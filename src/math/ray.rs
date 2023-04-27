@@ -4,7 +4,7 @@
 //  Created:
 //    27 Apr 2023, 14:46:36
 //  Last edited:
-//    27 Apr 2023, 14:58:08
+//    27 Apr 2023, 15:00:37
 //  Auto updated?
 //    Yes
 // 
@@ -12,7 +12,7 @@
 //!   Defines the [`Ray`] class, which represents a single ray of light.
 // 
 
-use super::vec3::{Vec3, Vector as _};
+use super::vec3::Vec3;
 
 
 /***** LIBRARY *****/
