@@ -865,6 +865,7 @@ dependencies = [
  "humanlog",
  "image",
  "log",
+ "num-traits",
  "serde",
  "serde_json",
  "serde_yaml",
