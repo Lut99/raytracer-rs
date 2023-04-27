@@ -1,1 +1,4 @@
 /target
+
+# Also skip output files
+*.png

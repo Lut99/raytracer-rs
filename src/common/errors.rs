@@ -4,7 +4,7 @@
 //  Created:
 //    23 Apr 2023, 12:00:31
 //  Last edited:
-//    27 Apr 2023, 11:59:57
+//    27 Apr 2023, 13:14:56
 //  Auto updated?
 //    Yes
 // 
@@ -105,3 +105,19 @@ impl Display for FileError {
     }
 }
 impl Error for FileError {}
+
+/// Defines errors relating to directory reading/writing.
+#[derive(Debug)]
+pub enum DirError {
+    /// Failed to create a new directory.
+    Create{ path: PathBuf, err: std::io::Error },
+}
+impl Display for DirError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
+        use DirError::*;
+        match self {
+            Create{ path, err } => write!(f, "Failed to create directory '{}': {}", path.display(), err),
+        }
+    }
+}
+impl Error for DirError {}

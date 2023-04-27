@@ -4,7 +4,7 @@
 //  Created:
 //    23 Apr 2023, 11:41:15
 //  Last edited:
-//    23 Apr 2023, 11:42:29
+//    27 Apr 2023, 12:52:04
 //  Auto updated?
 //    Yes
 // 
@@ -15,6 +15,9 @@
 //!   <https://raytracing.github.io/books/RayTracingInOneWeekend.html>.
 // 
 
-// Declare modules
+// Declare the library modules
 pub mod common;
 pub mod specifications;
+
+// Declare the subcommand modules
+pub mod generate;
