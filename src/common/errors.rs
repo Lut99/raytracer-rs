@@ -4,7 +4,7 @@
 //  Created:
 //    23 Apr 2023, 12:00:31
 //  Last edited:
-//    23 Apr 2023, 12:09:52
+//    27 Apr 2023, 11:59:57
 //  Auto updated?
 //    Yes
 // 
@@ -65,12 +65,12 @@ impl<'e> Display for PrettyErrorFormatter<'e> {
 }
 
 /// Helper trait that allows us to easily print an error stack.
-pub trait PrettyError: Error {
+pub trait PrettyError: Error + Sized {
     /// Returns a serializer for this error that prints it and its sources.
     /// 
     /// # Returns
     /// A new [`PrettyErrorFormatter`] that implements [`Display`].
-    fn stack(&self) -> PrettyErrorFormatter { PrettyErrorFormatter{ err: &self } }
+    fn stack(&self) -> PrettyErrorFormatter { PrettyErrorFormatter{ err: self } }
 }
 impl<T: Error> PrettyError for T {}
 
@@ -86,13 +86,21 @@ pub enum FileError {
     Open{ path: PathBuf, err: std::io::Error },
     /// Failed to read a file.
     Read{ path: PathBuf, err: std::io::Error },
+
+    /// Failed to create a file.
+    Create{ path: PathBuf, err: std::io::Error },
+    /// Failed to write a file.
+    Write{ path: PathBuf, err: std::io::Error },
 }
 impl Display for FileError {
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
         use FileError::*;
         match self {
             Open{ path, err } => write!(f, "Failed to open file '{}': {}", path.display(), err),
-            Read{ path, err } => write!(f, "Failed to read file '{}': {}", path.display(), err),
+            Read{ path, err } => write!(f, "Failed to read from file '{}': {}", path.display(), err),
+
+            Create{ path, err } => write!(f, "Failed to create file '{}': {}", path.display(), err),
+            Write{ path, err }  => write!(f, "Failed to write to file '{}': {}", path.display(), err),
         }
     }
 }
