@@ -4,7 +4,7 @@
 //  Created:
 //    27 Apr 2023, 13:27:16
 //  Last edited:
-//    27 Apr 2023, 13:27:22
+//    27 Apr 2023, 14:46:25
 //  Auto updated?
 //    Yes
 // 
@@ -14,3 +14,4 @@
 
 // Declare the submodules
 pub mod vec3;
+pub mod ray;

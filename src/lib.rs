@@ -4,7 +4,7 @@
 //  Created:
 //    23 Apr 2023, 11:41:15
 //  Last edited:
-//    27 Apr 2023, 13:27:59
+//    27 Apr 2023, 14:40:48
 //  Auto updated?
 //    Yes
 // 
@@ -22,3 +22,4 @@ pub mod math;
 
 // Declare the subcommand modules
 pub mod generate;
+pub mod render;

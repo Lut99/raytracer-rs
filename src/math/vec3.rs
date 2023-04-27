@@ -4,7 +4,7 @@
 //  Created:
 //    27 Apr 2023, 13:27:44
 //  Last edited:
-//    27 Apr 2023, 14:39:11
+//    27 Apr 2023, 14:57:55
 //  Auto updated?
 //    Yes
 // 
@@ -102,6 +102,10 @@ pub struct Vec3<T = f64> {
     pub z : T,
 }
 
+impl<T: Zero> Default for Vec3<T> {
+    #[inline]
+    fn default() -> Self { Self::zeroes() }
+}
 impl<T> Vec3<T> {
     /// Constructor for the Vec3.
     /// 
@@ -244,6 +248,136 @@ impl<T: NumAssign> DivAssign for Vec3<T> {
         self.x /= rhs.x;
         self.y /= rhs.y;
         self.z /= rhs.z;
+    }
+}
+
+impl<T: Copy + Num> Add<T> for Vec3<T> {
+    type Output = Self;
+
+    #[inline]
+    fn add(self, rhs: T) -> Self::Output {
+        Self {
+            x : self.x + rhs,
+            y : self.y + rhs,
+            z : self.z + rhs,
+        }
+    }
+}
+impl<T: Copy + NumAssign> AddAssign<T> for Vec3<T> {
+    #[inline]
+    fn add_assign(&mut self, rhs: T) {
+        self.x += rhs;
+        self.y += rhs;
+        self.z += rhs;
+    }
+}
+impl<T: Copy + Num> Sub<T> for Vec3<T> {
+    type Output = Self;
+
+    #[inline]
+    fn sub(self, rhs: T) -> Self::Output {
+        Self {
+            x : self.x - rhs,
+            y : self.y - rhs,
+            z : self.z - rhs,
+        }
+    }
+}
+impl<T: Copy + NumAssign> SubAssign<T> for Vec3<T> {
+    #[inline]
+    fn sub_assign(&mut self, rhs: T) {
+        self.x -= rhs;
+        self.y -= rhs;
+        self.z -= rhs;
+    }
+}
+impl<T: Copy + Num> Mul<T> for Vec3<T> {
+    type Output = Self;
+
+    #[inline]
+    fn mul(self, rhs: T) -> Self::Output {
+        Self {
+            x : self.x * rhs,
+            y : self.y * rhs,
+            z : self.z * rhs,
+        }
+    }
+}
+impl<T: Copy + NumAssign> MulAssign<T> for Vec3<T> {
+    #[inline]
+    fn mul_assign(&mut self, rhs: T) {
+        self.x *= rhs;
+        self.y *= rhs;
+        self.z *= rhs;
+    }
+}
+impl<T: Copy + Num> Div<T> for Vec3<T> {
+    type Output = Self;
+
+    #[inline]
+    fn div(self, rhs: T) -> Self::Output {
+        Self {
+            x : self.x / rhs,
+            y : self.y / rhs,
+            z : self.z / rhs,
+        }
+    }
+}
+impl<T: Copy + NumAssign> DivAssign<T> for Vec3<T> {
+    #[inline]
+    fn div_assign(&mut self, rhs: T) {
+        self.x /= rhs;
+        self.y /= rhs;
+        self.z /= rhs;
+    }
+}
+
+impl Add<Vec3<f64>> for f64 {
+    type Output = Vec3<f64>;
+
+    #[inline]
+    fn add(self, rhs: Vec3<f64>) -> Self::Output {
+        Vec3 {
+            x : self + rhs.x,
+            y : self + rhs.y,
+            z : self + rhs.z,
+        }
+    }
+}
+impl Sub<Vec3<f64>> for f64 {
+    type Output = Vec3<f64>;
+
+    #[inline]
+    fn sub(self, rhs: Vec3<f64>) -> Self::Output {
+        Vec3 {
+            x : self - rhs.x,
+            y : self - rhs.y,
+            z : self - rhs.z,
+        }
+    }
+}
+impl Mul<Vec3<f64>> for f64 {
+    type Output = Vec3<f64>;
+
+    #[inline]
+    fn mul(self, rhs: Vec3<f64>) -> Self::Output {
+        Vec3 {
+            x : self * rhs.x,
+            y : self * rhs.y,
+            z : self * rhs.z,
+        }
+    }
+}
+impl Div<Vec3<f64>> for f64 {
+    type Output = Vec3<f64>;
+
+    #[inline]
+    fn div(self, rhs: Vec3<f64>) -> Self::Output {
+        Vec3 {
+            x : self / rhs.x,
+            y : self / rhs.y,
+            z : self / rhs.z,
+        }
     }
 }
 

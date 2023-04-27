@@ -4,7 +4,7 @@
 //  Created:
 //    23 Apr 2023, 11:30:03
 //  Last edited:
-//    27 Apr 2023, 13:06:40
+//    27 Apr 2023, 14:44:33
 //  Auto updated?
 //    Yes
 // 
@@ -17,11 +17,14 @@ use std::path::PathBuf;
 use clap::{Parser, Subcommand};
 use enum_debug::EnumDebug;
 use humanlog::{DebugMode, HumanLogger};
-use log::{error, info};
+use image::RgbaImage;
+use log::{debug, error, info};
 
 use raytracer::common::errors::PrettyError as _;
+use raytracer::common::file::File as _;
 use raytracer::common::input::Dimensions;
-use raytracer::generate;
+use raytracer::specifications::scene::SceneFile;
+use raytracer::{generate, render};
 
 
 /***** ARGUMENTS *****/
@@ -103,8 +106,16 @@ fn main() {
 
     // Match on the subcommand
     match args.subcommand {
-        RaytracerSubcommand::Render(_) => {
-            todo!();
+        RaytracerSubcommand::Render(render) => {
+            // Load the given scene file
+            debug!("Loading scene file '{}'...", render.path.display());
+            let scene: SceneFile = match SceneFile::from_path(&render.path) {
+                Ok(scene) => scene,
+                Err(err)  => { error!("{}", err.stack()); std::process::exit(1); },
+            };
+
+            // Run the renderer
+            let _img: RgbaImage = render::handle(scene);
         },
 
         RaytracerSubcommand::Generate(generate) => {
