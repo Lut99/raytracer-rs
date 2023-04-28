@@ -4,7 +4,7 @@
 //  Created:
 //    27 Apr 2023, 13:27:44
 //  Last edited:
-//    27 Apr 2023, 14:57:55
+//    28 Apr 2023, 11:36:28
 //  Auto updated?
 //    Yes
 // 
@@ -17,6 +17,9 @@ use std::fmt::{Display, Formatter, Result as FResult};
 use std::ops::{Add, AddAssign, Div, DivAssign, Index, IndexMut, Mul, MulAssign, Neg, Sub, SubAssign};
 
 use num_traits::{AsPrimitive, Num, NumAssign, NumCast, Signed, Zero};
+use serde::{Deserialize, Serialize};
+use serde::de::{self, Deserializer, Visitor};
+use serde::ser::{Serializer, SerializeTuple as _};
 
 
 /***** AUXILLARY FUNCTIONS *****/
@@ -406,6 +409,54 @@ impl<T> IndexMut<usize> for Vec3<T> {
     }
 }
 
+impl<T: Serialize> Serialize for Vec3<T> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        // Start serializing it as a tuple
+        let mut tup = serializer.serialize_tuple(3)?;
+        tup.serialize_element(&self.x)?;
+        tup.serialize_element(&self.y)?;
+        tup.serialize_element(&self.z)?;
+        tup.end()
+    }
+}
+impl<'de, T: Deserialize<'de>> Deserialize<'de> for Vec3<T> {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        /// Visitor for a Vec3
+        struct Vec3Visitor<T> { _data: std::marker::PhantomData<T>, }
+        impl<'de, T: Deserialize<'de>> Visitor<'de> for Vec3Visitor<T> {
+            type Value = Vec3<T>;
+
+            #[inline]
+            fn expecting(&self, f: &mut Formatter) -> FResult { write!(f, "a 3D-vector") }
+
+            fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+            where
+                A: de::SeqAccess<'de>,
+            {
+                // Parse three elements
+                let x: T = seq.next_element()?.ok_or_else(|| de::Error::invalid_length(0, &self))?;
+                let y: T = seq.next_element()?.ok_or_else(|| de::Error::invalid_length(1, &self))?;
+                let z: T = seq.next_element()?.ok_or_else(|| de::Error::invalid_length(2, &self))?;
+
+                // Construct the Vec3
+                Ok(Vec3 {
+                    x,
+                    y,
+                    z,
+                })
+            }
+        }
+
+        // Call the visitor
+        deserializer.deserialize_seq(Vec3Visitor{ _data: Default::default() })
+    }
+}
 impl<T: Display> Display for Vec3<T> {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {

@@ -4,7 +4,7 @@
 //  Created:
 //    23 Apr 2023, 11:41:15
 //  Last edited:
-//    27 Apr 2023, 14:40:48
+//    28 Apr 2023, 11:24:37
 //  Auto updated?
 //    Yes
 // 
@@ -17,8 +17,8 @@
 
 // Declare the library modules
 pub mod common;
-pub mod specifications;
 pub mod math;
+pub mod specifications;
 
 // Declare the subcommand modules
 pub mod generate;

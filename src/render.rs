@@ -4,7 +4,7 @@
 //  Created:
 //    27 Apr 2023, 14:40:55
 //  Last edited:
-//    28 Apr 2023, 11:22:02
+//    28 Apr 2023, 11:42:17
 //  Auto updated?
 //    Yes
 // 
@@ -15,7 +15,7 @@
 use image::RgbaImage;
 use log::info;
 
-use crate::specifications::scene::SceneFile;
+use crate::specifications::scene::{Object, SceneFile, Sphere};
 use crate::math::colour::Colour;
 use crate::math::vec3::{dot3, Vec3, Vector as _};
 use crate::math::ray::Ray;
@@ -26,21 +26,20 @@ use crate::math::camera::Camera;
 /// Computes whether a ray hits a sphere or not.
 /// 
 /// # Arguments
-/// - `center`: The center point of the sphere.
-/// - `radius`: The radius of the sphere.
 /// - `ray`: The [`Ray`] to check if it hits.
+/// - `sphere`: The [`Sphere`] to compute the hit with.
 /// 
 /// # Returns
 /// true if the [`Ray`] hits, or false otherwise.
-fn hit_sphere(center: Vec3, radius: f64, ray: Ray) -> bool {
+fn hit_sphere(ray: Ray, sphere: &Sphere) -> bool {
     // Compute the distance between the origin of the ray and the center of the sphere
-    let oc: Vec3 = ray.origin - center;
+    let oc: Vec3 = ray.origin - sphere.center;
 
     // We compute `a`, `b` and `c` in the classic ABC-formula. This we do to find the intersections between the Ray (origin + t*direction) and the sphere (x^2 + y^2 + z^2 = r^2).
     // For more explanation, see the tutorial (<https://raytracing.github.io/books/RayTracingInOneWeekend.html#addingasphere/ray-sphereintersection>)
     let a: f64 = dot3(ray.direct, ray.direct);
     let b: f64 = 2.0 * dot3(oc, ray.direct);
-    let c: f64 = dot3(oc, oc) - radius * radius;
+    let c: f64 = dot3(oc, oc) - sphere.radius * sphere.radius;
 
     // Compute the discriminant only, since we're only interested in the number of roots
     // D < 0 -> no intersection, D == 0 -> one intersection (touching side), D > 0 -> two intersections (passing through)
@@ -54,13 +53,16 @@ fn hit_sphere(center: Vec3, radius: f64, ray: Ray) -> bool {
 /// 
 /// # Arguments
 /// - `ray`: The [`Ray`] who's colour to compute.
+/// - `objects`: The list of objects found in the scene file that we want to render.
 /// 
 /// # Returns
 /// A new [`Rgba`] struct that contains the matched colour.
-fn ray_colour(ray: Ray) -> Colour {
+fn ray_colour(ray: Ray, objects: &[Object]) -> Colour {
     // If it hits the sphere, return the sphere colour
-    if hit_sphere(Vec3::new(0, 0, -1), 0.5, ray) {
-        return Colour::new(1, 0, 0, 1);
+    for obj in objects {
+        match obj {
+            Object::Sphere(sphere) => if hit_sphere(ray, sphere) { return Colour::new(1, 0, 0, 1); }
+        }
     }
 
     // Otherwise, compute the background colour based on the Ray's direction; essentially, the higher the Y, the more blue
@@ -82,7 +84,7 @@ fn ray_colour(ray: Ray) -> Colour {
 /// 
 /// # Returns
 /// A newly rendered image based on the given scene file.
-pub fn handle(image: &mut RgbaImage, _scene: SceneFile) {
+pub fn handle(image: &mut RgbaImage, scene: SceneFile) {
     info!("Rendering scene...");
 
     // Let us define the camera (static, for now)
@@ -99,7 +101,7 @@ pub fn handle(image: &mut RgbaImage, _scene: SceneFile) {
 
             // Define the Ray and cast it
             let ray    : Ray    = Ray::new(camera.origin, camera.lower_left_corner + u * camera.horizontal + v * camera.vertical - camera.origin);
-            let colour : Colour = ray_colour(ray);
+            let colour : Colour = ray_colour(ray, &scene.objects);
 
             // Write the colour to the image
             image[(x, image_dims.1 - 1 - y)] = colour.into();
