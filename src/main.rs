@@ -4,7 +4,7 @@
 //  Created:
 //    23 Apr 2023, 11:30:03
 //  Last edited:
-//    27 Apr 2023, 14:44:33
+//    28 Apr 2023, 11:01:56
 //  Auto updated?
 //    Yes
 // 
@@ -17,7 +17,7 @@ use std::path::PathBuf;
 use clap::{Parser, Subcommand};
 use enum_debug::EnumDebug;
 use humanlog::{DebugMode, HumanLogger};
-use image::RgbaImage;
+use image::{ColorType, EncodableLayout as _, RgbaImage};
 use log::{debug, error, info};
 
 use raytracer::common::errors::PrettyError as _;
@@ -60,8 +60,15 @@ enum RaytracerSubcommand {
 #[derive(Debug, Parser)]
 struct RenderArguments {
     /// The path to the scene file to render.
-    #[clap(name="PATH", help="The path to the scene file which we want to render.")]
-    path : PathBuf,
+    #[clap(name="SCENE_PATH", help="The path to the scene file which we want to render.")]
+    scene_path  : PathBuf,
+    /// The path to the image file to output.
+    #[clap(name="OUTPUT_PATH", default_value="./image.png", help="The path to write the rendered image to.")]
+    output_path : PathBuf,
+
+    /// The output size of the image.
+    #[clap(short, long, default_value="800x600", help="The size of the output image for this render.")]
+    dims : Dimensions,
 }
 
 /// Defines the arguments for the `generate` subcommand.
@@ -108,14 +115,18 @@ fn main() {
     match args.subcommand {
         RaytracerSubcommand::Render(render) => {
             // Load the given scene file
-            debug!("Loading scene file '{}'...", render.path.display());
-            let scene: SceneFile = match SceneFile::from_path(&render.path) {
+            debug!("Loading scene file '{}'...", render.scene_path.display());
+            let scene: SceneFile = match SceneFile::from_path(&render.scene_path) {
                 Ok(scene) => scene,
                 Err(err)  => { error!("{}", err.stack()); std::process::exit(1); },
             };
 
-            // Run the renderer
-            let _img: RgbaImage = render::handle(scene);
+            // Create the image with the target size and render to it
+            let mut image: RgbaImage = RgbaImage::new(render.dims.0, render.dims.1);
+            render::handle(&mut image, scene);
+
+            // Now write the image to disk
+            if let Err(err) = image::save_buffer(&render.output_path, image.as_bytes(), render.dims.0, render.dims.1, ColorType::Rgba8) { error!("Failed to save rendered image to '{}': {}", render.output_path.display(), err); std::process::exit(1); }
         },
 
         RaytracerSubcommand::Generate(generate) => {

@@ -4,7 +4,7 @@
 //  Created:
 //    27 Apr 2023, 13:27:16
 //  Last edited:
-//    27 Apr 2023, 15:03:01
+//    28 Apr 2023, 10:50:31
 //  Auto updated?
 //    Yes
 // 
@@ -13,6 +13,8 @@
 // 
 
 // Declare the submodules
+pub mod utils;
 pub mod colour;
 pub mod vec3;
 pub mod ray;
+pub mod camera;

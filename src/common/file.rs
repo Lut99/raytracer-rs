@@ -4,7 +4,7 @@
 //  Created:
 //    23 Apr 2023, 11:42:51
 //  Last edited:
-//    27 Apr 2023, 12:15:43
+//    28 Apr 2023, 10:30:09
 //  Auto updated?
 //    Yes
 // 
@@ -225,52 +225,6 @@ pub trait File<'de>: Deserialize<'de> + Serialize {
 }
 
 
-
-/// Marker trait that will automatically implement the [`File`] trait for a struct using `serde_json`.
-pub trait JsonFile: for<'de> Deserialize<'de> + Serialize {}
-impl<'de, T: JsonFile> File<'de> for T {
-    type Err = serde_json::Error;
-
-    fn from_string(raw: impl AsRef<str>) -> Result<Self, Error<Self::Err>> where Self: Sized {
-        match serde_json::from_str(raw.as_ref()) {
-            Ok(res)  => Ok(res),
-            Err(err) => Err(Error::StringParse { what: type_name::<Self>(), err }),
-        }
-    }
-    fn from_reader<R: Read>(reader: R) -> Result<Self, Error<Self::Err>> where Self: Sized {
-        match serde_json::from_reader(reader) {
-            Ok(res)  => Ok(res),
-            Err(err) => Err(Error::ReaderParse { what: type_name::<Self>(), reader: type_name::<R>(), err }),
-        }
-    }
-
-    fn to_string(&self, pretty: bool) -> Result<String, Error<Self::Err>> {
-        if pretty {
-            match serde_json::to_string_pretty(self) {
-                Ok(raw)  => Ok(raw),
-                Err(err) => Err(Error::StringSerialize{ what: type_name::<Self>(), err }),
-            }
-        } else {
-            match serde_json::to_string(self) {
-                Ok(raw)  => Ok(raw),
-                Err(err) => Err(Error::StringSerialize{ what: type_name::<Self>(), err }),
-            }
-        }
-    }
-    fn to_writer<W: Write>(&self, writer: W, pretty: bool) -> Result<(), Error<Self::Err>> {
-        if pretty {
-            match serde_json::to_writer_pretty(writer, self) {
-                Ok(_)    => Ok(()),
-                Err(err) => Err(Error::WriterSerialize{ what: type_name::<Self>(), writer: type_name::<W>(), err }),
-            }
-        } else {
-            match serde_json::to_writer(writer, self) {
-                Ok(_)    => Ok(()),
-                Err(err) => Err(Error::WriterSerialize{ what: type_name::<Self>(), writer: type_name::<W>(), err }),
-            }
-        }
-    }
-}
 
 /// Macro that can implement [`File`] conveniently for us.
 macro_rules! impl_file {

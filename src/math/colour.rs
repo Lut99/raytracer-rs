@@ -4,7 +4,7 @@
 //  Created:
 //    27 Apr 2023, 15:03:09
 //  Last edited:
-//    27 Apr 2023, 15:16:15
+//    28 Apr 2023, 11:22:55
 //  Auto updated?
 //    Yes
 // 
@@ -17,6 +17,8 @@
 
 use std::fmt::{Display, Formatter, Result as FResult};
 use std::ops::{Add, AddAssign, Div, DivAssign, Index, IndexMut, Mul, MulAssign, Neg, Sub, SubAssign};
+
+use image::Rgba;
 
 
 /***** LIBRARY *****/
@@ -49,12 +51,12 @@ impl Colour {
     /// # Returns
     /// A new instance of Self with the given colour values.
     #[inline]
-    pub fn new(red: f64, green: f64, blue: f64, alpha: f64) -> Self {
+    pub fn new(red: impl Into<f64>, green: impl Into<f64>, blue: impl Into<f64>, alpha: impl Into<f64>) -> Self {
         Self {
-            r : red,
-            g : green,
-            b : blue,
-            a : alpha,
+            r : red.into(),
+            g : green.into(),
+            b : blue.into(),
+            a : alpha.into(),
         }
     }
 
@@ -69,6 +71,21 @@ impl Colour {
             g : 0.0,
             b : 0.0,
             a : 0.0,
+        }
+    }
+
+
+
+    /// Returns this Colour, but with the alpha set to 1.0.
+    /// 
+    /// # Returns
+    /// A new `Colour` instance with the same RGB-values, but with alpha set to 1.0.
+    pub fn opaque(&self) -> Self {
+        Self {
+            r : self.r,
+            g : self.g,
+            b : self.b,
+            a : 1.0,
         }
     }
 }
@@ -367,4 +384,16 @@ impl From<&Colour> for Colour {
 impl From<&mut Colour> for Colour {
     #[inline]
     fn from(value: &mut Colour) -> Self { *value }
+}
+
+impl From<Colour> for Rgba<u8> {
+    #[inline]
+    fn from(value: Colour) -> Self {
+        Self([
+            (255.0 * value.r) as u8,
+            (255.0 * value.g) as u8,
+            (255.0 * value.b) as u8,
+            (255.0 * value.a) as u8,
+        ])
+    }
 }
