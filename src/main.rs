@@ -4,7 +4,7 @@
 //  Created:
 //    23 Apr 2023, 11:30:03
 //  Last edited:
-//    29 Apr 2023, 10:11:04
+//    29 Apr 2023, 10:19:24
 //  Auto updated?
 //    Yes
 // 
@@ -126,7 +126,7 @@ fn main() {
             };
 
             // Create the image with the target size and render to it
-            let mut image: Image = Image::new((render.dims.0 as usize, render.dims.1 as usize));
+            let mut image: Image = Image::new(render.dims.into());
             frame::render(&mut image, scene);
 
             // Now write the image to disk

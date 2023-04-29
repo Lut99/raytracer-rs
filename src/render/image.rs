@@ -4,7 +4,7 @@
 //  Created:
 //    29 Apr 2023, 09:39:10
 //  Last edited:
-//    29 Apr 2023, 10:12:25
+//    29 Apr 2023, 10:19:02
 //  Auto updated?
 //    Yes
 // 
@@ -69,7 +69,7 @@ pub struct Image {
     /// The actual image data.
     pixels : Vec<Colour>,
     /// The dimensions of the image.
-    dims   : (usize, usize),
+    dims   : (u32, u32),
 }
 
 impl Image {
@@ -81,11 +81,11 @@ impl Image {
     /// # Returns
     /// A new instance of Self with only 0's in it.
     #[inline]
-    pub fn new(dims: (impl Into<usize>, impl Into<usize>)) -> Self {
-        let width  : usize = dims.0.into();
-        let height : usize = dims.1.into();
+    pub fn new(dims: (impl Into<u32>, impl Into<u32>)) -> Self {
+        let width  : u32 = dims.0.into();
+        let height : u32 = dims.1.into();
         Self {
-            pixels : vec![ Colour::zeroes(); width * height ],
+            pixels : vec![ Colour::zeroes(); (width * height) as usize ],
             dims   : (width, height),
         }
     }
@@ -118,7 +118,7 @@ impl Image {
         let mut buffer: RgbaImage = RgbaImage::new(self.dims.0 as u32, self.dims.1 as u32);
         for y in 0..self.dims.1 {
             for x in 0..self.dims.0 {
-                buffer[(x as u32, (self.dims.1 - 1 - y) as u32)] = self.pixels[x + self.dims.0 * y].into();
+                buffer[(x as u32, (self.dims.1 - 1 - y) as u32)] = self.pixels[(x + self.dims.0 * y) as usize].into();
             }
         }
 
@@ -136,13 +136,56 @@ impl Image {
     pub fn len(&self) -> usize { self.pixels.len() }
     /// Returns the dimensions of this Image.
     #[inline]
-    pub fn dims(&self) -> (usize, usize) { self.dims }
+    pub fn dims(&self) -> (u32, u32) { self.dims }
     /// Returns the width of the image.
     #[inline]
-    pub fn width(&self) -> usize { self.dims.0 }
+    pub fn width(&self) -> u32 { self.dims.0 }
     /// Returns the height of the image.
     #[inline]
-    pub fn height(&self) -> usize { self.dims.1 }
+    pub fn height(&self) -> u32 { self.dims.1 }
+}
+
+impl Index<u32> for Image {
+    type Output = [Colour];
+
+    #[inline]
+    fn index(&self, index: u32) -> &Self::Output {
+        // Assert the index is within the number of rows before returning
+        #[cfg(debug_assertions)]
+        if index >= self.dims.1 { panic!("Row index {} is out-of-bounds for Image of size {}x{}", index, self.dims.0, self.dims.1); }
+        &self.pixels[(self.dims.0 * index) as usize..((self.dims.0 + 1) * index) as usize]
+    }
+}
+impl IndexMut<u32> for Image {
+    #[inline]
+    fn index_mut(&mut self, index: u32) -> &mut Self::Output {
+        // Assert the index is within the number of rows before returning
+        #[cfg(debug_assertions)]
+        if index >= self.dims.1 { panic!("Row index {} is out-of-bounds for Image of size {}x{}", index, self.dims.0, self.dims.1); }
+        &mut self.pixels[(self.dims.0 * index) as usize..((self.dims.0 + 1) * index) as usize]
+    }
+}
+impl Index<(u32, u32)> for Image {
+    type Output = Colour;
+
+    #[inline]
+    fn index(&self, index: (u32, u32)) -> &Self::Output {
+        // Assert the index is within range before returning the individual pixel
+        let index: usize = (index.0 + self.dims.0 * index.1) as usize;
+        #[cfg(debug_assertions)]
+        if index >= self.pixels.len() { panic!("Index {} is out-of-bounds for Image of size {}x{}", index, self.dims.0, self.dims.1); }
+        &self.pixels[index]
+    }
+}
+impl IndexMut<(u32, u32)> for Image {
+    #[inline]
+    fn index_mut(&mut self, index: (u32, u32)) -> &mut Self::Output {
+        // Assert the index is within range before returning the individual pixel
+        let index: usize = (index.0 + self.dims.0 * index.1) as usize;
+        #[cfg(debug_assertions)]
+        if index >= self.pixels.len() { panic!("Index {} is out-of-bounds for Image of size {}x{}", index, self.dims.0, self.dims.1); }
+        &mut self.pixels[index]
+    }
 }
 
 impl Index<usize> for Image {
@@ -152,8 +195,8 @@ impl Index<usize> for Image {
     fn index(&self, index: usize) -> &Self::Output {
         // Assert the index is within the number of rows before returning
         #[cfg(debug_assertions)]
-        if index >= self.dims.1 { panic!("Row index {} is out-of-bounds for Image of size {}x{}", index, self.dims.0, self.dims.1); }
-        &self.pixels[self.dims.0 * index..(self.dims.0 + 1) * index]
+        if index >= self.dims.1 as usize { panic!("Row index {} is out-of-bounds for Image of size {}x{}", index, self.dims.0, self.dims.1); }
+        &self.pixels[self.dims.0 as usize * index..(self.dims.0 as usize + 1) * index]
     }
 }
 impl IndexMut<usize> for Image {
@@ -161,8 +204,8 @@ impl IndexMut<usize> for Image {
     fn index_mut(&mut self, index: usize) -> &mut Self::Output {
         // Assert the index is within the number of rows before returning
         #[cfg(debug_assertions)]
-        if index >= self.dims.1 { panic!("Row index {} is out-of-bounds for Image of size {}x{}", index, self.dims.0, self.dims.1); }
-        &mut self.pixels[self.dims.0 * index..(self.dims.0 + 1) * index]
+        if index >= self.dims.1 as usize { panic!("Row index {} is out-of-bounds for Image of size {}x{}", index, self.dims.0, self.dims.1); }
+        &mut self.pixels[self.dims.0 as usize * index..(self.dims.0 as usize + 1) * index]
     }
 }
 impl Index<(usize, usize)> for Image {
@@ -171,7 +214,7 @@ impl Index<(usize, usize)> for Image {
     #[inline]
     fn index(&self, index: (usize, usize)) -> &Self::Output {
         // Assert the index is within range before returning the individual pixel
-        let index: usize = index.0 + self.dims.0 * index.1;
+        let index: usize = index.0 + self.dims.0 as usize * index.1;
         #[cfg(debug_assertions)]
         if index >= self.pixels.len() { panic!("Index {} is out-of-bounds for Image of size {}x{}", index, self.dims.0, self.dims.1); }
         &self.pixels[index]
@@ -181,7 +224,7 @@ impl IndexMut<(usize, usize)> for Image {
     #[inline]
     fn index_mut(&mut self, index: (usize, usize)) -> &mut Self::Output {
         // Assert the index is within range before returning the individual pixel
-        let index: usize = index.0 + self.dims.0 * index.1;
+        let index: usize = index.0 + self.dims.0 as usize * index.1;
         #[cfg(debug_assertions)]
         if index >= self.pixels.len() { panic!("Index {} is out-of-bounds for Image of size {}x{}", index, self.dims.0, self.dims.1); }
         &mut self.pixels[index]

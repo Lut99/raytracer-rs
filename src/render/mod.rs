@@ -4,7 +4,7 @@
 //  Created:
 //    29 Apr 2023, 09:36:21
 //  Last edited:
-//    29 Apr 2023, 09:40:09
+//    29 Apr 2023, 10:12:58
 //  Auto updated?
 //    Yes
 // 
@@ -14,6 +14,7 @@
 
 // Declare submodules
 pub mod image;
+pub mod generator;
 pub mod frame;
 
 // Bring some stuff into this namespace

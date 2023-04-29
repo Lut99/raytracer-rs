@@ -4,7 +4,7 @@
 //  Created:
 //    27 Apr 2023, 14:40:55
 //  Last edited:
-//    29 Apr 2023, 10:08:19
+//    29 Apr 2023, 10:36:49
 //  Auto updated?
 //    Yes
 // 
@@ -21,6 +21,8 @@ use crate::math::vec3::{dot3, Vec3, Vector as _};
 use crate::math::ray::Ray;
 use crate::math::camera::Camera;
 use super::image::Image;
+
+use super::generator::RayGenerator;
 
 
 /***** HELPER FUNCTIONS *****/
@@ -92,21 +94,12 @@ pub fn render(image: &mut Image, scene: SceneFile) {
     let camera: Camera = Camera::new(((image.width() as f64 / image.height() as f64) * 2.0, 2.0), 1.0);
 
     // Let us fire all the rays (we go top-to-bottom)
-    for y in (0..image.height()).rev() {
-        for x in 0..image.width() {
-            let image_dims: (usize, usize) = (image.width(), image.height());
+    for ((x, y), ray) in RayGenerator::new(image.dims(), camera).coords() {
+        // Compute the colour of the Ray
+        let colour : Colour = ray_colour(ray, &scene.objects);
 
-            // Convert our pixel values to logical values
-            let u: f64 = x as f64 / (image_dims.0 as f64 - 1.0);
-            let v: f64 = y as f64 / (image_dims.1 as f64 - 1.0);
-
-            // Define the Ray and cast it
-            let ray    : Ray    = Ray::new(camera.origin, camera.lower_left_corner + u * camera.horizontal + v * camera.vertical - camera.origin);
-            let colour : Colour = ray_colour(ray, &scene.objects);
-
-            // Write the colour to the image
-            image[(x, y)] = colour.into();
-        }
+        // Write the colour to the image
+        image[(x, y)] = colour.into();
     }
 
     // Done
