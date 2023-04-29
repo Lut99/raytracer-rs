@@ -4,7 +4,7 @@
 //  Created:
 //    23 Apr 2023, 11:41:15
 //  Last edited:
-//    28 Apr 2023, 11:24:37
+//    29 Apr 2023, 10:51:22
 //  Auto updated?
 //    Yes
 // 
@@ -19,6 +19,7 @@
 pub mod common;
 pub mod math;
 pub mod specifications;
+pub mod ecs;
 
 // Declare the subcommand modules
 pub mod generate;
