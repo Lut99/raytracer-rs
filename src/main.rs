@@ -4,7 +4,7 @@
 //  Created:
 //    23 Apr 2023, 11:30:03
 //  Last edited:
-//    28 Apr 2023, 11:01:56
+//    29 Apr 2023, 10:11:04
 //  Auto updated?
 //    Yes
 // 
@@ -17,14 +17,15 @@ use std::path::PathBuf;
 use clap::{Parser, Subcommand};
 use enum_debug::EnumDebug;
 use humanlog::{DebugMode, HumanLogger};
-use image::{ColorType, EncodableLayout as _, RgbaImage};
 use log::{debug, error, info};
 
 use raytracer::common::errors::PrettyError as _;
 use raytracer::common::file::File as _;
 use raytracer::common::input::Dimensions;
 use raytracer::specifications::scene::SceneFile;
-use raytracer::{generate, render};
+use raytracer::generate;
+use raytracer::render::frame;
+use raytracer::render::image::Image;
 
 
 /***** ARGUMENTS *****/
@@ -68,7 +69,10 @@ struct RenderArguments {
 
     /// The output size of the image.
     #[clap(short, long, default_value="800x600", help="The size of the output image for this render.")]
-    dims : Dimensions,
+    dims     : Dimensions,
+    /// Whether to fix missing directories when generating the output image or not.
+    #[clap(short, long, help="If given, will generate missing directories for the output image.")]
+    fix_dirs : bool,
 }
 
 /// Defines the arguments for the `generate` subcommand.
@@ -122,11 +126,11 @@ fn main() {
             };
 
             // Create the image with the target size and render to it
-            let mut image: RgbaImage = RgbaImage::new(render.dims.0, render.dims.1);
-            render::handle(&mut image, scene);
+            let mut image: Image = Image::new((render.dims.0 as usize, render.dims.1 as usize));
+            frame::render(&mut image, scene);
 
             // Now write the image to disk
-            if let Err(err) = image::save_buffer(&render.output_path, image.as_bytes(), render.dims.0, render.dims.1, ColorType::Rgba8) { error!("Failed to save rendered image to '{}': {}", render.output_path.display(), err); std::process::exit(1); }
+            if let Err(err) = image.to_path(&render.output_path, render.fix_dirs) { error!("Failed to save rendered image to '{}': {}", render.output_path.display(), err); std::process::exit(1); }
         },
 
         RaytracerSubcommand::Generate(generate) => {

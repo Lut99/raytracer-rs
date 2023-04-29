@@ -1,18 +1,18 @@
-//  RENDER.rs
+//  FRAME.rs
 //    by Lut99
 // 
 //  Created:
 //    27 Apr 2023, 14:40:55
 //  Last edited:
-//    28 Apr 2023, 11:42:17
+//    29 Apr 2023, 10:08:19
 //  Auto updated?
 //    Yes
 // 
 //  Description:
-//!   Implements the main render functionality.
+//!   Implements the functionality to render a single frame based on a
+//!   [`SceneFile`].
 // 
 
-use image::RgbaImage;
 use log::info;
 
 use crate::specifications::scene::{Object, SceneFile, Sphere};
@@ -20,6 +20,7 @@ use crate::math::colour::Colour;
 use crate::math::vec3::{dot3, Vec3, Vector as _};
 use crate::math::ray::Ray;
 use crate::math::camera::Camera;
+use super::image::Image;
 
 
 /***** HELPER FUNCTIONS *****/
@@ -79,12 +80,12 @@ fn ray_colour(ray: Ray, objects: &[Object]) -> Colour {
 /// Implements the main rendering functionality.
 /// 
 /// # Arguments
-/// - `image`: The image to which we will render the scene.
+/// - `image`: The [`Image`] to which we will render the scene.
 /// - `scene`: A [`SceneFile`] that describes what to render.
 /// 
 /// # Returns
 /// A newly rendered image based on the given scene file.
-pub fn handle(image: &mut RgbaImage, scene: SceneFile) {
+pub fn render(image: &mut Image, scene: SceneFile) {
     info!("Rendering scene...");
 
     // Let us define the camera (static, for now)
@@ -93,7 +94,7 @@ pub fn handle(image: &mut RgbaImage, scene: SceneFile) {
     // Let us fire all the rays (we go top-to-bottom)
     for y in (0..image.height()).rev() {
         for x in 0..image.width() {
-            let image_dims: (u32, u32) = (image.width(), image.height());
+            let image_dims: (usize, usize) = (image.width(), image.height());
 
             // Convert our pixel values to logical values
             let u: f64 = x as f64 / (image_dims.0 as f64 - 1.0);
@@ -104,7 +105,7 @@ pub fn handle(image: &mut RgbaImage, scene: SceneFile) {
             let colour : Colour = ray_colour(ray, &scene.objects);
 
             // Write the colour to the image
-            image[(x, image_dims.1 - 1 - y)] = colour.into();
+            image[(x, y)] = colour.into();
         }
     }
 
