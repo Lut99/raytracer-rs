@@ -4,7 +4,7 @@
 //  Created:
 //    29 Apr 2023, 10:13:21
 //  Last edited:
-//    29 Apr 2023, 10:38:43
+//    30 Apr 2023, 12:42:28
 //  Auto updated?
 //    Yes
 // 
@@ -26,7 +26,6 @@ pub struct CoordinateEnumerate<I> {
     /// The horizontal dimension we are iterating over. We only need this one, since `iter` will do the stopping for us.
     width : u32,
 }
-
 impl<I: Iterator> Iterator for CoordinateEnumerate<I> {
     type Item = ((u32, u32), I::Item);
 
@@ -46,6 +45,10 @@ impl<I: Iterator> Iterator for CoordinateEnumerate<I> {
 
     #[inline]
     fn size_hint(&self) -> (usize, Option<usize>) { self.iter.size_hint() }
+}
+impl<I: ExactSizeIterator> ExactSizeIterator for CoordinateEnumerate<I> {
+    #[inline]
+    fn len(&self) -> usize { self.iter.len() }
 }
 
 

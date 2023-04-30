@@ -4,7 +4,7 @@
 //  Created:
 //    27 Apr 2023, 14:40:55
 //  Last edited:
-//    29 Apr 2023, 10:49:12
+//    30 Apr 2023, 12:52:26
 //  Auto updated?
 //    Yes
 // 
@@ -15,13 +15,14 @@
 
 use log::info;
 
-use crate::specifications::scene::{Object, SceneFile, Sphere};
 use crate::math::colour::Colour;
 use crate::math::vec3::{dot3, Vec3, Vector as _};
 use crate::math::ray::Ray;
 use crate::math::camera::Camera;
-use super::image::Image;
+use crate::specifications::objects::Sphere;
+use crate::hitlist::{HitItem, HitList};
 
+use super::image::Image;
 use super::generator::RayGenerator;
 
 
@@ -60,19 +61,37 @@ fn hit_sphere(ray: Ray, sphere: &Sphere) -> Option<f64> {
 /// 
 /// # Arguments
 /// - `ray`: The [`Ray`] who's colour to compute.
-/// - `objects`: The list of objects found in the scene file that we want to render.
+/// - `list`: A [`HitList`] that describes what to render.
 /// 
 /// # Returns
 /// A new [`Rgba`] struct that contains the matched colour.
-fn ray_colour(ray: Ray, objects: &[Object]) -> Colour {
+fn ray_colour(ray: Ray, list: &HitList) -> Colour {
     // If it hits the sphere, return the sphere colour
-    for obj in objects {
-        match obj {
-            Object::Sphere(sphere) => if let Some(point) = hit_sphere(ray, sphere) {
-                // Compute the normal
-                let normal: Vec3 = (ray.at(point) - sphere.center).unit();
-                return 0.5 * Colour::new(normal.x + 1.0, normal.y + 1.0, normal.z + 1.0, 1.0);
-            }
+    let mut spheres: std::slice::Iter<HitItem<Sphere>> = list.spheres().into_iter();
+    while let Some(sphere) = spheres.next() {
+        // Match whether it is an object or a group
+        match sphere {
+            HitItem::Object(s) => {
+                // Do the initial hit on the AABB
+                if s.aabb.hit(ray, 0.0, f64::INFINITY) {
+                    // Then hit the sphere
+                    if let Some(point) = hit_sphere(ray, &s.obj) {
+                        // Compute the normal
+                        let normal: Vec3 = (ray.at(point) - s.obj.center).unit();
+                        return 0.5 * Colour::new(normal.x + 1.0, normal.y + 1.0, normal.z + 1.0, 1.0);
+                    }
+                }
+            },
+
+            HitItem::Group(g) => {
+                // Skip all items in this group if we are never hitting them anyway
+                if !g.aabb.hit(ray, 0.0, f64::INFINITY) {
+                    for _ in 0..g.obj { spheres.next(); }
+                }
+
+                // Continue now with either the first of the group or first after the group
+                continue;
+            },
         }
     }
 
@@ -91,11 +110,11 @@ fn ray_colour(ray: Ray, objects: &[Object]) -> Colour {
 /// 
 /// # Arguments
 /// - `image`: The [`Image`] to which we will render the scene.
-/// - `scene`: A [`SceneFile`] that describes what to render.
+/// - `list`: A [`HitList`] that describes what to render.
 /// 
 /// # Returns
 /// A newly rendered image based on the given scene file.
-pub fn render(image: &mut Image, scene: SceneFile) {
+pub fn render(image: &mut Image, list: &HitList) {
     info!("Rendering scene...");
 
     // Let us define the camera (static, for now)
@@ -104,7 +123,7 @@ pub fn render(image: &mut Image, scene: SceneFile) {
     // Let us fire all the rays (we go top-to-bottom)
     for ((x, y), ray) in RayGenerator::new(image.dims(), camera).coords() {
         // Compute the colour of the Ray
-        let colour : Colour = ray_colour(ray, &scene.objects);
+        let colour : Colour = ray_colour(ray, list);
 
         // Write the colour to the image
         image[(x, y)] = colour.into();

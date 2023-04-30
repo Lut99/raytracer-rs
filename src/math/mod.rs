@@ -4,7 +4,7 @@
 //  Created:
 //    27 Apr 2023, 13:27:16
 //  Last edited:
-//    29 Apr 2023, 10:14:00
+//    30 Apr 2023, 12:04:35
 //  Auto updated?
 //    Yes
 // 
@@ -17,10 +17,12 @@ pub mod utils;
 pub mod colour;
 pub mod vec3;
 pub mod ray;
+pub mod aabb;
 pub mod camera;
 
 // Bring some stuff into the global namespace for convenience
 pub use colour::Colour;
 pub use vec3::{Vec3, Vector};
 pub use ray::Ray;
+pub use aabb::AABB;
 pub use camera::Camera;

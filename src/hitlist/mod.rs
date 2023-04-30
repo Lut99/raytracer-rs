@@ -4,19 +4,18 @@
 //  Created:
 //    29 Apr 2023, 10:50:46
 //  Last edited:
-//    29 Apr 2023, 10:55:53
+//    30 Apr 2023, 12:42:38
 //  Auto updated?
 //    Yes
 // 
 //  Description:
 //!   The so-manieth implementation of an Entity Component System (ECS).
-//!   This one is tuned for usage with our raytracer.
+//!   This one is tuned for usage with our raytracer, and thus called a
+//!   [`HitList`] instead of an ECS.
 // 
 
 // Declare submodules
-pub mod spec;
-pub mod system;
+pub mod hitlist;
 
 // Get some stuff into the module namespace
-pub use spec::{Component, Entity};
-pub use system::Ecs;
+pub use hitlist::{BoundingBox, HitItem, HitList};

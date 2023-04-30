@@ -4,7 +4,7 @@
 //  Created:
 //    23 Apr 2023, 11:30:03
 //  Last edited:
-//    29 Apr 2023, 10:19:24
+//    30 Apr 2023, 12:55:04
 //  Auto updated?
 //    Yes
 // 
@@ -23,6 +23,7 @@ use raytracer::common::errors::PrettyError as _;
 use raytracer::common::file::File as _;
 use raytracer::common::input::Dimensions;
 use raytracer::specifications::scene::SceneFile;
+use raytracer::hitlist::HitList;
 use raytracer::generate;
 use raytracer::render::frame;
 use raytracer::render::image::Image;
@@ -125,9 +126,12 @@ fn main() {
                 Err(err)  => { error!("{}", err.stack()); std::process::exit(1); },
             };
 
+            // Convert that to a static HitList
+            let list: HitList = HitList::from(&scene.objects);
+
             // Create the image with the target size and render to it
             let mut image: Image = Image::new(render.dims.into());
-            frame::render(&mut image, scene);
+            frame::render(&mut image, &list);
 
             // Now write the image to disk
             if let Err(err) = image.to_path(&render.output_path, render.fix_dirs) { error!("Failed to save rendered image to '{}': {}", render.output_path.display(), err); std::process::exit(1); }

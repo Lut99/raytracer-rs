@@ -5,6 +5,6 @@
 # 
 
 objects:
-- !sphere
+- !Sphere
   center: [ 0, 0, -1 ]
   radius: 0.5

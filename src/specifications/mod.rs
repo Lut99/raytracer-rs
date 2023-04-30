@@ -4,7 +4,7 @@
 //  Created:
 //    23 Apr 2023, 11:40:34
 //  Last edited:
-//    23 Apr 2023, 11:40:44
+//    30 Apr 2023, 10:59:32
 //  Auto updated?
 //    Yes
 // 
@@ -14,4 +14,5 @@
 // 
 
 // Declare the submodules
+pub mod objects;
 pub mod scene;
