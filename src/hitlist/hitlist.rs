@@ -4,7 +4,7 @@
 //  Created:
 //    29 Apr 2023, 10:51:41
 //  Last edited:
-//    30 Apr 2023, 12:54:17
+//    01 May 2023, 19:15:16
 //  Auto updated?
 //    Yes
 // 
@@ -15,39 +15,9 @@
 
 use enum_debug::EnumDebug;
 
-use crate::math::{AABB, Vec3};
-use crate::math::aabb::surround;
-use crate::specifications::objects::{Object, ObjectGroup, Sphere};
-
-
-/***** HELPER FUNCTIONS *****/
-/// Helper function that computes a bounding box perfectly fitting the given iterator over [`BoundingBoxable`] objects.
-/// 
-/// # Arguments
-/// - `objs`: The iterator that generates objects to compute the [`AABB`] of.
-/// 
-/// # Returns
-/// The Axis-Aligned Bounding Box ([`AABB`]) that perfect fits all of the objects.
-fn surround_list<B: BoundingBoxable>(objs: impl IntoIterator<Item = impl BoundingBoxable>) -> AABB {
-    let mut objs = objs.into_iter();
-
-    // Attempt to get the first item for the first box
-    let mut aabb: AABB = match objs.next() {
-        Some(obj) => obj.aabb(),
-        None      => { return AABB::new(Vec3::zeroes(), Vec3::zeroes()); },
-    };
-
-    // Add any other object in the iterator
-    for obj in objs {
-        aabb = surround(aabb, obj.aabb());
-    }
-
-    // Done
-    aabb
-}
-
-
-
+use crate::math::AABB;
+use crate::specifications::objects::{BoundingBoxable, Object, Sphere};
+use crate::specifications::objects::utils::surround_list;
 
 
 /***** HELPER STRUCTS *****/
@@ -81,48 +51,6 @@ impl<'l, T> Iterator for ToplevelObjects<'l, T> {
 }
 impl<'l, T> ExactSizeIterator for ToplevelObjects<'l, T> {
     fn len(&self) -> usize { if self.index < self.list.len() { self.list.len() - self.index } else { 0 } }
-}
-
-
-
-
-
-/***** AUXILLARY TRAITS *****/
-/// Abstracts the bounding box computation over various objects.
-pub trait BoundingBoxable {
-    /// Computes the bounding box around this object.
-    /// 
-    /// # Returns
-    /// An [`AABB`] that describes the axis-aligned bounding box for this object.
-    fn aabb(&self) -> AABB;
-}
-
-impl BoundingBoxable for Object {
-    fn aabb(&self) -> AABB {
-        match self {
-            Object::ObjectGroup(g) => g.aabb(),
-
-            Object::Sphere(s) => s.aabb(),
-        }
-    }
-}
-impl BoundingBoxable for ObjectGroup {
-    #[inline]
-    fn aabb(&self) -> AABB { surround_list::<&Object>(&self.objects) }
-}
-
-impl BoundingBoxable for Sphere {
-    #[inline]
-    fn aabb(&self) -> AABB { AABB::new(self.center - self.radius, self.center + self.radius) }
-}
-
-impl<T: BoundingBoxable> BoundingBoxable for &T {
-    #[inline]
-    fn aabb(&self) -> AABB { (**self).aabb() }
-}
-impl<T: BoundingBoxable> BoundingBoxable for &mut T {
-    #[inline]
-    fn aabb(&self) -> AABB { (**self).aabb() }
 }
 
 
@@ -402,7 +330,7 @@ impl From<&[Object]> for HitList {
                     let group: HitList = HitList::from(&g.objects);
 
                     // Compute a bounding box surrounding all of its spheres (and we skip anything within a group)
-                    let aabb: AABB = surround_list::<&HitItem<Sphere>>(ToplevelObjects{ list: &group.spheres, index: 0 });
+                    let aabb: AABB = surround_list(ToplevelObjects{ list: &group.spheres, index: 0 });
 
                     // Then add it to the thing with a group prepended to it
                     result.spheres.reserve(1 + group.spheres.len());

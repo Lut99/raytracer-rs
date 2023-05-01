@@ -4,7 +4,7 @@
 //  Created:
 //    27 Apr 2023, 14:40:55
 //  Last edited:
-//    30 Apr 2023, 12:52:26
+//    01 May 2023, 19:17:52
 //  Auto updated?
 //    Yes
 // 
@@ -16,10 +16,10 @@
 use log::info;
 
 use crate::math::colour::Colour;
-use crate::math::vec3::{dot3, Vec3, Vector as _};
+use crate::math::vec3::{Vec3, Vector as _};
 use crate::math::ray::Ray;
 use crate::math::camera::Camera;
-use crate::specifications::objects::Sphere;
+use crate::specifications::objects::{Hittable, Sphere};
 use crate::hitlist::{HitItem, HitList};
 
 use super::image::Image;
@@ -27,36 +27,6 @@ use super::generator::RayGenerator;
 
 
 /***** HELPER FUNCTIONS *****/
-/// Computes the hit point of the given ray with the given sphere, if any.
-/// 
-/// # Arguments
-/// - `ray`: The [`Ray`] to check if it hits.
-/// - `sphere`: The [`Sphere`] to compute the hit with.
-/// 
-/// # Returns
-/// The point along the given Ray if there is a hit, or else [None].
-fn hit_sphere(ray: Ray, sphere: &Sphere) -> Option<f64> {
-    // Compute the distance between the origin of the ray and the center of the sphere
-    let oc: Vec3 = ray.origin - sphere.center;
-
-    // We compute `a`, `b` and `c` in the classic ABC-formula. This we do to find the intersections between the Ray (origin + t*direction) and the sphere (x^2 + y^2 + z^2 = r^2).
-    // For more explanation, see the tutorial (<https://raytracing.github.io/books/RayTracingInOneWeekend.html#addingasphere/ray-sphereintersection>)
-    let a      : f64 = ray.direct.length2();
-    let half_b : f64 = dot3(oc, ray.direct);
-    let c      : f64 = oc.length2() - sphere.radius * sphere.radius;
-
-    // Compute the discriminant only, since we're only interested in the number of roots
-    // D < 0 -> no intersection, D == 0 -> one intersection (touching side), D > 0 -> two intersections (passing through)
-    let d: f64 = half_b*half_b - a*c;
-    if d >= 0.0 {
-        Some((-half_b - d.sqrt()) / a)
-    } else {
-        None
-    }
-}
-
-
-
 /// Computes an Rgba quadruplet based on what the Ray hits.
 /// 
 /// # Arguments
@@ -75,9 +45,9 @@ fn ray_colour(ray: Ray, list: &HitList) -> Colour {
                 // Do the initial hit on the AABB
                 if s.aabb.hit(ray, 0.0, f64::INFINITY) {
                     // Then hit the sphere
-                    if let Some(point) = hit_sphere(ray, &s.obj) {
+                    if let Some(point) = s.obj.hit(ray) {
                         // Compute the normal
-                        let normal: Vec3 = (ray.at(point) - s.obj.center).unit();
+                        let normal: Vec3 = (ray.at(point.t) - s.obj.center).unit();
                         return 0.5 * Colour::new(normal.x + 1.0, normal.y + 1.0, normal.z + 1.0, 1.0);
                     }
                 }
