@@ -1,0 +1,16 @@
+# SPHERE WITH GROUND SPHERE.yml
+#   by Lut99
+# 
+# Implements a sphere with an extremely large sphere underneath it that emulates a ground.
+# 
+# Used as the second scene in the tutorial. See:
+# <https://raytracing.github.io/books/RayTracingInOneWeekend.html#surfacenormalsandmultipleobjects/commonconstantsandutilityfunctions>.
+# 
+
+objects:
+- !Sphere
+  center: [ 0, 0, -1 ]
+  radius: 0.5
+- !Sphere
+  center: [ 0, -100.5, -1 ]
+  radius: 100

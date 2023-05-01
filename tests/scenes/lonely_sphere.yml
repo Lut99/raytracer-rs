@@ -1,0 +1,12 @@
+# LONELY SPHERE.yml
+#   by Lut99
+# 
+# Implements a lonely sphere, which is the first scene used in the tutorial.
+# 
+# See: <https://raytracing.github.io/books/RayTracingInOneWeekend.html#addingasphere/creatingourfirstraytracedimage>.
+# 
+
+objects:
+- !Sphere
+  center: [ 0, 0, -1 ]
+  radius: 0.5

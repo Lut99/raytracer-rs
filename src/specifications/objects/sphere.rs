@@ -4,7 +4,7 @@
 //  Created:
 //    01 May 2023, 18:56:14
 //  Last edited:
-//    01 May 2023, 19:18:09
+//    01 May 2023, 19:31:45
 //  Auto updated?
 //    Yes
 // 
@@ -49,9 +49,21 @@ impl Hittable for Sphere {
         // D < 0 -> no intersection, D == 0 -> one intersection (touching side), D > 0 -> two intersections (passing through)
         let d: f64 = half_b*half_b - a*c;
         if d >= 0.0 {
-            Some(HitRecord {
-                t : (-half_b - d.sqrt()) / a,
-            })
+            // Compute the t by filling in the (optimized) ABC formula and get the hit point
+            let t   : f64  = (-half_b - d.sqrt()) / a;
+            let hit : Vec3 = ray.at(t);
+
+            // Compute the outward normal, i.e., the normal that always points upward from the sphere
+            // Note: we divide by the radius to make it a unit sphere (since the hitpoint is guaranteed to be on the sphere itself)
+            let outward_normal: Vec3 = (hit - self.center) / self.radius;
+
+            // Populate the rest of the hitrecord on the fly
+            Some(HitRecord::new(
+                ray,
+                hit,
+                t,
+                outward_normal,
+            ))
         } else {
             None
         }

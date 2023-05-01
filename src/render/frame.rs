@@ -4,7 +4,7 @@
 //  Created:
 //    27 Apr 2023, 14:40:55
 //  Last edited:
-//    01 May 2023, 19:17:52
+//    01 May 2023, 19:35:02
 //  Auto updated?
 //    Yes
 // 
@@ -45,10 +45,9 @@ fn ray_colour(ray: Ray, list: &HitList) -> Colour {
                 // Do the initial hit on the AABB
                 if s.aabb.hit(ray, 0.0, f64::INFINITY) {
                     // Then hit the sphere
-                    if let Some(point) = s.obj.hit(ray) {
-                        // Compute the normal
-                        let normal: Vec3 = (ray.at(point.t) - s.obj.center).unit();
-                        return 0.5 * Colour::new(normal.x + 1.0, normal.y + 1.0, normal.z + 1.0, 1.0);
+                    if let Some(record) = s.obj.hit(ray) {
+                        // We return the colour as a gradient over the normal
+                        return 0.5 * Colour::new(record.normal.x + 1.0, record.normal.y + 1.0, record.normal.z + 1.0, 1.0);
                     }
                 }
             },
