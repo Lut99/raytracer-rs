@@ -4,7 +4,7 @@
 //  Created:
 //    23 Apr 2023, 11:30:03
 //  Last edited:
-//    30 Apr 2023, 12:55:04
+//    01 May 2023, 19:50:02
 //  Auto updated?
 //    Yes
 // 
@@ -22,6 +22,7 @@ use log::{debug, error, info};
 use raytracer::common::errors::PrettyError as _;
 use raytracer::common::file::File as _;
 use raytracer::common::input::Dimensions;
+use raytracer::specifications::features::FeaturesFile;
 use raytracer::specifications::scene::SceneFile;
 use raytracer::hitlist::HitList;
 use raytracer::generate;
@@ -74,6 +75,13 @@ struct RenderArguments {
     /// Whether to fix missing directories when generating the output image or not.
     #[clap(short, long, help="If given, will generate missing directories for the output image.")]
     fix_dirs : bool,
+
+    /// The file defining a constant setting of features.
+    #[clap(short='F', long, help="If given, will use the features enabled in the given features file.")]
+    features_file         : Option<PathBuf>,
+    /// Whether to disable antialiasing or not.
+    #[clap(long, help="If given, will not implement anti-aliasing (i.e., does not send multiple rays per pixel).")]
+    disable_anti_aliasing : bool,
 }
 
 /// Defines the arguments for the `generate` subcommand.
@@ -119,6 +127,17 @@ fn main() {
     // Match on the subcommand
     match args.subcommand {
         RaytracerSubcommand::Render(render) => {
+            // Load the given feature file, if any.
+            let mut features: FeaturesFile = match render.features_file {
+                Some(path) => match FeaturesFile::from_path(&path) {
+                    Ok(features) => features,
+                    Err(err)     => { error!("{}", err.stack()); std::process::exit(1); },
+                },
+                None => FeaturesFile::default(),
+            };
+            // Override it with other options
+            if render.disable_anti_aliasing { features.anti_aliasing = false; }
+
             // Load the given scene file
             debug!("Loading scene file '{}'...", render.scene_path.display());
             let scene: SceneFile = match SceneFile::from_path(&render.scene_path) {
@@ -131,7 +150,7 @@ fn main() {
 
             // Create the image with the target size and render to it
             let mut image: Image = Image::new(render.dims.into());
-            frame::render(&mut image, &list);
+            frame::render(&mut image, &list, &features);
 
             // Now write the image to disk
             if let Err(err) = image.to_path(&render.output_path, render.fix_dirs) { error!("Failed to save rendered image to '{}': {}", render.output_path.display(), err); std::process::exit(1); }

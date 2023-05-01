@@ -4,7 +4,7 @@
 //  Created:
 //    27 Apr 2023, 14:40:55
 //  Last edited:
-//    01 May 2023, 19:35:02
+//    01 May 2023, 19:50:46
 //  Auto updated?
 //    Yes
 // 
@@ -20,6 +20,7 @@ use crate::math::vec3::{Vec3, Vector as _};
 use crate::math::ray::Ray;
 use crate::math::camera::Camera;
 use crate::specifications::objects::{Hittable, Sphere};
+use crate::specifications::features::FeaturesFile;
 use crate::hitlist::{HitItem, HitList};
 
 use super::image::Image;
@@ -80,10 +81,11 @@ fn ray_colour(ray: Ray, list: &HitList) -> Colour {
 /// # Arguments
 /// - `image`: The [`Image`] to which we will render the scene.
 /// - `list`: A [`HitList`] that describes what to render.
+/// - `features`: A [`FeaturesFile`] defining any extra features to enable/disable during rendering.
 /// 
 /// # Returns
 /// A newly rendered image based on the given scene file.
-pub fn render(image: &mut Image, list: &HitList) {
+pub fn render(image: &mut Image, list: &HitList, _features: &FeaturesFile) {
     info!("Rendering scene...");
 
     // Let us define the camera (static, for now)
