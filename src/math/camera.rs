@@ -4,7 +4,7 @@
 //  Created:
 //    28 Apr 2023, 10:33:16
 //  Last edited:
-//    28 Apr 2023, 10:43:06
+//    02 May 2023, 18:17:51
 //  Auto updated?
 //    Yes
 // 
@@ -14,6 +14,7 @@
 // 
 
 use super::vec3::Vec3;
+use super::ray::Ray;
 
 
 /***** LIBRARY *****/
@@ -57,5 +58,20 @@ impl Camera {
             vertical,
             lower_left_corner,
         }
+    }
+
+
+
+    /// Returns a ray casted through the given virtual coordinates of the viewport.
+    /// 
+    /// # Arguments
+    /// - `u`: The virtual X-coordinate, ranging [0.0, 1.0].
+    /// - `v`: The virtual Y-coordinate, ranging [0.0, 1.0].
+    /// 
+    /// # Returns
+    /// A new [`Ray`], casted from this camera's `origin` through the viewport spanned by it.
+    #[inline]
+    pub fn cast(&self, u: f64, v:f64) -> Ray {
+        Ray::new(self.origin, self.lower_left_corner + u * self.horizontal + v * self.vertical - self.origin)
     }
 }

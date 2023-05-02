@@ -4,7 +4,7 @@
 //  Created:
 //    27 Apr 2023, 14:40:55
 //  Last edited:
-//    01 May 2023, 19:50:46
+//    02 May 2023, 18:30:55
 //  Auto updated?
 //    Yes
 // 
@@ -92,11 +92,11 @@ pub fn render(image: &mut Image, list: &HitList, _features: &FeaturesFile) {
     let camera: Camera = Camera::new(((image.width() as f64 / image.height() as f64) * 2.0, 2.0), 1.0);
 
     // Let us fire all the rays (we go top-to-bottom)
-    for ((x, y), ray) in RayGenerator::new(image.dims(), camera).coords() {
+    for ((x, y), ray) in RayGenerator::new(camera, image.dims()).coords() {
         // Compute the colour of the Ray
         let colour : Colour = ray_colour(ray, list);
 
-        // Write the colour to the image
+        // Add the colour to the image. 
         image[(x, y)] = colour.into();
     }
 
