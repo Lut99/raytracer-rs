@@ -4,7 +4,7 @@
 //  Created:
 //    23 Apr 2023, 11:30:03
 //  Last edited:
-//    01 May 2023, 19:50:02
+//    03 May 2023, 08:29:31
 //  Auto updated?
 //    Yes
 // 
@@ -136,7 +136,7 @@ fn main() {
                 None => FeaturesFile::default(),
             };
             // Override it with other options
-            if render.disable_anti_aliasing { features.anti_aliasing = false; }
+            if render.disable_anti_aliasing { features.n_samples = 1; }
 
             // Load the given scene file
             debug!("Loading scene file '{}'...", render.scene_path.display());

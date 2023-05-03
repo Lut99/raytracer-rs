@@ -4,7 +4,7 @@
 //  Created:
 //    23 Apr 2023, 11:42:18
 //  Last edited:
-//    27 Apr 2023, 12:59:26
+//    03 May 2023, 08:45:33
 //  Auto updated?
 //    Yes
 // 
@@ -16,3 +16,4 @@
 pub mod errors;
 pub mod file;
 pub mod input;
+pub mod progress;

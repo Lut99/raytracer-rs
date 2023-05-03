@@ -4,13 +4,15 @@
 //  Created:
 //    27 Apr 2023, 14:46:36
 //  Last edited:
-//    27 Apr 2023, 15:00:37
+//    03 May 2023, 08:40:32
 //  Auto updated?
 //    Yes
 // 
 //  Description:
 //!   Defines the [`Ray`] class, which represents a single ray of light.
 // 
+
+use std::fmt::{Display, Formatter, Result as FResult};
 
 use super::vec3::Vec3;
 
@@ -70,5 +72,12 @@ impl Ray {
     #[inline]
     pub fn at(&self, t: f64) -> Vec3 {
         self.origin + t * self.direct
+    }
+}
+
+impl Display for Ray {
+    #[inline]
+    fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
+        write!(f, "{}->{}", self.origin, self.direct)
     }
 }

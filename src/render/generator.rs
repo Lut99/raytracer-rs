@@ -4,7 +4,7 @@
 //  Created:
 //    29 Apr 2023, 10:13:21
 //  Last edited:
-//    02 May 2023, 18:30:47
+//    03 May 2023, 08:42:37
 //  Auto updated?
 //    Yes
 // 
@@ -12,6 +12,9 @@
 //!   Defines the [`RayGenerator`], which is an iterator that casts
 //!   [`Ray`]s.
 // 
+
+use rand::Rng as _;
+use rand::distributions::Uniform;
 
 use crate::math::{Camera, Ray};
 
@@ -34,14 +37,14 @@ pub struct CoordinateEnumerate<I> {
     y : usize,
 }
 impl<I: Iterator> Iterator for CoordinateEnumerate<I> {
-    type Item = ((u32, u32), I::Item);
+    type Item = ((usize, u32, u32), I::Item);
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
         // Get the next element and map it
         self.iter.next().map(|elem| {
             // Get the to-be-returned coordinates
-            let (x, y): (u32, u32) = (self.x as u32, self.y as u32);
+            let (s, x, y): (usize, u32, u32) = (self.s, self.x as u32, self.y as u32);
 
             // Increment the appropriate stuff
             self.s += 1;
@@ -55,7 +58,7 @@ impl<I: Iterator> Iterator for CoordinateEnumerate<I> {
             }
 
             // Return that which we found
-            ((x, y), elem)
+            ((s, x, y), elem)
         })
     }
 
@@ -76,7 +79,7 @@ impl<I: ExactSizeIterator> ExactSizeIterator for CoordinateEnumerate<I> {
 #[derive(Clone, Copy, Debug)]
 pub struct RayGenerator {
     /// Our current index of iteration.
-    index : u32,
+    index : usize,
 
     /// The Camera through which we cast rays.
     camera    : Camera,
@@ -132,15 +135,24 @@ impl Iterator for RayGenerator {
 
     fn next(&mut self) -> Option<Self::Item> {
         // Check if out-of-bounds
-        if self.index >= self.dims.0 * self.dims.1 { return None; }
+        if self.index >= self.n_samples * self.dims.0 as usize * self.dims.1 as usize { return None; }
 
         // Split the index into a pixel-base X & Y
-        let x: u32 = self.index % self.dims.0;
-        let y: u32 = self.index / self.dims.0;
+        let rem: usize = self.index / self.n_samples;
+        let x: usize = rem % self.dims.0 as usize;
+        let y: usize = rem / self.dims.0 as usize;
 
         // Compute the logical values of these
-        let u: f64 = x as f64 / (self.dims.0 as f64 - 1.0);
-        let v: f64 = y as f64 / (self.dims.1 as f64 - 1.0);
+        let mut u: f64 = x as f64 / (self.dims.0 as f64 - 1.0);
+        let mut v: f64 = y as f64 / (self.dims.1 as f64 - 1.0);
+
+        // Add a random value if we are antialiasing
+        if self.n_samples > 1 {
+            let mut rng = rand::thread_rng();
+            let dist: Uniform<f64> = Uniform::new(0.0, 1.0);
+            u += rng.sample(dist);
+            v += rng.sample(dist);
+        }
 
         // Compute the Ray with those and the Camera viewport
         self.index += 1;
@@ -149,11 +161,11 @@ impl Iterator for RayGenerator {
 
     #[inline]
     fn size_hint(&self) -> (usize, Option<usize>) {
-        let len: usize = (self.dims.0 * self.dims.1) as usize;
+        let len: usize = self.n_samples * self.dims.0 as usize * self.dims.1 as usize;
         (len, Some(len))
     }
 }
 impl ExactSizeIterator for RayGenerator {
     #[inline]
-    fn len(&self) -> usize { (self.dims.0 * self.dims.1 - self.index) as usize }
+    fn len(&self) -> usize { self.n_samples * self.dims.0 as usize * self.dims.1 as usize - self.index as usize }
 }
