@@ -4,7 +4,7 @@
 //  Created:
 //    03 May 2023, 08:43:53
 //  Last edited:
-//    03 May 2023, 09:04:18
+//    04 May 2023, 19:19:50
 //  Auto updated?
 //    Yes
 // 
@@ -15,6 +15,7 @@
 
 use std::error;
 use std::fmt::{Display, Formatter, Result as FResult};
+use std::io::{stderr, stdout, Stderr, Stdout, Write};
 use std::time::{Duration, Instant};
 
 use atty::Stream;
@@ -25,13 +26,14 @@ use num_traits::NumAssign;
 /// Defines errors originating from the ProgressBar.
 #[derive(Debug)]
 pub enum Error {
-
+    /// Failed to write to whatever stdout we're attached to.
+    Writer{ what: &'static str, err: std::io::Error },
 }
 impl Display for Error {
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
         use Error::*;
         match self {
-            
+            Writer{ what, .. } => write!(f, "Failed to render progressbar to {what}"),
         }
     }
 }
@@ -39,7 +41,7 @@ impl error::Error for Error {
     fn source(&self) -> Option<&(dyn error::Error + 'static)> {
         use Error::*;
         match self {
-            
+            Writer{ err, .. } => Some(err),
         }
     }
 }
@@ -51,7 +53,10 @@ impl error::Error for Error {
 /***** LIBRARY *****/
 /// The ProgressBar defines a singe progress bar that we can render to the terminal.
 #[derive(Debug)]
-pub struct ProgressBar<T> {
+pub struct ProgressBar<W, T> {
+    /// Defines the writer to which this ProgressBar writes.
+    writer : W,
+
     /// Defines the current progress.
     size     : T,
     /// Defines the maximum amount to count to.
@@ -61,14 +66,17 @@ pub struct ProgressBar<T> {
     last_render     : Instant,
     /// Defines the render update interval, i.e., the timeout between renders.
     render_interval : Duration,
+
     /// Defines whether we render as a TUI or as a string of text.
     use_inplace     : bool,
     /// Defines whether we render with colour or not.
     use_colour      : bool,
+    /// The width in which we render the progress bar if in interactive mode. [`None`] means to choose the terminal width.
+    width           : Option<usize>,
 }
 
-impl<T: Copy + NumAssign + PartialOrd> ProgressBar<T> {
-    /// Constructor for the Progressbar that initializes it to zero progress.
+impl<T: Copy + NumAssign + PartialOrd> ProgressBar<Stdout, T> {
+    /// Constructor for the ProgressBar that initializes it to zero progress and writes it to `stdout`.
     /// 
     /// # Arguments
     /// - `capacity`: The maximum number of something (`T`) to count to.
@@ -76,62 +84,67 @@ impl<T: Copy + NumAssign + PartialOrd> ProgressBar<T> {
     /// # Returns
     /// A new ProgressBar that can be used to start keeping track of progress.
     #[inline]
-    pub fn new(capacity: T) -> Self {
-        let render_interval: Duration = Duration::from_millis(500);
+    pub fn stdout(capacity: T) -> Self {
+        let is_atty: bool = atty::is(Stream::Stdout);
+        Self::new(
+            stdout(),
+            capacity,
+            Duration::from_millis(500),
+            is_atty,
+            is_atty,
+            None,
+        )
+    }
+}
+impl<T: Copy + NumAssign + PartialOrd> ProgressBar<Stderr, T> {
+    /// Constructor for the ProgressBar that initializes it to zero progress and writes it to `stderr`.
+    /// 
+    /// # Arguments
+    /// - `capacity`: The maximum number of something (`T`) to count to.
+    /// 
+    /// # Returns
+    /// A new ProgressBar that can be used to start keeping track of progress.
+    #[inline]
+    pub fn stderr(capacity: T) -> Self {
+        let is_atty: bool = atty::is(Stream::Stderr);
+        Self::new(
+            stderr(),
+            capacity,
+            Duration::from_millis(500),
+            is_atty,
+            is_atty,
+            None,
+        )
+    }
+}
+impl<W: Write, T: Copy + NumAssign + PartialOrd> ProgressBar<W, T> {
+    /// Constructor for the Progressbar that initializes it to zero progress.
+    /// 
+    /// # Arguments
+    /// - `writer`: The [`Write`]-enabled type to write to the progressbar to on [`ProgressBar::render()`] calls.
+    /// - `capacity`: The maximum number of something (`T`) to count to.
+    /// - `render_interval`: The duration between two render ticks. Note that the progressbar can be updated more than this; this interval is here to avoid the relatively expensive render on every update.
+    /// - `use_inplace`: Whether to render "in-place" (i.e., update parts of the terminal to animate the progressbar) or to instead use a non-replacing alternative.
+    /// - `use_colour`: Whether to use ANSI colours for the progressbar.
+    /// - `width`: The width of the rendered progressbar. If [`None`], then the terminal width is used. Ignored if `use_inplace` is false.
+    /// 
+    /// # Returns
+    /// A new ProgressBar that can be used to start keeping track of progress.
+    #[inline]
+    pub fn new(writer: W, capacity: T, render_interval: Duration, use_inplace: bool, use_colour: bool, width: Option<usize>) -> Self {
         Self {
+            writer,
+
             size : T::zero(),
             capacity,
 
             last_render : Instant::now() - render_interval,
             render_interval,
-            use_inplace : atty::is(Stream::Stdout),
-            use_colour  : atty::is(Stream::Stdout),
+
+            use_inplace,
+            use_colour,
+            width,
         }
-    }
-
-
-
-    /// Factory-like method that sets the interval between two render calls.
-    /// 
-    /// Note that progressbar can be updated more frequently; this is just to avoid slowing down the app by rendering every time.
-    /// 
-    /// # Arguments
-    /// - `interval`: The [`Duration`] that describes the time between render calls.
-    /// 
-    /// # Returns
-    /// A mutable reference to this ProgressBar for optional chaining.
-    #[inline]
-    pub fn render_interval(&mut self, interval: Duration) -> &mut Self {
-        self.render_interval = interval;
-        self
-    }
-
-    /// Factory-like method that enforces a particular fanciness on the progressbar.
-    /// 
-    /// Specifically, if the fanciness is set, will print like a real progressbar that is updated in-place. Otherwise, will print as a series of percentage updates.
-    /// 
-    /// # Arguments
-    /// - `use_inplace`: Whether to inplace rendering or not.
-    /// 
-    /// # Returns
-    /// A mutable reference to this ProgressBar for optional chaining.
-    #[inline]
-    pub fn inplace(&mut self, use_inplace: bool) -> &mut Self {
-        self.use_inplace = use_inplace;
-        self
-    }
-
-    /// Factory-like method that enforces the use of colours on the progressbar.
-    /// 
-    /// # Arguments
-    /// - `use_colour`: Whethre to use ANSI colours while rendering or not.
-    /// 
-    /// # Returns
-    /// A mutable reference to this ProgressBar for optional chaining.
-    #[inline]
-    pub fn colour(&mut self, use_colour: bool) -> &mut Self {
-        self.use_colour = use_colour;
-        self
     }
 
 
@@ -185,10 +198,11 @@ impl<T: Copy + NumAssign + PartialOrd> ProgressBar<T> {
     pub fn render(&self) -> Result<(), Error> {
         // Switch on how to render
         if self.use_inplace {
-
+            // Harder but much pretty method
+            Ok(())
         } else {
             // Fallback to a much easier method
-            
+            Ok(())
         }
     }
 }
