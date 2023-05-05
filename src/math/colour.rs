@@ -4,7 +4,7 @@
 //  Created:
 //    27 Apr 2023, 15:03:09
 //  Last edited:
-//    28 Apr 2023, 11:22:55
+//    05 May 2023, 10:29:35
 //  Auto updated?
 //    Yes
 // 
@@ -86,6 +86,19 @@ impl Colour {
             g : self.g,
             b : self.b,
             a : 1.0,
+        }
+    }
+
+    /// Returns this Colour, but with all its values clamped in the [0.0, 1.0] range.
+    /// 
+    /// # Returns
+    /// A new `Colour` instance with the same RGB-values, but clamped where necessary.
+    pub fn clamp(&self) -> Self {
+        Self {
+            r : self.r.clamp(0.0, 1.0),
+            g : self.g.clamp(0.0, 1.0),
+            b : self.b.clamp(0.0, 1.0),
+            a : self.a.clamp(0.0, 1.0),
         }
     }
 }

@@ -4,7 +4,7 @@
 //  Created:
 //    29 Apr 2023, 10:13:21
 //  Last edited:
-//    03 May 2023, 08:42:37
+//    05 May 2023, 10:36:12
 //  Auto updated?
 //    Yes
 // 
@@ -139,20 +139,20 @@ impl Iterator for RayGenerator {
 
         // Split the index into a pixel-base X & Y
         let rem: usize = self.index / self.n_samples;
-        let x: usize = rem % self.dims.0 as usize;
-        let y: usize = rem / self.dims.0 as usize;
-
-        // Compute the logical values of these
-        let mut u: f64 = x as f64 / (self.dims.0 as f64 - 1.0);
-        let mut v: f64 = y as f64 / (self.dims.1 as f64 - 1.0);
+        let mut x: f64 = (rem % self.dims.0 as usize) as f64;
+        let mut y: f64 = (rem / self.dims.0 as usize) as f64;
 
         // Add a random value if we are antialiasing
         if self.n_samples > 1 {
             let mut rng = rand::thread_rng();
             let dist: Uniform<f64> = Uniform::new(0.0, 1.0);
-            u += rng.sample(dist);
-            v += rng.sample(dist);
+            x += rng.sample(dist);
+            y += rng.sample(dist);
         }
+
+        // Compute the logical values of these
+        let u: f64 = x / (self.dims.0 as f64 - 1.0);
+        let v: f64 = y / (self.dims.1 as f64 - 1.0);
 
         // Compute the Ray with those and the Camera viewport
         self.index += 1;

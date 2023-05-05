@@ -4,7 +4,7 @@
 //  Created:
 //    27 Apr 2023, 14:40:55
 //  Last edited:
-//    05 May 2023, 10:21:57
+//    05 May 2023, 10:32:34
 //  Auto updated?
 //    Yes
 // 
@@ -12,6 +12,8 @@
 //!   Implements the functionality to render a single frame based on a
 //!   [`SceneFile`].
 // 
+
+use std::time::Instant;
 
 use indicatif::{ProgressBar, ProgressStyle};
 use log::info;
@@ -93,19 +95,25 @@ pub fn render(image: &mut Image, list: &HitList, features: &FeaturesFile) {
     let camera: Camera = Camera::new(((image.width() as f64 / image.height() as f64) * 2.0, 2.0), 1.0);
 
     // Let us fire all the rays (we go top-to-bottom)
-    let prgs: ProgressBar = ProgressBar::new(image.dims().0 as u64 * image.dims().1 as u64 * features.n_samples as u64).with_style(ProgressStyle::with_template(" Ray {human_pos}/{human_len} ({per_sec} rays/s) [{wide_bar}] {percent}% (ETA {eta}) ").unwrap_or_else(|err| panic!("Invalid template given to progress bar: {err}")).progress_chars("=> "));
+    let start: Instant = Instant::now();
+    let prgs: ProgressBar = ProgressBar::new(image.dims().0 as u64 * image.dims().1 as u64 * features.n_samples as u64).with_style(ProgressStyle::with_template(" Ray {human_pos}/{human_len} [{wide_bar}] {percent}% (ETA {eta}) ").unwrap_or_else(|err| panic!("Invalid template given to progress bar: {err}")).progress_chars("=> "));
     for ((s, x, y), ray) in RayGenerator::new(camera, image.dims(), features.n_samples).coords() {
         // Compute the colour of the Ray
         let colour : Colour = ray_colour(ray, list);
 
         // Add the colour to the image.
         image[(x, y)] += colour;
-        if s == features.n_samples - 1 { image[(x, y)] /= features.n_samples as f64; }
 
-        // Compute a ray!
+        // Scale the colour back if we're at the end of this pixel
+        if s == features.n_samples - 1 {
+            let scale: f64 = 1.0 / features.n_samples as f64;
+            image[(x, y)] = (image[(x, y)] * scale).clamp();
+        }
+
+        // Computed a ray!
         prgs.update(|state| state.set_pos(s as u64 + x as u64 * features.n_samples as u64 + y as u64 * features.n_samples as u64 * image.dims().0 as u64));
     }
-    prgs.finish();
+    prgs.finish_with_message(format!("Done (averaged {:.2} rays/s)", (image.dims().0 as u64 * image.dims().1 as u64 * features.n_samples as u64) as f64 / start.elapsed().as_secs() as f64));
 
     // Done
 }
