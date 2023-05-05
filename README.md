@@ -40,7 +40,7 @@ To describe a scene to render, we use our own scene file format. It is written i
   - `sphere`: Renders a perfect sphere. It has a `center` option, which takes a list of three coordinates (X, Y, Z), and a `radius` option, which determines its radius. For example:
     ```yaml
     objects:
-    - !sphere
+    - !Sphere
       center: [ 0, 0, -1 ]
       radius: 0.5
     ```

@@ -4,7 +4,7 @@
 //  Created:
 //    27 Apr 2023, 14:40:55
 //  Last edited:
-//    03 May 2023, 08:42:45
+//    05 May 2023, 10:21:57
 //  Auto updated?
 //    Yes
 // 
@@ -13,6 +13,7 @@
 //!   [`SceneFile`].
 // 
 
+use indicatif::{ProgressBar, ProgressStyle};
 use log::info;
 
 use crate::math::colour::Colour;
@@ -92,6 +93,7 @@ pub fn render(image: &mut Image, list: &HitList, features: &FeaturesFile) {
     let camera: Camera = Camera::new(((image.width() as f64 / image.height() as f64) * 2.0, 2.0), 1.0);
 
     // Let us fire all the rays (we go top-to-bottom)
+    let prgs: ProgressBar = ProgressBar::new(image.dims().0 as u64 * image.dims().1 as u64 * features.n_samples as u64).with_style(ProgressStyle::with_template(" Ray {human_pos}/{human_len} ({per_sec} rays/s) [{wide_bar}] {percent}% (ETA {eta}) ").unwrap_or_else(|err| panic!("Invalid template given to progress bar: {err}")).progress_chars("=> "));
     for ((s, x, y), ray) in RayGenerator::new(camera, image.dims(), features.n_samples).coords() {
         // Compute the colour of the Ray
         let colour : Colour = ray_colour(ray, list);
@@ -99,7 +101,11 @@ pub fn render(image: &mut Image, list: &HitList, features: &FeaturesFile) {
         // Add the colour to the image.
         image[(x, y)] += colour;
         if s == features.n_samples - 1 { image[(x, y)] /= features.n_samples as f64; }
+
+        // Compute a ray!
+        prgs.update(|state| state.set_pos(s as u64 + x as u64 * features.n_samples as u64 + y as u64 * features.n_samples as u64 * image.dims().0 as u64));
     }
+    prgs.finish();
 
     // Done
 }
