@@ -4,7 +4,7 @@
 //  Created:
 //    23 Apr 2023, 11:40:34
 //  Last edited:
-//    01 May 2023, 19:44:55
+//    05 May 2023, 10:41:59
 //  Auto updated?
 //    Yes
 // 
@@ -15,5 +15,6 @@
 
 // Declare the submodules
 pub mod objects;
+pub mod materials;
 pub mod features;
 pub mod scene;

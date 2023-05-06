@@ -1,7 +1,9 @@
-# SPHERE WITH GROUND SPHERE.yml
+# FIRST DIFFUSE.yml
 #   by Lut99
 # 
 # Implements a sphere with an extremely large sphere underneath it that emulates a ground.
+# 
+# Is the same as `sphere_with_ground_sphere.yml`, but uses different materials.
 # 
 # Used as the second scene in the tutorial. See:
 # <https://raytracing.github.io/books/RayTracingInOneWeekend.html#surfacenormalsandmultipleobjects/commonconstantsandutilityfunctions>.
@@ -11,8 +13,10 @@ objects:
 - !Sphere
   center: [ 0, 0, -1 ]
   radius: 0.5
-  material: !NormalMap
+  material: !Diffuse
+    colour: [ 1.0, 1.0, 1.0, 1.0 ]
 - !Sphere
   center: [ 0, -100.5, -1 ]
   radius: 100
-  material: !NormalMap
+  material: !Diffuse
+    colour: [ 1.0, 1.0, 1.0, 1.0 ]

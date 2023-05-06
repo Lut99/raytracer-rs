@@ -4,7 +4,7 @@
 //  Created:
 //    27 Apr 2023, 13:27:44
 //  Last edited:
-//    30 Apr 2023, 11:54:54
+//    05 May 2023, 11:00:43
 //  Auto updated?
 //    Yes
 // 
@@ -32,10 +32,7 @@ use serde::ser::{Serializer, SerializeTuple as _};
 /// # Returns
 /// The value of the dot product, as `T`.
 #[inline]
-pub fn dot3<T>(lhs: Vec3<T>, rhs: Vec3<T>) -> T
-where
-    T: Copy + Num,
-{
+pub fn dot3<T: Copy + Num>(lhs: Vec3<T>, rhs: Vec3<T>) -> T {
     lhs.x * rhs.x + lhs.y * rhs.y + lhs.z * rhs.z
 }
 
@@ -48,10 +45,7 @@ where
 /// # Returns
 /// The value of the cross product, as `T`.
 #[inline]
-pub fn cross3<T>(lhs: Vec3<T>, rhs: Vec3<T>) -> Vec3<T>
-where
-    T: Copy + Num,
-{
+pub fn cross3<T: Copy + Num>(lhs: Vec3<T>, rhs: Vec3<T>) -> Vec3<T> {
     Vec3 {
         x : lhs.y * rhs.z + lhs.z * rhs.y,
         y : lhs.z * rhs.x + lhs.x * rhs.z,

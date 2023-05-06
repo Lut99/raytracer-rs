@@ -4,7 +4,7 @@
 //  Created:
 //    27 Apr 2023, 15:03:09
 //  Last edited:
-//    05 May 2023, 10:29:35
+//    05 May 2023, 11:29:20
 //  Auto updated?
 //    Yes
 // 
@@ -19,6 +19,9 @@ use std::fmt::{Display, Formatter, Result as FResult};
 use std::ops::{Add, AddAssign, Div, DivAssign, Index, IndexMut, Mul, MulAssign, Neg, Sub, SubAssign};
 
 use image::Rgba;
+use serde::{Deserialize, Serialize};
+use serde::de::{self, Deserializer, Visitor};
+use serde::ser::{Serializer, SerializeTuple as _};
 
 
 /***** LIBRARY *****/
@@ -375,6 +378,58 @@ impl IndexMut<usize> for Colour {
     }
 }
 
+
+impl Serialize for Colour {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        // Start serializing it as a tuple
+        let mut tup = serializer.serialize_tuple(4)?;
+        tup.serialize_element(&self.r)?;
+        tup.serialize_element(&self.g)?;
+        tup.serialize_element(&self.b)?;
+        tup.serialize_element(&self.a)?;
+        tup.end()
+    }
+}
+impl<'de> Deserialize<'de> for Colour {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        /// Visitor for a Colour
+        struct ColourVisitor;
+        impl<'de> Visitor<'de> for ColourVisitor {
+            type Value = Colour;
+
+            #[inline]
+            fn expecting(&self, f: &mut Formatter) -> FResult { write!(f, "an RGBA-colour") }
+
+            fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+            where
+                A: de::SeqAccess<'de>,
+            {
+                // Parse three elements
+                let r: f64 = seq.next_element()?.ok_or_else(|| de::Error::invalid_length(0, &self))?;
+                let g: f64 = seq.next_element()?.ok_or_else(|| de::Error::invalid_length(1, &self))?;
+                let b: f64 = seq.next_element()?.ok_or_else(|| de::Error::invalid_length(2, &self))?;
+                let a: f64 = seq.next_element()?.ok_or_else(|| de::Error::invalid_length(3, &self))?;
+
+                // Construct the Colour
+                Ok(Colour {
+                    r,
+                    g,
+                    b,
+                    a,
+                })
+            }
+        }
+
+        // Call the visitor
+        deserializer.deserialize_seq(ColourVisitor)
+    }
+}
 impl Display for Colour {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {

@@ -4,7 +4,7 @@
 //  Created:
 //    29 Apr 2023, 10:51:41
 //  Last edited:
-//    01 May 2023, 19:15:16
+//    05 May 2023, 11:54:17
 //  Auto updated?
 //    Yes
 // 
@@ -16,8 +16,10 @@
 use enum_debug::EnumDebug;
 
 use crate::math::AABB;
-use crate::specifications::objects::{BoundingBoxable, Object, Sphere};
+use crate::specifications::objects::{BoundingBoxable, Sphere};
 use crate::specifications::objects::utils::surround_list;
+use crate::specifications::materials::{Diffuse, NormalMap};
+use crate::specifications::scene::{Material, Object};
 
 
 /***** HELPER STRUCTS *****/
@@ -185,105 +187,6 @@ impl<T> BoundingBoxable for HitItem<T> {
 
 
 /***** LIBRARY *****/
-// /// Defines a list of hittable objects, in an Entity Component System-kinda way.
-// /// 
-// /// This struct defines a configurable counterpart of the list. Before you can use it, you should compile it to a [`StaticHitList`] that is optimized for rendering.
-// #[derive(Clone, Debug)]
-// pub struct HitList {
-//     /// A list of object groups that we may hit.
-//     pub groups : Vec<HitList>,
-
-//     /// A list of spheres that we may hit.
-//     pub spheres : Vec<Sphere>,
-// }
-
-// impl HitList {
-//     /// Constructor for the HitList that initializes it empty.
-//     /// 
-//     /// Note that none of the internal vectors have any capacity yet. For optimization purposes, you should probably assign some it to them yourself.
-//     /// 
-//     /// # Returns
-//     /// A new, empty instance of a HitList.
-//     #[inline]
-//     pub fn new() -> Self {
-//         Self {
-//             groups : vec![],
-
-//             spheres : vec![],
-//         }
-//     }
-
-
-
-//     /// Builds a [`StaticHitList`] from this HitList which can be used to efficiently render.
-//     /// 
-//     /// # Returns
-//     /// A new [`StaticHitList`] object that re-ordens the items to efficiently search through them.
-//     #[inline]
-//     pub fn build(&self) -> StaticHitList { StaticHitList::new(self) }
-// }
-
-// impl From<Vec<Object>> for HitList {
-//     #[inline]
-//     fn from(value: Vec<Object>) -> Self {
-//         // Start building ourselves from a list of objects
-//         let mut list: Self = Self::new();
-//         for o in value {
-//             // Match on the type
-//             match o {
-//                 Object::ObjectGroup(g) => list.groups.push(g.into()),
-
-//                 Object::Sphere(s) => list.spheres.push(s),
-//             }
-//         }
-//         list
-//     }
-// }
-// impl From<&Vec<Object>> for HitList {
-//     #[inline]
-//     fn from(value: &Vec<Object>) -> Self { Self::from(value.clone()) }
-// }
-// impl From<&mut Vec<Object>> for HitList {
-//     #[inline]
-//     fn from(value: &mut Vec<Object>) -> Self { Self::from(value.clone()) }
-// }
-// impl From<&[Object]> for HitList {
-//     #[inline]
-//     fn from(value: &[Object]) -> Self { Self::from(value.to_vec()) }
-// }
-// impl From<&mut [Object]> for HitList {
-//     #[inline]
-//     fn from(value: &mut [Object]) -> Self { Self::from(value.to_vec()) }
-// }
-
-// impl From<SceneFile> for HitList {
-//     #[inline]
-//     fn from(value: SceneFile) -> Self { Self::from(value.objects) }
-// }
-// impl From<&SceneFile> for HitList {
-//     #[inline]
-//     fn from(value: &SceneFile) -> Self { Self::from(&value.objects) }
-// }
-// impl From<&mut SceneFile> for HitList {
-//     #[inline]
-//     fn from(value: &mut SceneFile) -> Self { Self::from(&mut value.objects) }
-// }
-
-// impl From<ObjectGroup> for HitList {
-//     #[inline]
-//     fn from(value: ObjectGroup) -> Self { Self::from(value.objects) }
-// }
-// impl From<&ObjectGroup> for HitList {
-//     #[inline]
-//     fn from(value: &ObjectGroup) -> Self { Self::from(&value.objects) }
-// }
-// impl From<&mut ObjectGroup> for HitList {
-//     #[inline]
-//     fn from(value: &mut ObjectGroup) -> Self { Self::from(&mut value.objects) }
-// }
-
-
-
 /// Defines a list of hittable objects, in an Entity Component System-kinda way.
 /// 
 /// Note this struct is non-configurable, as it imposes specific preprocessing and ordering on its contents. Specifically:
@@ -292,14 +195,19 @@ impl<T> BoundingBoxable for HitItem<T> {
 /// - The object groups are also separated by group, and then flattened for most cache-friendly traversal.
 #[derive(Clone, Debug)]
 pub struct HitList {
-    /// The spheres which we can render to
-    spheres : Vec<HitItem<Sphere>>,
+    /// The [`Sphere`]s which use the [`NormalMap`] material.
+    sphere_normalmap : Vec<HitItem<Sphere<NormalMap>>>,
+    /// The [`Sphere`]s which use the basic [`Diffuse`] material.
+    sphere_diffuse   : Vec<HitItem<Sphere<Diffuse>>>,
 }
 
 impl HitList {
-    /// Provides immutable access to the internal list of spheres.
+    /// Provides immutable access to the internal list of normalmap-spheres.
     #[inline]
-    pub fn spheres(&self) -> &[HitItem<Sphere>] { &self.spheres }
+    pub fn sphere_normalmap(&self) -> &[HitItem<Sphere<NormalMap>>] { &self.sphere_normalmap }
+    /// Provides immutable access to the internal list of diffuse-spheres.
+    #[inline]
+    pub fn sphere_diffuse(&self) -> &[HitItem<Sphere<Diffuse>>] { &self.sphere_diffuse }
 }
 
 impl From<Vec<Object>> for HitList {
@@ -318,29 +226,58 @@ impl From<&[Object]> for HitList {
     fn from(value: &[Object]) -> Self {
         // Prepare an empty self, and start populating it based on what we find
         let mut result: HitList = HitList {
-            spheres: vec![],
+            sphere_normalmap : vec![],
+            sphere_diffuse   : vec![],
         };
 
         // Iterate over the objects
         for obj in value {
             // Match on the object's type
             match obj {
-                Object::ObjectGroup(g) => {
-                    // Recursively construct ourselves
-                    let group: HitList = HitList::from(&g.objects);
+                // Normal objects
+                Object::Sphere(s) => {
+                    // Match on the material to find the target list
+                    match s.material {
+                        Material::NormalMap(n) => {
+                            result.sphere_normalmap.push(HitItem::Object(BoundingBox::new(Sphere {
+                                center : s.center,
+                                radius : s.radius,
+        
+                                // But first, unpack the material
+                                material : n,
+                            })));
+                        },
 
-                    // Compute a bounding box surrounding all of its spheres (and we skip anything within a group)
-                    let aabb: AABB = surround_list(ToplevelObjects{ list: &group.spheres, index: 0 });
-
-                    // Then add it to the thing with a group prepended to it
-                    result.spheres.reserve(1 + group.spheres.len());
-                    result.spheres.push(HitItem::Group(BoundingBox{ obj: group.spheres.len(), aabb }));
-                    result.spheres.extend(&group.spheres);
+                        Material::Diffuse(d) => {
+                            result.sphere_diffuse.push(HitItem::Object(BoundingBox::new(Sphere {
+                                center : s.center,
+                                radius : s.radius,
+        
+                                // But first, unpack the material
+                                material : d,
+                            })));
+                        },
+                    };
                 },
 
-                Object::Sphere(s) => {
-                    // We can directly add it to the list of spheres
-                    result.spheres.push(HitItem::Object(BoundingBox::new(*s)));
+                // Groups
+                Object::Group(g) => {
+                    // Recursively construct ourselves
+                    let list: HitList = HitList::from(g);
+
+                    // Compute a bounding box surrounding all of its normalmap spheres (and we skip anything within a group)
+                    let aabb: AABB = surround_list(ToplevelObjects{ list: &list.sphere_normalmap, index: 0 });
+                    // Then add it to the thing with a group prepended to it
+                    result.sphere_normalmap.reserve(1 + list.sphere_normalmap.len());
+                    result.sphere_normalmap.push(HitItem::Group(BoundingBox{ obj: list.sphere_normalmap.len(), aabb }));
+                    result.sphere_normalmap.extend(&list.sphere_normalmap);
+
+                    // Compute a bounding box surrounding all of its diffuse spheres (and we skip anything within a group)
+                    let aabb: AABB = surround_list(ToplevelObjects{ list: &list.sphere_diffuse, index: 0 });
+                    // Then add it to the thing with a group prepended to it
+                    result.sphere_diffuse.reserve(1 + list.sphere_diffuse.len());
+                    result.sphere_diffuse.push(HitItem::Group(BoundingBox{ obj: list.sphere_diffuse.len(), aabb }));
+                    result.sphere_diffuse.extend(&list.sphere_diffuse);
                 },
             }
         }

@@ -4,7 +4,7 @@
 //  Created:
 //    01 May 2023, 18:56:14
 //  Last edited:
-//    01 May 2023, 19:31:45
+//    05 May 2023, 11:30:33
 //  Auto updated?
 //    Yes
 // 
@@ -14,7 +14,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::math::{AABB, Vec3, Vector as _};
+use crate::math::{AABB, Ray, Vec3, Vector as _};
 use crate::math::vec3::dot3;
 
 use super::spec::{BoundingBoxable, HitRecord, Hittable};
@@ -23,19 +23,22 @@ use super::spec::{BoundingBoxable, HitRecord, Hittable};
 /***** LIBRARY *****/
 /// Defines a perfect sphere.
 #[derive(Clone, Copy, Debug, Deserialize, Serialize)]
-pub struct Sphere {
+pub struct Sphere<M> {
     /// The center point of the sphere.
     pub center : Vec3,
     /// The radius of the sphere.
     pub radius : f64,
+
+    /// The material the sphere is composed of.
+    pub material : M,
 }
 
-impl BoundingBoxable for Sphere {
+impl<M> BoundingBoxable for Sphere<M> {
     #[inline]
-    fn aabb(&self) -> crate::math::AABB { AABB::new(self.center - self.radius, self.center + self.radius) }
+    fn aabb(&self) -> AABB { AABB::new(self.center - self.radius, self.center + self.radius) }
 }
-impl Hittable for Sphere {
-    fn hit(&self, ray: crate::math::Ray) -> Option<HitRecord> {
+impl<M> Hittable for Sphere<M> {
+    fn hit(&self, ray: Ray) -> Option<HitRecord> {
         // Compute the distance between the origin of the ray and the center of the sphere
         let oc: Vec3 = ray.origin - self.center;
 

@@ -4,7 +4,7 @@
 //  Created:
 //    23 Apr 2023, 11:30:03
 //  Last edited:
-//    03 May 2023, 08:29:31
+//    05 May 2023, 12:08:07
 //  Auto updated?
 //    Yes
 // 
@@ -82,6 +82,9 @@ struct RenderArguments {
     /// Whether to disable antialiasing or not.
     #[clap(long, help="If given, will not implement anti-aliasing (i.e., does not send multiple rays per pixel).")]
     disable_anti_aliasing : bool,
+    /// Sets the maximum bounce depth.
+    #[clap(long, help="The maximum times that a ray can bounce between objects.")]
+    max_depth             : Option<usize>,
 }
 
 /// Defines the arguments for the `generate` subcommand.
@@ -137,6 +140,7 @@ fn main() {
             };
             // Override it with other options
             if render.disable_anti_aliasing { features.n_samples = 1; }
+            if let Some(depth) = render.max_depth { features.max_depth = depth; }
 
             // Load the given scene file
             debug!("Loading scene file '{}'...", render.scene_path.display());

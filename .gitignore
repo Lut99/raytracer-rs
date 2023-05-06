@@ -1,4 +1,7 @@
 /target
 
+# Also skip the features files
+features.yml
+
 # Also skip output files
 *.png
