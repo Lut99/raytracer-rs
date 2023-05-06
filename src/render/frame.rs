@@ -4,7 +4,7 @@
 //  Created:
 //    27 Apr 2023, 14:40:55
 //  Last edited:
-//    05 May 2023, 14:57:54
+//    06 May 2023, 11:48:51
 //  Auto updated?
 //    Yes
 // 
@@ -24,7 +24,7 @@ use crate::math::ray::Ray;
 use crate::math::camera::Camera;
 use crate::specifications::objects::{Hittable as _};
 use crate::specifications::materials::{Material as _};
-use crate::specifications::features::FeaturesFile;
+use crate::specifications::features::Features;
 use crate::hitlist::{HitItem, HitList};
 
 use super::image::Image;
@@ -43,7 +43,9 @@ macro_rules! hit_object {
                     // Do the initial hit on the AABB
                     if o.aabb.hit($ray, 0.0, f64::INFINITY) {
                         // Then hit the sphere
-                        if let Some(record) = o.obj.hit($ray) {
+                        if let Some(record) = o.obj.hit($ray, 0.0, f64::INFINITY) {
+                            // println!("Ray {} hits {} object {} @ {}", $ray, stringify!($obj_list), i, record.hit);
+
                             // Scatter over the sphere's material and use that to recurse
                             match o.obj.material.scatter($ray, record) {
                                 (Some(scattered), attenuation) => { return attenuation * ray_colour(scattered, $hit_list, $depth - 1); },
@@ -109,7 +111,7 @@ fn ray_colour(ray: Ray, list: &HitList, depth: usize) -> Colour {
 /// 
 /// # Returns
 /// A newly rendered image based on the given scene file.
-pub fn render(image: &mut Image, list: &HitList, features: &FeaturesFile) {
+pub fn render(image: &mut Image, list: &HitList, features: &Features) {
     info!("Rendering scene...");
 
     // Let us define the camera (static, for now)
@@ -122,7 +124,7 @@ pub fn render(image: &mut Image, list: &HitList, features: &FeaturesFile) {
     for ((s, x, y), ray) in RayGenerator::new(camera, image.dims(), features.n_samples).coords() {
         // Compute the colour of the Ray
         let colour : Colour = ray_colour(ray, list, features.max_depth);
-        println!("{colour}");
+        // println!("{colour}");
 
         // Add the colour to the image.
         image[(x, y)] += colour;

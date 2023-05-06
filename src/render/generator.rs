@@ -4,7 +4,7 @@
 //  Created:
 //    29 Apr 2023, 10:13:21
 //  Last edited:
-//    05 May 2023, 10:36:12
+//    06 May 2023, 10:36:31
 //  Auto updated?
 //    Yes
 // 
@@ -12,9 +12,6 @@
 //!   Defines the [`RayGenerator`], which is an iterator that casts
 //!   [`Ray`]s.
 // 
-
-use rand::Rng as _;
-use rand::distributions::Uniform;
 
 use crate::math::{Camera, Ray};
 
@@ -144,10 +141,8 @@ impl Iterator for RayGenerator {
 
         // Add a random value if we are antialiasing
         if self.n_samples > 1 {
-            let mut rng = rand::thread_rng();
-            let dist: Uniform<f64> = Uniform::new(0.0, 1.0);
-            x += rng.sample(dist);
-            y += rng.sample(dist);
+            x += fastrand::f64();
+            y += fastrand::f64();
         }
 
         // Compute the logical values of these

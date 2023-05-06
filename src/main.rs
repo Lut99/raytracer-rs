@@ -4,7 +4,7 @@
 //  Created:
 //    23 Apr 2023, 11:30:03
 //  Last edited:
-//    05 May 2023, 12:08:07
+//    06 May 2023, 11:14:23
 //  Auto updated?
 //    Yes
 // 
@@ -22,7 +22,7 @@ use log::{debug, error, info};
 use raytracer::common::errors::PrettyError as _;
 use raytracer::common::file::File as _;
 use raytracer::common::input::Dimensions;
-use raytracer::specifications::features::FeaturesFile;
+use raytracer::specifications::features::{Features, FeaturesCli, FeaturesFile};
 use raytracer::specifications::scene::SceneFile;
 use raytracer::hitlist::HitList;
 use raytracer::generate;
@@ -78,13 +78,18 @@ struct RenderArguments {
 
     /// The file defining a constant setting of features.
     #[clap(short='F', long, help="If given, will use the features enabled in the given features file.")]
-    features_file         : Option<PathBuf>,
-    /// Whether to disable antialiasing or not.
-    #[clap(long, help="If given, will not implement anti-aliasing (i.e., does not send multiple rays per pixel).")]
-    disable_anti_aliasing : bool,
-    /// Sets the maximum bounce depth.
-    #[clap(long, help="The maximum times that a ray can bounce between objects.")]
-    max_depth             : Option<usize>,
+    features_file : Option<PathBuf>,
+    #[clap(flatten)]
+    features : FeaturesCli,
+    // /// Whether to disable antialiasing or not.
+    // #[clap(long, help="If given, will not implement anti-aliasing (i.e., does not send multiple rays per pixel). Shortcut for '--rays-per-pixel 1'")]
+    // disable_anti_aliasing : bool,
+    // /// The number of rays to shoot per pixel.
+    // #[clap(long, help="Sets the number of rays to shoot per pixel. Setting '1' implies disabling antialiasing.")]
+    // rays_per_pixel        : Option<usize>,
+    // /// Sets the maximum bounce depth.
+    // #[clap(long, help="The maximum times that a ray can bounce between objects.")]
+    // max_depth             : Option<usize>,
 }
 
 /// Defines the arguments for the `generate` subcommand.
@@ -131,16 +136,14 @@ fn main() {
     match args.subcommand {
         RaytracerSubcommand::Render(render) => {
             // Load the given feature file, if any.
-            let mut features: FeaturesFile = match render.features_file {
-                Some(path) => match FeaturesFile::from_path(&path) {
+            let features: Option<FeaturesFile> = render.features_file.map(|p| {
+                match FeaturesFile::from_path(&p) {
                     Ok(features) => features,
                     Err(err)     => { error!("{}", err.stack()); std::process::exit(1); },
-                },
-                None => FeaturesFile::default(),
-            };
+                }
+            });
             // Override it with other options
-            if render.disable_anti_aliasing { features.n_samples = 1; }
-            if let Some(depth) = render.max_depth { features.max_depth = depth; }
+            let features: Features = Features::new(features, render.features);
 
             // Load the given scene file
             debug!("Loading scene file '{}'...", render.scene_path.display());

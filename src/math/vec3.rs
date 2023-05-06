@@ -4,7 +4,7 @@
 //  Created:
 //    27 Apr 2023, 13:27:44
 //  Last edited:
-//    05 May 2023, 11:00:43
+//    06 May 2023, 11:21:40
 //  Auto updated?
 //    Yes
 // 
@@ -60,6 +60,14 @@ pub fn cross3<T: Copy + Num>(lhs: Vec3<T>, rhs: Vec3<T>) -> Vec3<T> {
 /***** AUXILLARY TRAITS *****/
 /// The `Vector` trait implements functions for vectors of any size.
 pub trait Vector: Sized + Copy + Neg + Add + AddAssign + Sub + SubAssign + Mul + MulAssign + Div + DivAssign + Index<usize> + IndexMut<usize> {
+    /// Returns whether this Vector is (nearly) zero.
+    /// 
+    /// Essentially, just checks if `x`, `y` and `z` are all (individually) below some close-to-zero value.
+    /// 
+    /// # Returns
+    /// true if this Vector is essentially zero, or false otherwise.
+    fn is_nearly_zero(&self) -> bool;
+
     /// Returns the unit vector equivalent of this vector.
     /// 
     /// # Returns
@@ -136,6 +144,11 @@ impl<T> Vec3<T> {
     }
 }
 impl<T: Copy + AsPrimitive<f64> + NumAssign + NumCast + Signed> Vector for Vec3<T> {
+    #[inline]
+    fn is_nearly_zero(&self) -> bool {
+        self.x.as_() < 1e-8 && self.y.as_() < 1e-8 && self.z.as_() < 1e-8
+    }
+
     #[inline]
     fn unit(&self) -> Self {
         let len: f64 = self.length();

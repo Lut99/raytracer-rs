@@ -4,7 +4,7 @@
 //  Created:
 //    01 May 2023, 18:58:37
 //  Last edited:
-//    05 May 2023, 11:30:25
+//    06 May 2023, 11:43:06
 //  Auto updated?
 //    Yes
 // 
@@ -85,16 +85,18 @@ pub trait Hittable: BoundingBoxable {
     /// 
     /// # Arguments
     /// - `ray`: The [`Ray`] to compute any hits with.
+    /// - `t_min`: The minimum point along the ray we still accept (we don't count it as a hit before that).
+    /// - `t_max`: The maximum point along the ray we still accept (we don't count is as a hit after that).
     /// 
     /// # Returns
     /// A new [`HitRecord`] struct, which collects relevant information of this hit, or else [`None`] if the ray does not hit.
-    fn hit(&self, ray: Ray) -> Option<HitRecord>;
+    fn hit(&self, ray: Ray, t_min: f64, t_max: f64) -> Option<HitRecord>;
 }
 impl<T: Hittable> Hittable for &T {
     #[inline]
-    fn hit(&self, ray: Ray) -> Option<HitRecord> { (**self).hit(ray) }
+    fn hit(&self, ray: Ray, t_min: f64, t_max: f64) -> Option<HitRecord> { (**self).hit(ray, t_min, t_max) }
 }
 impl<T: Hittable> Hittable for &mut T {
     #[inline]
-    fn hit(&self, ray: Ray) -> Option<HitRecord> { (**self).hit(ray) }
+    fn hit(&self, ray: Ray, t_min: f64, t_max: f64) -> Option<HitRecord> { (**self).hit(ray, t_min, t_max) }
 }

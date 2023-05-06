@@ -5,3 +5,6 @@ features.yml
 
 # Also skip output files
 *.png
+
+# Ignore perf profile information
+perf.data*
