@@ -4,7 +4,7 @@
 //  Created:
 //    01 May 2023, 19:45:19
 //  Last edited:
-//    06 May 2023, 11:13:02
+//    06 May 2023, 12:02:20
 //  Auto updated?
 //    Yes
 // 
@@ -24,10 +24,13 @@ use crate::common::file::impl_file;
 #[derive(Clone, Copy, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub struct FeaturesFile {
+    /// Whether to correct for gamma or not.
+    #[serde(alias = "gamma")]
+    pub gamma_correction : Option<bool>,
+
     /// Whether to enable anti-aliasing or not. Specifically, aliasing is enabled if the number of samples > 1.
     #[serde(alias="anti_aliasing")]
     pub n_samples : Option<usize>,
-
     /// How many times we bounce a Ray, at most.
     #[serde(alias="bounce_depth")]
     pub max_depth : Option<usize>,
@@ -40,6 +43,10 @@ impl_file!(FeaturesFile, serde_yaml);
 /// The FeaturesCli struct defines the CLI interface.
 #[derive(Clone, Copy, Debug, Parser)]
 pub struct FeaturesCli {
+    /// Whether to enable gamma correction (or rather, to disable it).
+    #[clap(long, help="If given, disables gamma correction")]
+    disable_gamma_correction : bool,
+
     /// Whether to enable anti-aliasing (or rather, to disable it).
     #[clap(long, help="If given, disables anti-aliasing (shorthand for '--anti-aliasing-rays 1')")]
     disable_anti_aliasing : bool,
@@ -56,6 +63,9 @@ pub struct FeaturesCli {
 /// The `Features` struct is an abstraction over a features file that combines it and any overrides from the CLI.
 #[derive(Clone, Copy, Debug)]
 pub struct Features {
+    /// Whether to correct for gamma or not.
+    pub gamma_correction : bool,
+
     /// The number of samples to shoot through each ray.
     pub n_samples : usize,
     /// The number of times we bounce a ray at maximum.
@@ -66,6 +76,8 @@ impl Default for Features {
     #[inline]
     fn default() -> Self {
         Self {
+            gamma_correction : true,
+
             n_samples : 100,
             max_depth : 50,
         }
@@ -88,6 +100,8 @@ impl Features {
         // Comput the join of that one and the features file
         let file: Self = match file {
             Some(file) => Self {
+                gamma_correction : file.gamma_correction.unwrap_or(def.gamma_correction),
+
                 n_samples : file.n_samples.unwrap_or(def.n_samples),
                 max_depth : file.max_depth.unwrap_or(def.max_depth),
             },
@@ -96,6 +110,8 @@ impl Features {
 
         // Finally, add in the CLI
         Self {
+            gamma_correction : if cli.disable_gamma_correction { false } else { file.gamma_correction },
+
             n_samples : if cli.disable_anti_aliasing { 1 } else { cli.anti_aliasing_rays.unwrap_or(file.n_samples) },
             max_depth : cli.ray_max_depth.unwrap_or(file.max_depth),
         }

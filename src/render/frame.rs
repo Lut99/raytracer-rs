@@ -4,7 +4,7 @@
 //  Created:
 //    27 Apr 2023, 14:40:55
 //  Last edited:
-//    06 May 2023, 11:48:51
+//    06 May 2023, 12:00:28
 //  Auto updated?
 //    Yes
 // 
@@ -132,7 +132,11 @@ pub fn render(image: &mut Image, list: &HitList, features: &Features) {
         // Scale the colour back if we're at the end of this pixel
         if s == features.n_samples - 1 {
             let scale: f64 = 1.0 / features.n_samples as f64;
-            image[(x, y)] = (image[(x, y)] * scale).clamp();
+            if features.gamma_correction {
+                image[(x, y)] = (image[(x, y)] * scale).gamma().clamp();
+            } else {
+                image[(x, y)] = (image[(x, y)] * scale).clamp();
+            }
         }
 
         // Computed a ray!

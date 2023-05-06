@@ -4,7 +4,7 @@
 //  Created:
 //    27 Apr 2023, 15:03:09
 //  Last edited:
-//    05 May 2023, 11:29:20
+//    06 May 2023, 11:59:30
 //  Auto updated?
 //    Yes
 // 
@@ -95,13 +95,26 @@ impl Colour {
     /// Returns this Colour, but with all its values clamped in the [0.0, 1.0] range.
     /// 
     /// # Returns
-    /// A new `Colour` instance with the same RGB-values, but clamped where necessary.
+    /// A new `Colour` instance with the same RGBA-values, but clamped where necessary.
     pub fn clamp(&self) -> Self {
         Self {
             r : self.r.clamp(0.0, 1.0),
             g : self.g.clamp(0.0, 1.0),
             b : self.b.clamp(0.0, 1.0),
             a : self.a.clamp(0.0, 1.0),
+        }
+    }
+
+    /// Returns this Colour corrected for gamma.
+    /// 
+    /// # Returns
+    /// A new `Colour` instance with the same RGB-values, but corrected for gamma. The alpha channel is passed as-is.
+    pub fn gamma(&self) -> Self {
+        Self {
+            r : self.r.sqrt(),
+            g : self.g.sqrt(),
+            b : self.b.sqrt(),
+            a : self.a,
         }
     }
 }

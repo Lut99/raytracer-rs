@@ -4,7 +4,7 @@
 //  Created:
 //    05 May 2023, 11:41:04
 //  Last edited:
-//    05 May 2023, 11:43:46
+//    06 May 2023, 12:05:58
 //  Auto updated?
 //    Yes
 // 
@@ -22,7 +22,7 @@ use super::spec::Material;
 
 
 /***** LIBRARY *****/
-/// Implements a non-bouncing, just-normal-map kind of material.
+/// Implements a non-bouncing, just-normal-map kind of material. Mostly created for the scene in the [tutorial](https://raytracing.github.io/books/RayTracingInOneWeekend.html#surfacenormalsandmultipleobjects/commonconstantsandutilityfunctions).
 #[derive(Clone, Copy, Debug, Deserialize, Serialize)]
 pub struct NormalMap;
 impl Material for NormalMap {

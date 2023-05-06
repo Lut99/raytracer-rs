@@ -37,13 +37,25 @@ The `raytracer` executable has various features. Currently, these are them:
 ### Scene files
 To describe a scene to render, we use our own scene file format. It is written in [YAML](https://yaml.org), and knows of the following fields:
 - `objects`: Describes a list of objects to render, as a vector. The following objects can be chosen:
-  - `sphere`: Renders a perfect sphere. It has a `center` option, which takes a list of three coordinates (X, Y, Z), and a `radius` option, which determines its radius. For example:
+  - `!Sphere`: Renders a perfect sphere. It has a `center` option, which takes a list of three coordinates (X, Y, Z), and a `radius` option, which determines its radius. For example:
     ```yaml
     objects:
     - !Sphere
       center: [ 0, 0, -1 ]
       radius: 0.5
+      # See below what this means
+      material: !NormalMap
     ```
+  - Then, aside from those objects, every object also has a `material` option. This determines how the light refracts off it, and which colour the object has. Specifically, the following materials are supported:
+    - `!NormalMap`: defines a material that doesn't reflect, but instead just applies a colour gradient based on the normal direction. This is not really used in practise, but instead only for the tutorial (see [here](https://raytracing.github.io/books/RayTracingInOneWeekend.html#surfacenormalsandmultipleobjects/commonconstantsandutilityfunctions)).
+    - `!Diffuse`: A "lazy hack" version of a lambartian diffuse. Implemented from the tutorial. It has only one field, which specifies its color:
+      ```yaml
+      ...
+        - !Sphere
+          ...
+          material: !Diffuse
+            colour: [ 0.5, 0.5, 0.5 ]
+      ```
 
 For examples of scene files, check the [`tests/scenes`](./tests/scenes/) directory.
 
