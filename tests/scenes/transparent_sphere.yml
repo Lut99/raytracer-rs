@@ -1,0 +1,16 @@
+# TRANSPARENT SPHERE.yml
+#   by Lut99
+# 
+# Example that tests our own alpha-blend feature.
+# 
+
+objects:
+- !Sphere
+  center: [ 0, 0, -1 ]
+  radius: 0.5
+  material: !StaticColour
+    colour: [ 1.0, 0.0, 0.0, 0.5 ]
+- !Sphere
+  center: [ 0, -100.5, -1 ]
+  radius: 100
+  material: !NormalMap

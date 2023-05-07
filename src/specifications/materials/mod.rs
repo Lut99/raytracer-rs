@@ -4,7 +4,7 @@
 //  Created:
 //    05 May 2023, 10:41:36
 //  Last edited:
-//    05 May 2023, 11:44:16
+//    07 May 2023, 10:51:52
 //  Auto updated?
 //    Yes
 // 
@@ -22,5 +22,5 @@ pub mod diffuse;
 
 // Put some of it into the module namespace
 pub use spec::*;
-pub use simple::NormalMap;
-pub use diffuse::Diffuse;
+pub use simple::*;
+pub use diffuse::*;

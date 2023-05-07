@@ -4,7 +4,7 @@
 //  Created:
 //    27 Apr 2023, 15:03:09
 //  Last edited:
-//    06 May 2023, 11:59:30
+//    07 May 2023, 10:49:59
 //  Auto updated?
 //    Yes
 // 
@@ -423,11 +423,11 @@ impl<'de> Deserialize<'de> for Colour {
             where
                 A: de::SeqAccess<'de>,
             {
-                // Parse three elements
+                // Parse three to four elements
                 let r: f64 = seq.next_element()?.ok_or_else(|| de::Error::invalid_length(0, &self))?;
                 let g: f64 = seq.next_element()?.ok_or_else(|| de::Error::invalid_length(1, &self))?;
                 let b: f64 = seq.next_element()?.ok_or_else(|| de::Error::invalid_length(2, &self))?;
-                let a: f64 = seq.next_element()?.ok_or_else(|| de::Error::invalid_length(3, &self))?;
+                let a: f64 = seq.next_element()?.unwrap_or(1.0);
 
                 // Construct the Colour
                 Ok(Colour {

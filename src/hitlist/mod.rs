@@ -4,7 +4,7 @@
 //  Created:
 //    29 Apr 2023, 10:50:46
 //  Last edited:
-//    30 Apr 2023, 12:42:38
+//    07 May 2023, 12:17:27
 //  Auto updated?
 //    Yes
 // 
@@ -18,4 +18,4 @@
 pub mod hitlist;
 
 // Get some stuff into the module namespace
-pub use hitlist::{BoundingBox, HitItem, HitList};
+pub use hitlist::{HitIndex, HitList};

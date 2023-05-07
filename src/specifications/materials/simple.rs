@@ -4,7 +4,7 @@
 //  Created:
 //    05 May 2023, 11:41:04
 //  Last edited:
-//    06 May 2023, 12:05:58
+//    07 May 2023, 10:51:40
 //  Auto updated?
 //    Yes
 // 
@@ -22,6 +22,22 @@ use super::spec::Material;
 
 
 /***** LIBRARY *****/
+/// Implements a non-bouncing, static-colour material.
+#[derive(Clone, Copy, Debug, Deserialize, Serialize)]
+pub struct StaticColour {
+    /// The colour to show.
+    colour : Colour,
+}
+impl Material for StaticColour {
+    #[inline]
+    fn scatter(&self, _ray: Ray, _record: HitRecord) -> (Option<Ray>, Colour) {
+        // Compute the normal map colour based on the normal
+        (None, self.colour)
+    }
+}
+
+
+
 /// Implements a non-bouncing, just-normal-map kind of material. Mostly created for the scene in the [tutorial](https://raytracing.github.io/books/RayTracingInOneWeekend.html#surfacenormalsandmultipleobjects/commonconstantsandutilityfunctions).
 #[derive(Clone, Copy, Debug, Deserialize, Serialize)]
 pub struct NormalMap;

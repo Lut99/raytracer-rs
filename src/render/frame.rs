@@ -4,7 +4,7 @@
 //  Created:
 //    27 Apr 2023, 14:40:55
 //  Last edited:
-//    06 May 2023, 12:00:28
+//    07 May 2023, 12:47:02
 //  Auto updated?
 //    Yes
 // 
@@ -22,57 +22,14 @@ use crate::math::colour::Colour;
 use crate::math::vec3::{Vec3, Vector as _};
 use crate::math::ray::Ray;
 use crate::math::camera::Camera;
-use crate::specifications::objects::{Hittable as _};
-use crate::specifications::materials::{Material as _};
 use crate::specifications::features::Features;
-use crate::hitlist::{HitItem, HitList};
+use crate::hitlist::HitList;
 
 use super::image::Image;
 use super::generator::RayGenerator;
 
 
 /***** HELPER MACROS *****/
-/// Implements the logic that happens for every item in a HitList's internal vector.
-macro_rules! hit_object {
-    ($hit_list:ident, $obj_list:ident, $ray:ident, $depth:ident) => {
-        let mut iter = $hit_list.$obj_list().into_iter();
-        while let Some(obj) = iter.next() {
-            // Match whether it is an object or a group
-            match obj {
-                HitItem::Object(o) => {
-                    // Do the initial hit on the AABB
-                    if o.aabb.hit($ray, 0.0, f64::INFINITY) {
-                        // Then hit the sphere
-                        if let Some(record) = o.obj.hit($ray, 0.0, f64::INFINITY) {
-                            // println!("Ray {} hits {} object {} @ {}", $ray, stringify!($obj_list), i, record.hit);
-
-                            // Scatter over the sphere's material and use that to recurse
-                            match o.obj.material.scatter($ray, record) {
-                                (Some(scattered), attenuation) => { return attenuation * ray_colour(scattered, $hit_list, $depth - 1); },
-                                (None, colour)                 => { return colour; },
-                            }
-                        }
-                    }
-                },
-
-                HitItem::Group(g) => {
-                    // Skip all items in this group if we are never hitting them anyway
-                    if !g.aabb.hit($ray, 0.0, f64::INFINITY) {
-                        for _ in 0..g.obj { iter.next(); }
-                    }
-
-                    // Continue now with either the first of the group or first after the group
-                    continue;
-                },
-            }
-        }
-    };
-}
-
-
-
-
-
 /***** HELPER FUNCTIONS *****/
 /// Computes an Rgba quadruplet based on what the Ray hits.
 /// 
@@ -87,14 +44,26 @@ fn ray_colour(ray: Ray, list: &HitList, depth: usize) -> Colour {
     // We stop if there is no more to bounce
     if depth == 0 { return Colour::new(0.0, 0.0, 0.0, 1.0); }
 
-    // If it hits the sphere, return the sphere colour
-    hit_object!(list, sphere_diffuse, ray, depth);
-    hit_object!(list, sphere_normalmap, ray, depth);
+    // Try to find the object that hits closest
+    match list.hit(ray, 0.0, f64::INFINITY) {
+        Some((index, record)) => {
+            // Scatter the ray now we've found it
+            match list.scatter(ray, index, record) {
+                // Return the recursive bounce of the returned ray
+                (Some(scatter), attenuation) => attenuation * ray_colour(scatter, list, depth - 1),
 
-    // Otherwise, compute the background colour based on the Ray's direction; essentially, the higher the Y, the more blue
-    let udir: Vec3 = ray.direct.unit();
-    let t: f64 = 0.5 * (udir.y + 1.0);
-    ((1.0 - t) * Colour::new(1.0, 1.0, 1.0, 0.0) + t * Colour::new(0.5, 0.7, 1.0, 0.0)).opaque()
+                // We can simply return this colour
+                (None, colour) => colour,
+            }
+        },
+
+        None => {
+            // Otherwise, return the sky colour
+            let udir: Vec3 = ray.direct.unit();
+            let t: f64 = 0.5 * (udir.y + 1.0);
+            ((1.0 - t) * Colour::new(1.0, 1.0, 1.0, 0.0) + t * Colour::new(0.5, 0.7, 1.0, 0.0)).opaque()
+        }
+    }
 }
 
 
@@ -107,12 +76,12 @@ fn ray_colour(ray: Ray, list: &HitList, depth: usize) -> Colour {
 /// # Arguments
 /// - `image`: The [`Image`] to which we will render the scene.
 /// - `list`: A [`HitList`] that describes what to render.
-/// - `features`: A [`FeaturesFile`] defining any extra features to enable/disable during rendering.
+/// - `features`: A [`Features`] defining any extra features to enable/disable during rendering.
 /// 
 /// # Returns
 /// A newly rendered image based on the given scene file.
 pub fn render(image: &mut Image, list: &HitList, features: &Features) {
-    info!("Rendering scene...");
+    info!("Rendering scene ({} objects)...", list.len());
 
     // Let us define the camera (static, for now)
     let camera: Camera = Camera::new(((image.width() as f64 / image.height() as f64) * 2.0, 2.0), 1.0);
@@ -133,9 +102,9 @@ pub fn render(image: &mut Image, list: &HitList, features: &Features) {
         if s == features.n_samples - 1 {
             let scale: f64 = 1.0 / features.n_samples as f64;
             if features.gamma_correction {
-                image[(x, y)] = (image[(x, y)] * scale).gamma().clamp();
+                image[(x, y)] = (image[(x, y)] * scale).gamma().opaque().clamp();
             } else {
-                image[(x, y)] = (image[(x, y)] * scale).clamp();
+                image[(x, y)] = (image[(x, y)] * scale).opaque().clamp();
             }
         }
 
