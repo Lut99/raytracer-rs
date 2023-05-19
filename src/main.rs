@@ -4,7 +4,7 @@
 //  Created:
 //    23 Apr 2023, 11:30:03
 //  Last edited:
-//    06 May 2023, 11:14:23
+//    19 May 2023, 11:56:28
 //  Auto updated?
 //    Yes
 // 
@@ -26,8 +26,9 @@ use raytracer::specifications::features::{Features, FeaturesCli, FeaturesFile};
 use raytracer::specifications::scene::SceneFile;
 use raytracer::hitlist::HitList;
 use raytracer::generate;
-use raytracer::render::frame;
+use raytracer::render::spec::{RayRenderer as _, RenderBackend};
 use raytracer::render::image::Image;
+use raytracer::render::single::SingleThreadRenderer;
 
 
 /***** ARGUMENTS *****/
@@ -62,13 +63,6 @@ enum RaytracerSubcommand {
 /// Defines the arguments for the `render` subcommand.
 #[derive(Debug, Parser)]
 struct RenderArguments {
-    /// The path to the scene file to render.
-    #[clap(name="SCENE_PATH", help="The path to the scene file which we want to render.")]
-    scene_path  : PathBuf,
-    /// The path to the image file to output.
-    #[clap(name="OUTPUT_PATH", default_value="./image.png", help="The path to write the rendered image to.")]
-    output_path : PathBuf,
-
     /// The output size of the image.
     #[clap(short, long, default_value="800x600", help="The size of the output image for this render.")]
     dims     : Dimensions,
@@ -76,20 +70,36 @@ struct RenderArguments {
     #[clap(short, long, help="If given, will generate missing directories for the output image.")]
     fix_dirs : bool,
 
+    /// The backend to use for rendering.
+    #[clap(short, long, default_value="single", help="The backend to use for rendering.")]
+    backend : RenderBackend,
+
     /// The file defining a constant setting of features.
     #[clap(short='F', long, help="If given, will use the features enabled in the given features file.")]
     features_file : Option<PathBuf>,
     #[clap(flatten)]
     features : FeaturesCli,
-    // /// Whether to disable antialiasing or not.
-    // #[clap(long, help="If given, will not implement anti-aliasing (i.e., does not send multiple rays per pixel). Shortcut for '--rays-per-pixel 1'")]
-    // disable_anti_aliasing : bool,
-    // /// The number of rays to shoot per pixel.
-    // #[clap(long, help="Sets the number of rays to shoot per pixel. Setting '1' implies disabling antialiasing.")]
-    // rays_per_pixel        : Option<usize>,
-    // /// Sets the maximum bounce depth.
-    // #[clap(long, help="The maximum times that a ray can bounce between objects.")]
-    // max_depth             : Option<usize>,
+
+    /// A once-more nested subcommand that defines what type of media to render.
+    #[clap(subcommand)]
+    media : RenderSubcommand,
+}
+/// Defines the subcommands for the `render` subcommand.
+#[derive(Debug, EnumDebug, Subcommand)]
+enum RenderSubcommand {
+    /// Renders a single frame/image.
+    #[clap(name = "image", alias = "frame", about = "Renders a single frame of the given scene.")]
+    Image(RenderImageArguments),
+}
+/// Defines the arguments for the `render image` subcommand.
+#[derive(Debug, Parser)]
+struct RenderImageArguments {
+    /// The path to the scene file to render.
+    #[clap(name="SCENE_PATH", help="The path to the scene file which we want to render.")]
+    scene_path  : PathBuf,
+    /// The path to the image file to output.
+    #[clap(name="OUTPUT_PATH", default_value="./image.png", help="The path to write the rendered image to.")]
+    output_path : PathBuf,
 }
 
 /// Defines the arguments for the `generate` subcommand.
@@ -145,22 +155,27 @@ fn main() {
             // Override it with other options
             let features: Features = Features::new(features, render.features);
 
-            // Load the given scene file
-            debug!("Loading scene file '{}'...", render.scene_path.display());
-            let scene: SceneFile = match SceneFile::from_path(&render.scene_path) {
-                Ok(scene) => scene,
-                Err(err)  => { error!("{}", err.stack()); std::process::exit(1); },
-            };
+            // Match further on the media type
+            match render.media {
+                RenderSubcommand::Image(image) => {
+                    // Load the given scene file
+                    debug!("Loading scene file '{}'...", image.scene_path.display());
+                    let scene: SceneFile = match SceneFile::from_path(&image.scene_path) {
+                        Ok(scene) => scene,
+                        Err(err)  => { error!("{}", err.stack()); std::process::exit(1); },
+                    };
 
-            // Convert that to a static HitList
-            let list: HitList = HitList::from(&scene.objects);
+                    // Convert that to a static HitList
+                    let list: HitList = HitList::from(&scene.objects);
 
-            // Create the image with the target size and render to it
-            let mut image: Image = Image::new(render.dims.into());
-            frame::render(&mut image, &list, &features);
+                    // Create the image with the target size and render to it
+                    let renderer: SingleThreadRenderer = SingleThreadRenderer::new(render.dims.into(), features);
+                    let output: Image = renderer.render_frame(&list).unwrap();
 
-            // Now write the image to disk
-            if let Err(err) = image.to_path(&render.output_path, render.fix_dirs) { error!("Failed to save rendered image to '{}': {}", render.output_path.display(), err); std::process::exit(1); }
+                    // Now write the image to disk
+                    if let Err(err) = output.to_path(&image.output_path, render.fix_dirs) { error!("Failed to save rendered image to '{}': {}", image.output_path.display(), err); std::process::exit(1); }
+                },
+            }
         },
 
         RaytracerSubcommand::Generate(generate) => {
