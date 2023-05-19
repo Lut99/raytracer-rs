@@ -4,7 +4,7 @@
 //  Created:
 //    19 May 2023, 11:35:51
 //  Last edited:
-//    19 May 2023, 11:42:25
+//    19 May 2023, 12:12:22
 //  Auto updated?
 //    Yes
 // 
@@ -74,9 +74,11 @@ fn ray_colour(ray: Ray, list: &HitList, depth: usize) -> Colour {
 #[derive(Debug)]
 pub struct SingleThreadRenderer {
     /// The dimensions of the output images.
-    dims     : (u32, u32),
+    dims      : (u32, u32),
     /// The renderer features to enable/disable.
-    features : Features,
+    features  : Features,
+    /// Whether to enable or disable the progress bar.
+    show_prgs : bool,
 }
 
 impl SingleThreadRenderer {
@@ -85,14 +87,16 @@ impl SingleThreadRenderer {
     /// # Arguments
     /// - `dims`: The dimensions of the output images of this renderer.
     /// - `features`: The features to enable in this renderer.
+    /// - `show_prgs`: Whether or not to show the progress as we're rendering.
     /// 
     /// # Returns
     /// A new SingleThreadRenderer instance.
     #[inline]
-    pub fn new(dims: (impl Into<u32>, impl Into<u32>), features: impl Into<Features>) -> Self {
+    pub fn new(dims: (impl Into<u32>, impl Into<u32>), features: impl Into<Features>, show_prgs: bool) -> Self {
         Self {
             dims     : (dims.0.into(), dims.1.into()),
             features : features.into(),
+            show_prgs,
         }
     }
 }
@@ -108,10 +112,15 @@ impl RayRenderer for SingleThreadRenderer {
         // Let us define the camera (static, for now)
         let camera: Camera = Camera::new(((image.width() as f64 / image.height() as f64) * 2.0, 2.0), 1.0);
 
+        // Prepare the progressbar if desired
+        let mut prgs: Option<(Instant, ProgressBar)> = if self.show_prgs {
+            Some((Instant::now(), ProgressBar::new(image.dims().0 as u64 * image.dims().1 as u64 * self.features.n_samples as u64).with_style(ProgressStyle::with_template(" Ray {human_pos}/{human_len} [{wide_bar}] {percent}% (ETA {eta}) ").unwrap_or_else(|err| panic!("Invalid template given to progress bar: {err}")).progress_chars("=> "))))
+        } else {
+            None
+        };
+
         // Let us fire all the rays (we go top-to-bottom)
-        let mut last_prgs_update: Instant = Instant::now();
         let start: Instant = Instant::now();
-        let prgs: ProgressBar = ProgressBar::new(image.dims().0 as u64 * image.dims().1 as u64 * self.features.n_samples as u64).with_style(ProgressStyle::with_template(" Ray {human_pos}/{human_len} [{wide_bar}] {percent}% (ETA {eta}) ").unwrap_or_else(|err| panic!("Invalid template given to progress bar: {err}")).progress_chars("=> "));
         for ((s, x, y), ray) in RayGenerator::new(camera, image.dims(), self.features.n_samples).coords() {
             // Compute the colour of the Ray
             let colour : Colour = ray_colour(ray, list, self.features.max_depth);
@@ -131,12 +140,14 @@ impl RayRenderer for SingleThreadRenderer {
             }
 
             // Computed a ray!
-            if last_prgs_update.elapsed().as_millis() >= 500 {
-                prgs.update(|state| state.set_pos(s as u64 + x as u64 * self.features.n_samples as u64 + y as u64 * self.features.n_samples as u64 * image.dims().0 as u64));
-                last_prgs_update += std::time::Duration::from_millis(500);
+            if let Some(prgs) = &mut prgs {
+                if prgs.0.elapsed().as_millis() >= 500 {
+                    prgs.1.update(|state| state.set_pos(s as u64 + x as u64 * self.features.n_samples as u64 + y as u64 * self.features.n_samples as u64 * image.dims().0 as u64));
+                    prgs.0 += std::time::Duration::from_millis(500);
+                }
             }
         }
-        prgs.finish_with_message(format!("Done (averaged {:.2} rays/s)", (image.dims().0 as u64 * image.dims().1 as u64 * self.features.n_samples as u64) as f64 / start.elapsed().as_secs() as f64));
+        if let Some(prgs) = prgs { prgs.1.finish_with_message(format!("Done (averaged {:.2} rays/s)", (image.dims().0 as u64 * image.dims().1 as u64 * self.features.n_samples as u64) as f64 / start.elapsed().as_secs() as f64)); }
 
         // Done
         Ok(image)

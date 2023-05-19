@@ -4,7 +4,7 @@
 //  Created:
 //    19 May 2023, 11:31:46
 //  Last edited:
-//    19 May 2023, 11:52:28
+//    19 May 2023, 12:47:14
 //  Auto updated?
 //    Yes
 // 
@@ -50,4 +50,7 @@ pub enum RenderBackend {
     /// Renders rays single-threaded.
     #[clap(name = "single", alias = "single_threaded", alias = "single-threaded")]
     SingleThreaded,
+    /// Renders rays multi-threaded.
+    #[clap(name = "multi", alias = "multi_threaded", alias = "multi-threaded")]
+    MultiThreaded,
 }

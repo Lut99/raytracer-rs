@@ -4,7 +4,7 @@
 //  Created:
 //    19 May 2023, 11:31:15
 //  Last edited:
-//    19 May 2023, 11:31:19
+//    19 May 2023, 12:48:29
 //  Auto updated?
 //    Yes
 // 
@@ -13,3 +13,7 @@
 // 
 
 // Declare submodules
+pub mod renderer;
+
+// Bring some of it into this namespace
+pub use renderer::{Error, MultiThreadRenderer, MultiThreadRendererConfig};

@@ -4,7 +4,7 @@
 //  Created:
 //    29 Apr 2023, 09:39:10
 //  Last edited:
-//    29 Apr 2023, 10:19:02
+//    19 May 2023, 12:28:52
 //  Auto updated?
 //    Yes
 // 
@@ -88,6 +88,32 @@ impl Image {
             pixels : vec![ Colour::zeroes(); (width * height) as usize ],
             dims   : (width, height),
         }
+    }
+
+
+
+    /// Copies another image into this one.
+    /// 
+    /// # Arguments
+    /// - `other`: The other image to paste into those image.
+    /// - `position`: The position in this image, given as an `(x, y)` pair.
+    /// 
+    /// # Panics
+    /// This function panics if the given image was too large for the position it was places, i.e., `position.0 + other.width() > self.width()` or `position.1 + other.height() > self.height()`.
+    #[track_caller]
+    pub fn move_into(&mut self, other: Image, position: (u32, u32)) {
+        // Assert the image fits
+        if position.0 + other.dims.0 > self.dims.0 || position.1 + other.dims.1 > self.dims.1 {
+            panic!(
+                "Cannot move given image of size {}x{} into this image of size {}x{} at position {}x{} ({},{} + {}x{} > {}x{})",
+                other.dims.0, other.dims.1, self.dims.0, self.dims.1, position.0, position.1,
+                position.0, position.1, other.dims.0, other.dims.1, self.dims.0, self.dims.1,
+            );
+        }
+
+        // Perform the copy
+        let start: usize = position.1 as usize * self.dims.0 as usize + position.0 as usize;
+        self.pixels[start..start + other.pixels.len()].copy_from_slice(&other.pixels);
     }
 
 

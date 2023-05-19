@@ -4,7 +4,7 @@
 //  Created:
 //    23 Apr 2023, 11:30:03
 //  Last edited:
-//    19 May 2023, 11:56:28
+//    19 May 2023, 12:53:51
 //  Auto updated?
 //    Yes
 // 
@@ -29,6 +29,7 @@ use raytracer::generate;
 use raytracer::render::spec::{RayRenderer as _, RenderBackend};
 use raytracer::render::image::Image;
 use raytracer::render::single::SingleThreadRenderer;
+use raytracer::render::multi::{MultiThreadRenderer, MultiThreadRendererConfig};
 
 
 /***** ARGUMENTS *****/
@@ -72,7 +73,10 @@ struct RenderArguments {
 
     /// The backend to use for rendering.
     #[clap(short, long, default_value="single", help="The backend to use for rendering.")]
-    backend : RenderBackend,
+    backend        : RenderBackend,
+    /// Any additional config parameters to set for the backend file.
+    #[clap(long, help="If given, defines a file that defines backend-specific properties.")]
+    backend_config : Option<PathBuf>,
 
     /// The file defining a constant setting of features.
     #[clap(short='F', long, help="If given, will use the features enabled in the given features file.")]
@@ -168,9 +172,39 @@ fn main() {
                     // Convert that to a static HitList
                     let list: HitList = HitList::from(&scene.objects);
 
-                    // Create the image with the target size and render to it
-                    let renderer: SingleThreadRenderer = SingleThreadRenderer::new(render.dims.into(), features);
-                    let output: Image = renderer.render_frame(&list).unwrap();
+                    // Now render based on the backend
+                    let output: Image = match render.backend {
+                        RenderBackend::SingleThreaded => {
+                            debug!("Rendering with single-threaded backend");
+                            let renderer: SingleThreadRenderer = SingleThreadRenderer::new(render.dims.into(), features, true);
+                            renderer.render_frame(&list).unwrap()
+                        },
+
+                        RenderBackend::MultiThreaded => {
+                            debug!("Rendering with multi-threaded backend");
+
+                            // Read the given file, if any
+                            let config: MultiThreadRendererConfig = match render.backend_config {
+                                Some(path) => {
+                                    debug!("Loading multi-threaded backend file '{}'...", path.display());
+                                    match MultiThreadRendererConfig::from_path(path) {
+                                        Ok(config) => config,
+                                        Err(err)   => { error!("{}", err.stack()); std::process::exit(1); },
+                                    }
+                                },
+                                None => Default::default(),
+                            };
+
+                            // Create the backend
+                            let renderer: MultiThreadRenderer = match MultiThreadRenderer::new(render.dims.into(), features, config) {
+                                Ok(renderer) => renderer,
+                                Err(err)     => { error!("{}", err.stack()); std::process::exit(1); },
+                            };
+
+                            // Now render with this backend
+                            renderer.render_frame(&list).unwrap()
+                        },
+                    };
 
                     // Now write the image to disk
                     if let Err(err) = output.to_path(&image.output_path, render.fix_dirs) { error!("Failed to save rendered image to '{}': {}", image.output_path.display(), err); std::process::exit(1); }
