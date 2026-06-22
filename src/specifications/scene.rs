@@ -1,30 +1,29 @@
 //  SCENE.rs
 //    by Lut99
-// 
+//
 //  Created:
 //    23 Apr 2023, 11:40:52
 //  Last edited:
 //    07 May 2023, 12:43:21
 //  Auto updated?
 //    Yes
-// 
+//
 //  Description:
 //!   Defines the scene file.
-// 
+//
 
-use enum_debug::EnumDebug;
 use serde::{Deserialize, Serialize};
 
-use crate::common::file::impl_file;
-use crate::specifications::objects::Sphere;
+use crate::common::file::{impl_toml_from_path, impl_toml_from_string, impl_toml_to_path, impl_toml_to_string};
 use crate::specifications::materials::{Diffuse, NormalMap, StaticColour};
+use crate::specifications::objects::Sphere;
 
 
 /***** AUXILLARY *****/
 /// Helper trait that we use to get some specialization in on retrieving the internal object in the [`Object`] and [`Material`] enums.
 pub trait IntoInner<T> {
     /// Returns ourselves as the given type if we are.
-    /// 
+    ///
     /// # Returns
     /// The internal object, or [`None`].
     fn into_inner(self) -> Option<T>;
@@ -33,7 +32,7 @@ pub trait IntoInner<T> {
 
 
 /// Defines an abstraction over objects that makes it more intuitive for the user to pass them.
-#[derive(Clone, Debug, Deserialize, EnumDebug, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub enum Object {
     // Normal objects
     /// A perfect sphere.
@@ -43,17 +42,18 @@ pub enum Object {
     Group(Vec<Self>),
 }
 
-impl<T: Clone> IntoInner<Sphere<T>> for Object where Material: IntoInner<T> {
+impl<T: Clone> IntoInner<Sphere<T>> for Object
+where
+    Material: IntoInner<T>,
+{
     #[inline]
     fn into_inner(self) -> Option<Sphere<T>> {
         if let Self::Sphere(s) = self {
-            s.material.into_inner().map(|m| {
-                Sphere {
-                    center : s.center,
-                    radius : s.radius,
+            s.material.into_inner().map(|m| Sphere {
+                center: s.center,
+                radius: s.radius,
 
-                    material : m,
-                }
+                material: m,
             })
         } else {
             None
@@ -64,7 +64,7 @@ impl<T: Clone> IntoInner<Sphere<T>> for Object where Material: IntoInner<T> {
 
 
 /// Defines an abstraction over materials that we can use to parse objects independently from sphere.
-#[derive(Clone, Copy, Debug, Deserialize, EnumDebug, Serialize)]
+#[derive(Clone, Copy, Debug, Deserialize, Serialize)]
 pub enum Material {
     // Basic materials
     /// A non-lighted static colour.
@@ -100,6 +100,91 @@ impl IntoInner<Diffuse> for Material {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct SceneFile {
     /// The objects found in this scene.
-    pub objects : Vec<Object>,
+    pub objects: Vec<Object>,
 }
-impl_file!(SceneFile, serde_yaml);
+impl SceneFile {
+    impl_toml_from_string!();
+    impl_toml_to_string!();
+    impl_toml_from_path!();
+    impl_toml_to_path!();
+}
+
+
+
+
+
+/***** TESTS *****/
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::math::Colour;
+
+    #[test]
+    fn test_scene_file_serialize() {
+        assert_eq!(
+            SceneFile { objects: Vec::new() }.to_string().unwrap(),
+            r#"{
+  "objects": []
+}"#
+        );
+        assert_eq!(
+            SceneFile {
+                objects: vec![Object::Sphere(Sphere { center: [0.0, 0.0, 0.0].into(), radius: 1.0, material: Material::NormalMap(NormalMap) })],
+            }
+            .to_string()
+            .unwrap(),
+            r#"{
+  "objects": [
+    {
+      "Sphere": {
+        "center": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "radius": 1.0,
+        "material": {
+          "NormalMap": null
+        }
+      }
+    }
+  ]
+}"#
+        );
+        assert_eq!(
+            SceneFile {
+                objects: vec![Object::Sphere(Sphere {
+                    center:   [0.0, 0.0, 0.0].into(),
+                    radius:   1.0,
+                    material: Material::Diffuse(Diffuse { colour: Colour::new(1.0, 1.0, 1.0, 1.0) }),
+                })],
+            }
+            .to_string()
+            .unwrap(),
+            r#"{
+  "objects": [
+    {
+      "Sphere": {
+        "center": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "radius": 1.0,
+        "material": {
+          "Diffuse": {
+            "colour": [
+              1.0,
+              1.0,
+              1.0,
+              1.0
+            ]
+          }
+        }
+      }
+    }
+  ]
+}"#
+        );
+    }
+}

@@ -16,10 +16,42 @@
 use std::fmt::{Display, Formatter, Result as FResult};
 use std::ops::{Add, AddAssign, Div, DivAssign, Index, IndexMut, Mul, MulAssign, Neg, Sub, SubAssign};
 
-use num_traits::{AsPrimitive, Num, NumAssign, NumCast, Signed, Zero};
 use serde::de::{self, Deserializer, Visitor};
 use serde::ser::{SerializeTuple as _, Serializer};
 use serde::{Deserialize, Serialize};
+
+
+/***** HELPER MACROS *****/
+/// Implements [`Number`].
+macro_rules! number_impl {
+    (f32) => {
+        impl Number for f32 {
+            const ZERO: Self = 0.0;
+
+            #[inline]
+            fn as_f64(self) -> f64 { self as f64 }
+        }
+    };
+    (f64) => {
+        impl Number for f64 {
+            const ZERO: Self = 0.0;
+
+            #[inline]
+            fn as_f64(self) -> f64 { self }
+        }
+    };
+    ($ty:ty) => {
+        impl Number for $ty {
+            const ZERO: Self = 0;
+
+            #[inline]
+            fn as_f64(self) -> f64 { self as f64 }
+        }
+    };
+}
+
+
+
 
 
 /***** AUXILLARY FUNCTIONS *****/
@@ -32,7 +64,7 @@ use serde::{Deserialize, Serialize};
 /// # Returns
 /// The value of the dot product, as `T`.
 #[inline]
-pub fn dot3<T: Copy + Num>(lhs: Vec3<T>, rhs: Vec3<T>) -> T { lhs.x * rhs.x + lhs.y * rhs.y + lhs.z * rhs.z }
+pub fn dot3<T: Number>(lhs: Vec3<T>, rhs: Vec3<T>) -> T { lhs.x * rhs.x + lhs.y * rhs.y + lhs.z * rhs.z }
 
 /// Computes the cross product of two 3D vectors.
 ///
@@ -43,7 +75,7 @@ pub fn dot3<T: Copy + Num>(lhs: Vec3<T>, rhs: Vec3<T>) -> T { lhs.x * rhs.x + lh
 /// # Returns
 /// The value of the cross product, as `T`.
 #[inline]
-pub fn cross3<T: Copy + Num>(lhs: Vec3<T>, rhs: Vec3<T>) -> Vec3<T> {
+pub fn cross3<T: Number>(lhs: Vec3<T>, rhs: Vec3<T>) -> Vec3<T> {
     Vec3 { x: lhs.y * rhs.z + lhs.z * rhs.y, y: lhs.z * rhs.x + lhs.x * rhs.z, z: lhs.x * rhs.y + lhs.y * rhs.x }
 }
 
@@ -52,48 +84,61 @@ pub fn cross3<T: Copy + Num>(lhs: Vec3<T>, rhs: Vec3<T>) -> Vec3<T> {
 
 
 /***** AUXILLARY TRAITS *****/
-/// The `Vector` trait implements functions for vectors of any size.
-pub trait Vector:
-    Sized + Copy + Neg + Add + AddAssign + Sub + SubAssign + Mul + MulAssign + Div + DivAssign + Index<usize> + IndexMut<usize>
+/// The `Number` trait implements functions for anything in a vector.
+pub trait Number:
+    Sized + Copy + Add<Output = Self> + AddAssign + Sub<Output = Self> + SubAssign + Mul<Output = Self> + MulAssign + Div<Output = Self> + DivAssign
 {
-    /// Returns whether this Vector is (nearly) zero.
-    ///
-    /// Essentially, just checks if `x`, `y` and `z` are all (individually) below some close-to-zero value.
-    ///
-    /// # Returns
-    /// true if this Vector is essentially zero, or false otherwise.
-    fn is_nearly_zero(&self) -> bool;
+    const ZERO: Self;
 
-    /// Returns the unit vector equivalent of this vector.
-    ///
-    /// # Returns
-    /// A new `Vec3` that is the unit vector of this vector.
-    fn unit(&self) -> Self;
-    /// Computes the mathmatical length of this vector.
-    ///
-    /// # Returns
-    /// The length of this vector, as a double-precision floating-point.
-    fn length(&self) -> f64 { self.length2().sqrt() }
-    /// Computes the mathmatical length squared of this vector.
-    ///
-    /// # Returns
-    ///  The length of this vector squared, as a double-precision floating-point.
-    fn length2(&self) -> f64;
-
-    /// Returns the programmatic length of this vector, i.e., the number of elements in it.
-    ///
-    /// # Returns
-    /// The number of elements in this vector, as a [`usize`].
-    fn len(&self) -> usize;
+    /// Returns this number as an [`f64`].
+    fn as_f64(self) -> f64;
 }
 
+// Canonical impls
+number_impl!(u8);
+number_impl!(u16);
+number_impl!(u32);
+number_impl!(u64);
+number_impl!(u128);
+number_impl!(usize);
+number_impl!(i8);
+number_impl!(i16);
+number_impl!(i32);
+number_impl!(i64);
+number_impl!(i128);
+number_impl!(isize);
+number_impl!(f32);
+number_impl!(f64);
 
+
+
+/// Defines a [`Number`] that can be negative.
+pub trait Signed: Number + Neg<Output = Self> {}
+
+// Canonical impls
+impl Signed for i8 {}
+impl Signed for i16 {}
+impl Signed for i32 {}
+impl Signed for i64 {}
+impl Signed for i128 {}
+impl Signed for isize {}
+impl Signed for f32 {}
+impl Signed for f64 {}
+
+
+
+/// Defines a [`Number`] that is floating-point.
+pub trait Float: Number {}
+
+// Canonical impls
+impl Float for f32 {}
+impl Float for f64 {}
 
 
 
 /***** LIBRARY *****/
 /// The `Vec3` class implements a 3D vector. By default, it abstracts over double-precision floats, but this can be changed manually.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct Vec3<T = f64> {
     /// The X-coordinate / index 0.
     pub x: T,
@@ -103,7 +148,8 @@ pub struct Vec3<T = f64> {
     pub z: T,
 }
 
-impl<T: Zero> Default for Vec3<T> {
+// Constructors
+impl<T: Number> Default for Vec3<T> {
     #[inline]
     fn default() -> Self { Self::zeroes() }
 }
@@ -118,46 +164,64 @@ impl<T> Vec3<T> {
     /// # Returns
     /// A new instance of Self with the given coordinates.
     #[inline]
-    pub fn new(x: impl Into<T>, y: impl Into<T>, z: impl Into<T>) -> Self { Self { x: x.into(), y: y.into(), z: z.into() } }
-
+    pub const fn new(x: T, y: T, z: T) -> Self { Self { x, y, z } }
+}
+impl<T: Number> Vec3<T> {
     /// Constructor for the Vec3 that initializes it to all-zeroes.
     ///
     /// # Returns
     /// A new instance of Self with only 0's in it.
     #[inline]
-    pub fn zeroes() -> Self
-    where
-        T: Zero,
-    {
-        Self { x: T::zero(), y: T::zero(), z: T::zero() }
-    }
+    pub fn zeroes() -> Self { Self { x: T::ZERO, y: T::ZERO, z: T::ZERO } }
 }
-impl<T: Copy + AsPrimitive<f64> + NumAssign + NumCast + Signed> Vector for Vec3<T> {
-    #[inline]
-    fn is_nearly_zero(&self) -> bool { self.x.as_() < 1e-8 && self.y.as_() < 1e-8 && self.z.as_() < 1e-8 }
 
+// Facts
+impl<T: Float> Vec3<T> {
+    /// Returns whether this Vec3 is _nearly_ zero.
+    ///
+    /// This is used to "round off" the last bit of colour, and as such, only useful for
+    /// floating-point numbers.
+    ///
+    /// # Returns
+    /// True if every component of this vector is below `1e-8`, or false if any of them isn't.
     #[inline]
-    fn unit(&self) -> Self {
+    pub fn is_nearly_zero(&self) -> bool { self.x.as_f64() < 1e-8 && self.y.as_f64() < 1e-8 && self.z.as_f64() < 1e-8 }
+}
+impl<T: Number> Vec3<T> {
+    /// Computes the length of the vector.
+    ///
+    /// If you plan to square the length later anyway, consider using [`Vec3::length2()`] instead.
+    ///
+    /// # Returns
+    /// The mathmatical length of this vector.
+    #[inline]
+    pub fn length(&self) -> f64 { self.length2().sqrt() }
+
+    /// Computes the length of the vector, but still squared.
+    ///
+    /// Use this is if you plan to square the length later anyway. Else, consider using
+    /// [`Vec3::length()`] instead.
+    ///
+    /// # Returns
+    /// The mathmatical length of this vector to the power of two.
+    #[inline]
+    pub fn length2(&self) -> f64 { (self.x * self.x + self.y * self.y + self.z * self.z).as_f64() }
+}
+
+// Custom ops
+impl<T: Float> Vec3<T> {
+    /// Returns a Vec3 that is the unit vector of this vector.
+    ///
+    /// # Returns
+    /// A new Vec3 of floats that has the same direction but [length](Vec3::length()) `1`.
+    #[inline]
+    pub fn unit(&self) -> Vec3<f64> {
         let len: f64 = self.length();
-        Self {
-            x: T::from(self.x.as_() / len).unwrap_or_else(|| {
-                panic!("Cannot compute unit length of Vec3<{}>, since element type cannot be created from f64", std::any::type_name::<T>())
-            }),
-            y: T::from(self.y.as_() / len).unwrap_or_else(|| {
-                panic!("Cannot compute unit length of Vec3<{}>, since element type cannot be created from f64", std::any::type_name::<T>())
-            }),
-            z: T::from(self.z.as_() / len).unwrap_or_else(|| {
-                panic!("Cannot compute unit length of Vec3<{}>, since element type cannot be created from f64", std::any::type_name::<T>())
-            }),
-        }
+        Vec3 { x: self.x.as_f64() / len, y: self.y.as_f64() / len, z: self.z.as_f64() / len }
     }
-    #[inline]
-    fn length2(&self) -> f64 { (self.x * self.x + self.y * self.y + self.z * self.z).as_() }
-
-    #[inline]
-    fn len(&self) -> usize { 3 }
 }
 
+// Std ops
 impl<T: Signed> Neg for Vec3<T> {
     type Output = Self;
 
@@ -165,13 +229,13 @@ impl<T: Signed> Neg for Vec3<T> {
     fn neg(self) -> Self::Output { Self { x: -self.x, y: -self.y, z: -self.z } }
 }
 
-impl<T: Num> Add for Vec3<T> {
+impl<T: Number> Add for Vec3<T> {
     type Output = Self;
 
     #[inline]
     fn add(self, rhs: Self) -> Self::Output { Self { x: self.x + rhs.x, y: self.y + rhs.y, z: self.z + rhs.z } }
 }
-impl<T: NumAssign> AddAssign for Vec3<T> {
+impl<T: Number> AddAssign for Vec3<T> {
     #[inline]
     fn add_assign(&mut self, rhs: Self) {
         self.x += rhs.x;
@@ -179,13 +243,13 @@ impl<T: NumAssign> AddAssign for Vec3<T> {
         self.z += rhs.z;
     }
 }
-impl<T: Num> Sub for Vec3<T> {
+impl<T: Number> Sub for Vec3<T> {
     type Output = Self;
 
     #[inline]
     fn sub(self, rhs: Self) -> Self::Output { Self { x: self.x - rhs.x, y: self.y - rhs.y, z: self.z - rhs.z } }
 }
-impl<T: NumAssign> SubAssign for Vec3<T> {
+impl<T: Number> SubAssign for Vec3<T> {
     #[inline]
     fn sub_assign(&mut self, rhs: Self) {
         self.x -= rhs.x;
@@ -193,13 +257,13 @@ impl<T: NumAssign> SubAssign for Vec3<T> {
         self.z -= rhs.z;
     }
 }
-impl<T: Num> Mul for Vec3<T> {
+impl<T: Number> Mul for Vec3<T> {
     type Output = Self;
 
     #[inline]
     fn mul(self, rhs: Self) -> Self::Output { Self { x: self.x * rhs.x, y: self.y * rhs.y, z: self.z * rhs.z } }
 }
-impl<T: NumAssign> MulAssign for Vec3<T> {
+impl<T: Number> MulAssign for Vec3<T> {
     #[inline]
     fn mul_assign(&mut self, rhs: Self) {
         self.x *= rhs.x;
@@ -207,13 +271,13 @@ impl<T: NumAssign> MulAssign for Vec3<T> {
         self.z *= rhs.z;
     }
 }
-impl<T: Num> Div for Vec3<T> {
+impl<T: Number> Div for Vec3<T> {
     type Output = Self;
 
     #[inline]
     fn div(self, rhs: Self) -> Self::Output { Self { x: self.x / rhs.x, y: self.y / rhs.y, z: self.z / rhs.z } }
 }
-impl<T: NumAssign> DivAssign for Vec3<T> {
+impl<T: Number> DivAssign for Vec3<T> {
     #[inline]
     fn div_assign(&mut self, rhs: Self) {
         self.x /= rhs.x;
@@ -222,13 +286,13 @@ impl<T: NumAssign> DivAssign for Vec3<T> {
     }
 }
 
-impl<T: Copy + Num> Add<T> for Vec3<T> {
+impl<T: Number> Add<T> for Vec3<T> {
     type Output = Self;
 
     #[inline]
     fn add(self, rhs: T) -> Self::Output { Self { x: self.x + rhs, y: self.y + rhs, z: self.z + rhs } }
 }
-impl<T: Copy + NumAssign> AddAssign<T> for Vec3<T> {
+impl<T: Number> AddAssign<T> for Vec3<T> {
     #[inline]
     fn add_assign(&mut self, rhs: T) {
         self.x += rhs;
@@ -236,13 +300,13 @@ impl<T: Copy + NumAssign> AddAssign<T> for Vec3<T> {
         self.z += rhs;
     }
 }
-impl<T: Copy + Num> Sub<T> for Vec3<T> {
+impl<T: Number> Sub<T> for Vec3<T> {
     type Output = Self;
 
     #[inline]
     fn sub(self, rhs: T) -> Self::Output { Self { x: self.x - rhs, y: self.y - rhs, z: self.z - rhs } }
 }
-impl<T: Copy + NumAssign> SubAssign<T> for Vec3<T> {
+impl<T: Number> SubAssign<T> for Vec3<T> {
     #[inline]
     fn sub_assign(&mut self, rhs: T) {
         self.x -= rhs;
@@ -250,13 +314,13 @@ impl<T: Copy + NumAssign> SubAssign<T> for Vec3<T> {
         self.z -= rhs;
     }
 }
-impl<T: Copy + Num> Mul<T> for Vec3<T> {
+impl<T: Number> Mul<T> for Vec3<T> {
     type Output = Self;
 
     #[inline]
     fn mul(self, rhs: T) -> Self::Output { Self { x: self.x * rhs, y: self.y * rhs, z: self.z * rhs } }
 }
-impl<T: Copy + NumAssign> MulAssign<T> for Vec3<T> {
+impl<T: Number> MulAssign<T> for Vec3<T> {
     #[inline]
     fn mul_assign(&mut self, rhs: T) {
         self.x *= rhs;
@@ -264,13 +328,13 @@ impl<T: Copy + NumAssign> MulAssign<T> for Vec3<T> {
         self.z *= rhs;
     }
 }
-impl<T: Copy + Num> Div<T> for Vec3<T> {
+impl<T: Number> Div<T> for Vec3<T> {
     type Output = Self;
 
     #[inline]
     fn div(self, rhs: T) -> Self::Output { Self { x: self.x / rhs, y: self.y / rhs, z: self.z / rhs } }
 }
-impl<T: Copy + NumAssign> DivAssign<T> for Vec3<T> {
+impl<T: Number> DivAssign<T> for Vec3<T> {
     #[inline]
     fn div_assign(&mut self, rhs: T) {
         self.x /= rhs;

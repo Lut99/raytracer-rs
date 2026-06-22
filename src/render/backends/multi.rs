@@ -15,23 +15,25 @@
 
 use std::error;
 use std::fmt::{Display, Formatter, Result as FResult};
+use std::iter::Enumerate;
 use std::num::NonZeroUsize;
+use std::sync::Arc;
 use std::thread::ScopedJoinHandle;
 use std::time::Instant;
 
-use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
+use indicatif::{ProgressBar, ProgressStyle};
 use log::info;
+use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 
 use super::super::image::Image;
-use super::super::iter::Coords;
 use super::super::iter::prelude::*;
+use super::super::iter::{Coords, Samples};
 use super::super::spec::RayRenderer;
 use super::cpu::ray_colour;
-use crate::common::file::impl_file;
+use crate::common::file::{impl_toml_from_path, impl_toml_from_string, impl_toml_to_path, impl_toml_to_string};
 use crate::hitlist::HitList;
 use crate::math::{Camera, Colour};
-use crate::render::iter::Samples;
 use crate::specifications::features::Features;
 
 
@@ -69,13 +71,20 @@ impl error::Error for Error {
 pub struct MultiThreadRendererConfig {
     /// Defines the number of threads to spawn. If omitted, uses the number reported by `std::thread::available_parallelism()`.
     n_threads: Option<NonZeroUsize>,
+    /// Defines the workload size to send to each thread everytime they finished rendering the previous one.
+    work_size: usize,
 }
 
 impl Default for MultiThreadRendererConfig {
     #[inline]
-    fn default() -> Self { Self { n_threads: None } }
+    fn default() -> Self { Self { n_threads: None, work_size: 64 } }
 }
-impl_file!(MultiThreadRendererConfig, serde_yaml);
+impl MultiThreadRendererConfig {
+    impl_toml_from_string!();
+    impl_toml_to_string!();
+    impl_toml_from_path!();
+    impl_toml_to_path!();
+}
 
 
 
@@ -94,6 +103,8 @@ pub struct MultiThreadRenderer {
 
     /// The number of threads to render with.
     n_threads: usize,
+    /// The number of rays to send to each thread every time they need work.
+    work_size: usize,
 }
 
 impl MultiThreadRenderer {
@@ -118,7 +129,8 @@ impl MultiThreadRenderer {
         config: impl Into<MultiThreadRendererConfig>,
     ) -> Result<Self, Error> {
         // Resolve the number of threads first
-        let n_threads: usize = match config.into().n_threads {
+        let config = config.into();
+        let n_threads: usize = match config.n_threads {
             Some(n_threads) => n_threads.into(),
             None => match std::thread::available_parallelism() {
                 Ok(n_threads) => n_threads.into(),
@@ -129,150 +141,124 @@ impl MultiThreadRenderer {
         };
 
         // Done
-        Ok(Self { dims: (dims.0.into(), dims.1.into()), features: features.into(), show_prgs, n_threads })
+        Ok(Self { dims: (dims.0.into(), dims.1.into()), features: features.into(), show_prgs, n_threads, work_size: config.work_size })
     }
 }
 impl RayRenderer for MultiThreadRenderer {
     type Error = std::convert::Infallible;
 
     fn render_frame(&self, list: &HitList) -> Result<crate::render::image::Image, Self::Error> {
-        // // Compute the (approximate) share for each thread
-        // let rows_per_thread: u32 = self.dims.1 / self.n_threads as u32;
-
-        // // Enter a thread scope to share the HitList
-        // let mut result: Image = Image::new(self.dims);
-        // thread::scope(|s| {
-        //     // Spawn the required number of threads
-        //     let mut handles: Vec<ScopedJoinHandle<Image>> = Vec::with_capacity(self.n_threads.into());
-        //     for i in 0..self.n_threads {
-        //         // Compute this thread's share
-        //         let height: u32 = rows_per_thread + (i == self.n_threads - 1) as u32 * (self.dims.1 % self.n_threads as u32);
-
-        //         // Spawn the thread
-        //         let width: u32 = self.dims.0;
-        //         let features: Features = self.features.clone();
-        //         handles.push(s.spawn(move || {
-        //             // Create a single-threaded renderer for this number of images
-        //             let renderer: SingleThreadRenderer = SingleThreadRenderer::new((width, height), features, false);
-        //             renderer.render_frame(list).unwrap()
-        //         }));
-        //     }
-
-        //     // Now wait for the other threads to join, showing the progress bars in the meantime
-        //     let mut done: usize = 0;
-        //     while done < self.n_threads {
-        //         // Poll the threads to see if they are ready
-        //         done = 0;
-        //         for handle in &handles {
-        //             done += handle.is_finished() as usize;
-        //         }
-
-        //         // Do sommat progressbar-y in the meantime
-        //         /* TODO */
-        //     }
-
-        //     // Join all the threads
-        //     for (i, handle) in handles.into_iter().enumerate() {
-        //         // Get the result
-        //         let image: Image = match handle.join() {
-        //             Ok(image) => image,
-        //             Err(_) => {
-        //                 panic!("Thread {i} panicked");
-        //             },
-        //         };
-
-        //         // Move it into its location in the main image
-        //         result.move_into(image, (0, i as u32 * rows_per_thread));
-        //     }
-        // });
-
-        // // Done, return the image!
-        // Ok(result)
-
         info!("Rendering scene ({} objects)...", list.len());
 
         // Let us define the camera (static, for now)
         let dims: (u32, u32) = self.dims;
         let camera: Camera = Camera::new(((dims.0 as f64 / dims.1 as f64) * 2.0, 2.0), 1.0);
+        let scale: f64 = 1.0 / self.features.n_samples as f64;
 
-        // Prepare the progressbar if desired
-        let prgs: Option<(Instant, MultiProgress)> = if self.show_prgs { Some((Instant::now(), MultiProgress::new())) } else { None };
-
-        // Split the rays, do each generator on a separate thread
-        let mut image = Image::new(dims);
-        let start: Instant = Instant::now();
+        // Now have the threads each do chunk of rays, popping them off the main queue
         std::thread::scope(|s| {
-            // Get an image and split it into many parts
-            let parts: Vec<&mut [Colour]> = image.distribute(self.n_threads);
+            let start: Instant = Instant::now();
+
+            // Define the main queue of rays & the progress bar
+            let queue: Arc<Mutex<(Enumerate<Coords>, Option<(Instant, ProgressBar)>)>> = Arc::new(Mutex::new((
+                Coords::new(dims).enumerate(),
+                if self.show_prgs {
+                    Some((
+                        Instant::now(),
+                        ProgressBar::new(dims.0 as u64 * dims.1 as u64 * self.features.n_samples as u64).with_style(
+                            ProgressStyle::with_template(" Ray {human_pos}/{human_len} [{wide_bar}] {percent}% (ETA {eta}) ")
+                                .unwrap_or_else(|err| panic!("Invalid template given to progress bar: {err}"))
+                                .progress_chars("=> "),
+                        ),
+                    ))
+                } else {
+                    None
+                },
+            )));
 
             // Split one set of rays for every thread
-            let handles: Vec<ScopedJoinHandle<()>> = Coords::new(dims)
-                .distribute(self.n_threads)
-                .zip(parts)
-                .map(|(iter, part)| {
-                    // Prepare a progress bar
-                    let llen: usize = iter.len();
-                    let mut prgs: Option<(Instant, ProgressBar)> = prgs.as_ref().map(|(inst, prgs)| {
-                        (
-                            *inst,
-                            prgs.add(
-                                ProgressBar::new(llen as u64 * self.features.n_samples as u64).with_style(
-                                    ProgressStyle::with_template(" Ray {human_pos}/{human_len} [{wide_bar}] {percent}% (ETA {eta}) ")
-                                        .unwrap_or_else(|err| panic!("Invalid template given to progress bar: {err}"))
-                                        .progress_chars("=> "),
-                                ),
-                            ),
-                        )
-                    });
-
+            let handles: Vec<ScopedJoinHandle<Image>> = (0..self.n_threads)
+                .map(|_| {
                     // Spawn a thread that does this iterator
+                    let queue = queue.clone();
                     s.spawn(move || {
-                        // Iterate
-                        for (li, coord) in iter.enumerate() {
-                            // Run through the samples
-                            for (s, ray) in Samples::new(self.features.n_samples, [coord].into_iter()).cast(camera, dims).enumerate() {
-                                // Compute the colour of the Ray
-                                let colour: Colour = ray_colour(ray, list, self.features.max_depth);
+                        // Prepare this local thread's frame to render to
+                        let mut count: u64 = 0;
+                        let mut image = Image::new(dims);
+                        let mut buf: Vec<(usize, (f64, f64))> = Vec::with_capacity(self.work_size);
 
-                                // Add the colour to the image.
-                                part[li] += colour;
+                        // Keep popping work until all pixels are computed
+                        loop {
+                            // Pop a chunk of rays to render
+                            {
+                                let mut lock = queue.lock();
+                                buf.extend((&mut lock.0).take(self.work_size));
+                                if buf.is_empty() {
+                                    // Done, nothing to render anymore
+                                    break image;
+                                }
 
-                                // Computed a ray!
-                                if let Some(prgs) = &mut prgs {
+                                // Update the progress bar with what we're going to do
+                                if let Some(prgs) = &mut lock.1 {
                                     if prgs.0.elapsed().as_millis() >= 500 {
-                                        prgs.1.update(|state| state.set_pos((li * self.features.n_samples + s) as u64));
+                                        prgs.1.inc(count);
                                         prgs.0 += std::time::Duration::from_millis(500);
+                                        count = 0;
                                     }
                                 }
                             }
 
-                            // Scale the colour back
-                            let scale: f64 = 1.0 / self.features.n_samples as f64;
-                            if self.features.gamma_correction {
-                                part[li] = (part[li] * scale).gamma().opaque().clamp();
-                            } else {
-                                part[li] = (part[li] * scale).opaque().clamp();
+                            // Iterate over the allocated rays to compute them
+                            for (i, coord) in buf.drain(..) {
+                                for ray in Samples::new(self.features.n_samples, [coord].into_iter()).cast(camera, dims) {
+                                    // Compute the colour of the Ray
+                                    let colour: Colour = ray_colour(ray, list, self.features.max_depth);
+
+                                    // Add the colour to the image.
+                                    *image.at_mut(i) += colour;
+
+                                    // Done this ray
+                                    count += 1;
+                                }
+
+                                // Scale the colour back
+                                if self.features.gamma_correction {
+                                    *image.at_mut(i) = (*image.at(i) * scale).gamma().opaque().clamp();
+                                } else {
+                                    *image.at_mut(i) = (*image.at(i) * scale).opaque().clamp();
+                                }
                             }
-                        }
-                        if let Some(prgs) = prgs {
-                            prgs.1.finish_with_message(format!(
-                                "Done (averaged {:.2} rays/s)",
-                                (dims.0 as u64 * dims.1 as u64 * self.features.n_samples as u64) as f64 / start.elapsed().as_secs() as f64
-                            ));
                         }
                     })
                 })
                 .collect();
 
             // Await them
+            let mut res: Option<Image> = None;
             for (i, handle) in handles.into_iter().enumerate() {
-                if handle.join().is_err() {
-                    panic!("Thread {i} panicked");
+                let image: Image = match handle.join() {
+                    Ok(image) => image,
+                    Err(_) => panic!("Thread {i} panicked"),
+                };
+                match &mut res {
+                    Some(res) => *res += image,
+                    None => res = Some(image),
                 }
             }
-        });
 
-        // Done
-        Ok(image)
+            // Complete the progress bar
+            if let Some(prgs) = &queue.lock().1 {
+                prgs.1.finish_with_message(format!(
+                    "Done (averaged {:.2} rays/s)",
+                    (dims.0 as u64 * dims.1 as u64 * self.features.n_samples as u64) as f64 / start.elapsed().as_secs() as f64
+                ));
+            }
+
+            // Done
+            match res {
+                Some(image) => Ok(image),
+                None => panic!("No thread completed computation"),
+            }
+        })
     }
 }

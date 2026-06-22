@@ -15,11 +15,9 @@
 use std::path::PathBuf;
 
 use clap::{Parser, Subcommand};
-use enum_debug::EnumDebug;
+use error_trace::ErrorTrace as _;
 use humanlog::{DebugMode, HumanLogger};
 use log::{debug, error, info};
-use raytracer::common::errors::PrettyError as _;
-use raytracer::common::file::File as _;
 use raytracer::common::input::Dimensions;
 use raytracer::generate;
 use raytracer::hitlist::HitList;
@@ -55,7 +53,7 @@ struct Arguments {
 
 
 /// Defines subcommands for the `raytracer` application.
-#[derive(Debug, EnumDebug, Subcommand)]
+#[derive(Debug, Subcommand)]
 enum RaytracerSubcommand {
     /// Renders a new scene.
     #[clap(name = "render", about = "Renders a particular scene.")]
@@ -93,7 +91,7 @@ struct RenderArguments {
     media: RenderSubcommand,
 }
 /// Defines the subcommands for the `render` subcommand.
-#[derive(Debug, EnumDebug, Subcommand)]
+#[derive(Debug, Subcommand)]
 enum RenderSubcommand {
     /// Renders a single frame/image.
     #[clap(name = "image", alias = "frame", about = "Renders a single frame of the given scene.")]
@@ -122,7 +120,7 @@ struct GenerateArguments {
     subcommand: GenerateSubcommand,
 }
 /// Defines the things we can generate.
-#[derive(Debug, EnumDebug, Subcommand)]
+#[derive(Debug, Subcommand)]
 enum GenerateSubcommand {
     #[clap(name = "gradient", about = "Generates the test gradient image discussed in the tutorial.")]
     Gradient {
@@ -162,7 +160,7 @@ fn main() {
             let features: Option<FeaturesFile> = render.features_file.map(|p| match FeaturesFile::from_path(&p) {
                 Ok(features) => features,
                 Err(err) => {
-                    error!("{}", err.stack());
+                    error!("{}", err.trace());
                     std::process::exit(1);
                 },
             });
@@ -177,7 +175,7 @@ fn main() {
                     let scene: SceneFile = match SceneFile::from_path(&image.scene_path) {
                         Ok(scene) => scene,
                         Err(err) => {
-                            error!("{}", err.stack());
+                            error!("{}", err.trace());
                             std::process::exit(1);
                         },
                     };
@@ -203,7 +201,7 @@ fn main() {
                                     match MultiThreadRendererConfig::from_path(path) {
                                         Ok(config) => config,
                                         Err(err) => {
-                                            error!("{}", err.stack());
+                                            error!("{}", err.trace());
                                             std::process::exit(1);
                                         },
                                     }
@@ -215,7 +213,7 @@ fn main() {
                             let renderer: MultiThreadRenderer = match MultiThreadRenderer::new(render.dims.into(), features, true, config) {
                                 Ok(renderer) => renderer,
                                 Err(err) => {
-                                    error!("{}", err.stack());
+                                    error!("{}", err.trace());
                                     std::process::exit(1);
                                 },
                             };
@@ -240,7 +238,7 @@ fn main() {
                 GenerateSubcommand::Gradient { path, dims } => {
                     // Run the command
                     if let Err(err) = generate::gradient(path, dims.into(), generate.fix_dirs) {
-                        error!("{}", err.stack());
+                        error!("{}", err.trace());
                         std::process::exit(1);
                     }
                 },

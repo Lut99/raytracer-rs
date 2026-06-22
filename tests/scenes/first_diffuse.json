@@ -1,0 +1,26 @@
+{
+  "objects": [
+    {
+      "Sphere": {
+        "center": [0, 0, -1],
+        "radius": 0.5,
+        "material": {
+          "Diffuse": {
+            "colour": [0.5, 0.5, 0.5, 1]
+          }
+        }
+      }
+    },
+    {
+      "Sphere": {
+        "center": [0, -100.5, -1],
+        "radius": 100,
+        "material": {
+          "Diffuse": {
+            "colour": [0.5, 0.5, 0.5, 1]
+          }
+        }
+      }
+    }
+  ]
+}

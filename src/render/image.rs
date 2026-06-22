@@ -14,13 +14,12 @@
 //
 
 use std::fmt::{Display, Formatter, Result as FResult};
-use std::ops::{Index, IndexMut};
+use std::ops::{AddAssign, Index, IndexMut};
 use std::path::{Path, PathBuf};
 use std::{error, fs};
 
 use image::{ColorType, RgbaImage};
 
-use crate::common::errors::DirError;
 use crate::math::colour::Colour;
 
 
@@ -31,7 +30,7 @@ pub enum Error {
     /// The parent directories did not exist.
     ParentNotFound { path: PathBuf },
     /// Failed to fix the parent directories.
-    FixDirs { path: PathBuf, err: DirError },
+    FixDirs { path: PathBuf, err: std::io::Error },
     /// Failed to save an Image to disk.
     ToPath { path: PathBuf, err: image::ImageError },
 }
@@ -126,30 +125,6 @@ impl Image {
         if let Some(pixel) = self.pixels.get_mut(i) { pixel } else { panic!("Index {i} is out-of-bounds for image of {pixels_len} pixels") }
     }
 
-    /// Splits the internal buffer of pixels into slices suitable for cross-thread distribution.
-    ///
-    /// # Arguments
-    /// - `n`: The number of slices to create. Each slice receives an equal amount of pixels,
-    ///   except for the last; it also receives any remaining ones.
-    ///
-    /// # Returns
-    /// A vector of mutable slices.
-    #[inline]
-    #[track_caller]
-    pub fn distribute(&mut self, n: usize) -> Vec<&mut [Colour]> {
-        // Keep splitting
-        let mut pixels: &mut [Colour] = self.pixels.as_mut_slice();
-        let chunk_len: usize = pixels.len() / n;
-        let mut res: Vec<&mut [Colour]> = Vec::with_capacity(n);
-        while res.len() < n - 1 {
-            let (lhs, rhs) = pixels.split_at_mut(chunk_len);
-            res.push(lhs);
-            pixels = rhs;
-        }
-        res.push(pixels);
-        res
-    }
-
     /// Copies another image into this one.
     ///
     /// # Arguments
@@ -202,7 +177,7 @@ impl Image {
             if !parent.exists() {
                 if fix_dirs {
                     if let Err(err) = fs::create_dir_all(parent) {
-                        return Err(Error::FixDirs { path: path.into(), err: DirError::Create { path: parent.into(), err } });
+                        return Err(Error::FixDirs { path: path.into(), err });
                     }
                 } else {
                     return Err(Error::ParentNotFound { path: parent.into() });
@@ -340,5 +315,20 @@ impl IndexMut<(usize, usize)> for Image {
             panic!("Index {} is out-of-bounds for Image of size {}x{}", index, self.dims.0, self.dims.1);
         }
         &mut self.pixels[index]
+    }
+}
+
+impl AddAssign for Image {
+    #[inline]
+    fn add_assign(&mut self, rhs: Self) {
+        if self.dims != rhs.dims {
+            panic!("Cannot add images of different dimensions ({}x{} VS {}x{})", self.dims.0, self.dims.1, rhs.dims.0, rhs.dims.1)
+        }
+        assert_eq!(self.pixels.len(), rhs.pixels.len());
+
+        // Add the vectors
+        for (pixel, rhs) in self.pixels.iter_mut().zip(rhs.pixels.into_iter()) {
+            *pixel += rhs;
+        }
     }
 }

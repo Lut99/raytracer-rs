@@ -6,7 +6,7 @@
 //
 
 use crate::hitlist::HitList;
-use crate::math::{Colour, Ray, Vec3, Vector as _};
+use crate::math::{Colour, Ray, Vec3};
 
 
 /***** LIBRARY *****/

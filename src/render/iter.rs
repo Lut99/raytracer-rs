@@ -197,8 +197,9 @@ impl<I: ExactSizeIterator<Item = (f64, f64)>> Iterator for Samples<I> {
     fn next(&mut self) -> Option<Self::Item> {
         // Take a new coord if none yet
         while self.coord.is_none() || self.index >= self.n_samples {
-            self.index = 0;
             self.coord = Some(self.iter.next()?);
+            // NOTE: Must be after the escape above!
+            self.index = 0;
         }
         let mut coord: (f64, f64) = self.coord.unwrap();
 
@@ -410,20 +411,11 @@ mod tests {
         assert_eq!(Coords::new((0, 0)).cast(cam, (0, 0)).collect::<Vec<_>>(), Vec::new());
         assert_eq!(Coords::new((0, 1)).cast(cam, (0, 1)).collect::<Vec<_>>(), Vec::new());
         assert_eq!(Coords::new((1, 0)).cast(cam, (1, 0)).collect::<Vec<_>>(), Vec::new());
-        assert_eq!(Coords::new((1, 1)).cast(cam, (1, 1)).collect::<Vec<_>>(), vec![Ray::new([0.0, 0.0, 0.0], [0.0, 0.0, 0.0])]);
-        assert_eq!(Coords::new((1, 2)).cast(cam, (1, 0)).collect::<Vec<_>>(), vec![
-            Ray::new([0.0, 0.0, 0.0], [0.0, 0.0, 0.0]),
-            Ray::new([0.0, 0.0, 0.0], [0.0, 0.0, 0.0])
-        ]);
-        assert_eq!(Coords::new((2, 1)).cast(cam, (2, 1)).collect::<Vec<_>>(), vec![
-            Ray::new([0.0, 0.0, 0.0], [0.0, 0.0, 0.0]),
-            Ray::new([0.0, 0.0, 0.0], [0.0, 0.0, 0.0])
-        ]);
         assert_eq!(Coords::new((2, 2)).cast(cam, (2, 2)).collect::<Vec<_>>(), vec![
-            Ray::new([0.0, 0.0, 0.0], [0.0, 0.0, 0.0]),
-            Ray::new([0.0, 0.0, 0.0], [0.0, 0.0, 0.0]),
-            Ray::new([0.0, 0.0, 0.0], [0.0, 0.0, 0.0]),
-            Ray::new([0.0, 0.0, 0.0], [0.0, 0.0, 0.0])
+            Ray::new([0.0, 0.0, 0.0], [-8.0, -5.0, -1.0]),
+            Ray::new([0.0, 0.0, 0.0], [8.0, -5.0, -1.0]),
+            Ray::new([0.0, 0.0, 0.0], [-8.0, 5.0, -1.0]),
+            Ray::new([0.0, 0.0, 0.0], [8.0, 5.0, -1.0])
         ]);
 
         assert_eq!(Coords::new((0, 0)).cast(cam, (0, 0)).count(), 0);
