@@ -26,7 +26,7 @@ pub fn ray_colour(ray: Ray, list: &HitList, depth: usize) -> Colour {
     }
 
     // Try to find the object that hits closest
-    match list.hit(ray, 0.0, f64::INFINITY) {
+    match list.hit(ray, 0.001, f64::INFINITY) {
         Some((index, record)) => {
             // Scatter the ray now we've found it
             match list.scatter(ray, index, record) {
