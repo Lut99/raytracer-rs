@@ -1,24 +1,23 @@
 //  SIMPLE.rs
 //    by Lut99
-// 
+//
 //  Created:
 //    05 May 2023, 11:41:04
 //  Last edited:
 //    07 May 2023, 10:51:40
 //  Auto updated?
 //    Yes
-// 
+//
 //  Description:
 //!   Defines super-simple materials, mostly used for debugging or to
 //!   represent earlier parts of the tutorial.
-// 
+//
 
 use serde::{Deserialize, Serialize};
 
+use super::Material;
 use crate::math::{Colour, Ray};
 use crate::specifications::objects::HitRecord;
-
-use super::spec::Material;
 
 
 /***** LIBRARY *****/
@@ -26,7 +25,7 @@ use super::spec::Material;
 #[derive(Clone, Copy, Debug, Deserialize, Serialize)]
 pub struct StaticColour {
     /// The colour to show.
-    colour : Colour,
+    colour: Colour,
 }
 impl Material for StaticColour {
     #[inline]

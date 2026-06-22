@@ -15,7 +15,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use super::spec::Material;
+use super::Material;
 use crate::math::{Colour, Ray, Vec3};
 use crate::specifications::objects::HitRecord;
 
