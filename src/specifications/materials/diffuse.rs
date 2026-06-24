@@ -54,15 +54,6 @@ pub struct Diffuse {
 impl Material for Diffuse {
     #[inline]
     fn scatter(&self, _ray: Ray, record: HitRecord) -> (Option<Ray>, Colour) {
-        // // Compute the scattered ray, making sure the scattered one is not zero
-        // let mut scattered: Vec3 = record.normal + random3_uniform();
-        // if scattered.is_nearly_zero() {
-        //     scattered = record.normal;
-        // }
-
-        // // Now we can simply return the new ray to bounce and the colour
-        // (Some(Ray::new(record.hit, scattered)), self.colour)
-
         // Return a ray scattered in a random direction
         let direction: Vec3 = random3_on_hemisphere(record.normal);
         (Some(Ray::new(record.hit, direction)), self.colour)

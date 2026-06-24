@@ -19,12 +19,14 @@
 pub mod diffuse;
 pub mod lambertian;
 pub mod metal;
+pub mod partial_dielectric;
 pub mod simple;
 
 // Put some of it into the module namespace
 pub use diffuse::*;
 pub use lambertian::*;
 pub use metal::*;
+pub use partial_dielectric::*;
 pub use simple::*;
 
 // Imports
@@ -39,9 +41,11 @@ pub trait Material {
     ///
     /// # Arguments
     /// - `ray`: The inbound [`Ray`] that we want to scatter.
-    /// - `record`: The [`HitRecord`] that determines where the hit was and what the hit normal was and such.
+    /// - `record`: The [`HitRecord`] that determines where the hit was and what the hit normal was
+    ///   and such.
     ///
     /// # Returns
-    /// A tuple that represents the bounced [`Ray`] and the attenuated colour from this bounce. If [`None`] is returned for the [`Ray`], then no more bounce is necessary.
+    /// A tuple that represents the bounced [`Ray`] and the attenuated colour from this bounce. If
+    /// [`None`] is returned for the [`Ray`], then no more bounce is necessary.
     fn scatter(&self, ray: Ray, record: HitRecord) -> (Option<Ray>, Colour);
 }

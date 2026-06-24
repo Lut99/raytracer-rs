@@ -15,7 +15,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::common::file::{impl_toml_from_path, impl_toml_from_string, impl_toml_to_path, impl_toml_to_string};
-use crate::specifications::materials::{Diffuse, Lambertian, Metal, NormalMap, StaticColour};
+use crate::specifications::materials::{Diffuse, Lambertian, Metal, NormalMap, PartialDielectric, StaticColour};
 use crate::specifications::objects::Sphere;
 
 
@@ -79,6 +79,8 @@ pub enum Material {
     Lambertian(Lambertian),
     /// Metallic material.
     Metal(Metal),
+    /// (Partially correct) Dieletric material.
+    PartialDielectric(PartialDielectric),
 }
 
 impl IntoInner<StaticColour> for Material {
@@ -101,6 +103,10 @@ impl IntoInner<Lambertian> for Material {
 impl IntoInner<Metal> for Material {
     #[inline]
     fn into_inner(self) -> Option<Metal> { if let Self::Metal(m) = self { Some(m) } else { None } }
+}
+impl IntoInner<PartialDielectric> for Material {
+    #[inline]
+    fn into_inner(self) -> Option<PartialDielectric> { if let Self::PartialDielectric(m) = self { Some(m) } else { None } }
 }
 
 

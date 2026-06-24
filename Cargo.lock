@@ -1179,6 +1179,7 @@ dependencies = [
  "indicatif",
  "log",
  "parking_lot",
+ "paste",
  "serde",
  "serde_json",
  "thiserror",
