@@ -19,6 +19,7 @@ use clap::ValueEnum;
 
 use super::image::Image;
 use crate::hitlist::HitList;
+use crate::specifications::scene::Environment;
 
 
 /***** LIBRARY *****/
@@ -37,7 +38,7 @@ pub trait RayRenderer: Debug {
     ///
     /// # Errors
     /// This function may error. This will typically be an error relating to the backend of the renderer, since the rendering process, mathmatically, does not error.
-    fn render_frame(&self, list: &HitList) -> Result<Image, Self::Error>;
+    fn render_frame(&self, list: &HitList, env: &Environment) -> Result<Image, Self::Error>;
 }
 
 

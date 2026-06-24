@@ -35,6 +35,7 @@ use crate::common::file::{impl_toml_from_path, impl_toml_from_string, impl_toml_
 use crate::hitlist::HitList;
 use crate::math::{Camera, Colour};
 use crate::specifications::features::Features;
+use crate::specifications::scene::Environment;
 
 
 /***** ERRORS *****/
@@ -147,7 +148,7 @@ impl MultiThreadRenderer {
 impl RayRenderer for MultiThreadRenderer {
     type Error = std::convert::Infallible;
 
-    fn render_frame(&self, list: &HitList) -> Result<crate::render::image::Image, Self::Error> {
+    fn render_frame(&self, list: &HitList, env: &Environment) -> Result<crate::render::image::Image, Self::Error> {
         info!("Rendering scene ({} objects)...", list.len());
 
         // Let us define the camera (static, for now)
@@ -212,7 +213,7 @@ impl RayRenderer for MultiThreadRenderer {
                             for (i, coord) in buf.drain(..) {
                                 for ray in Samples::new(self.features.n_samples, [coord].into_iter()).cast(camera, dims) {
                                     // Compute the colour of the Ray
-                                    let colour: Colour = ray_colour(ray, list, self.features.max_depth);
+                                    let colour: Colour = ray_colour(ray, list, self.features.max_depth, env);
 
                                     // Add the colour to the image.
                                     *image.at_mut(i) += colour;

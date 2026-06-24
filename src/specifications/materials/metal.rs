@@ -7,11 +7,12 @@
 
 use serde::{Deserialize, Serialize};
 
+use super::super::objects::HitRecord;
+use super::super::scene::Environment;
 use super::Material;
+use super::diffuse::random3_uniform;
 use crate::math::vec3::dot3;
 use crate::math::{Colour, Ray, Vec3};
-use crate::specifications::materials::random3_uniform;
-use crate::specifications::objects::HitRecord;
 
 
 /***** HELPER FUNCTIONS *****/
@@ -37,7 +38,7 @@ pub struct Metal {
 }
 impl Material for Metal {
     #[inline]
-    fn scatter(&self, ray: Ray, record: HitRecord) -> (Option<Ray>, Colour) {
+    fn scatter(&self, ray: Ray, record: HitRecord, _env: &Environment) -> (Option<Ray>, Colour) {
         // Compute the scattered ray, making sure the scattered one is not zero
         let reflected: Vec3 = reflect(ray.direct, record.normal);
         // Add some fuzz by offsetting the endpoint of the reflected vector by a small amount.

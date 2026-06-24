@@ -15,8 +15,17 @@
 use serde::{Deserialize, Serialize};
 
 use crate::common::file::{impl_toml_from_path, impl_toml_from_string, impl_toml_to_path, impl_toml_to_string};
-use crate::specifications::materials::{Diffuse, Lambertian, Metal, NormalMap, PartialDielectric, StaticColour};
+use crate::specifications::materials::{Dielectric, Diffuse, Lambertian, Metal, NormalMap, PartialDielectric, StaticColour};
 use crate::specifications::objects::Sphere;
+
+
+/***** HELPER FUNCTIONS *****/
+/// Checks for the default air refraction index.
+#[inline]
+pub fn is_default_environment(env: &Environment) -> bool { env == &Environment::default() }
+
+
+
 
 
 /***** AUXILLARY *****/
@@ -79,8 +88,10 @@ pub enum Material {
     Lambertian(Lambertian),
     /// Metallic material.
     Metal(Metal),
-    /// (Partially correct) Dieletric material.
+    /// (Partially correct) Dielectric material.
     PartialDielectric(PartialDielectric),
+    /// Dielectric material.
+    Dielectric(Dielectric),
 }
 
 impl IntoInner<StaticColour> for Material {
@@ -108,17 +119,37 @@ impl IntoInner<PartialDielectric> for Material {
     #[inline]
     fn into_inner(self) -> Option<PartialDielectric> { if let Self::PartialDielectric(m) = self { Some(m) } else { None } }
 }
+impl IntoInner<Dielectric> for Material {
+    #[inline]
+    fn into_inner(self) -> Option<Dielectric> { if let Self::Dielectric(m) = self { Some(m) } else { None } }
+}
 
 
 
 
 
 /***** LIBRARY *****/
+/// Defines properties of the environment passed to objects and materials.
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Serialize)]
+pub struct Environment {
+    /// The refraction index of the outer world.
+    pub air_refraction_index: f64,
+}
+impl Default for Environment {
+    #[inline]
+    fn default() -> Self { Self { air_refraction_index: 1.0 } }
+}
+
+
+
 /// The SceneFile defines the scene's file.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct SceneFile {
+    /// The environment properties.
+    #[serde(default, skip_serializing_if = "is_default_environment")]
+    pub environment: Environment,
     /// The objects found in this scene.
-    pub objects: Vec<Object>,
+    pub objects:     Vec<Object>,
 }
 impl SceneFile {
     impl_toml_from_string!();
@@ -140,14 +171,19 @@ mod tests {
     #[test]
     fn test_scene_file_serialize() {
         assert_eq!(
-            SceneFile { objects: Vec::new() }.to_string().unwrap(),
+            SceneFile { environment: Environment::default(), objects: Vec::new() }.to_string().unwrap(),
             r#"{
   "objects": []
 }"#
         );
         assert_eq!(
             SceneFile {
-                objects: vec![Object::Sphere(Sphere { center: [0.0, 0.0, 0.0].into(), radius: 1.0, material: Material::NormalMap(NormalMap) })],
+                environment: Environment::default(),
+                objects:     vec![Object::Sphere(Sphere {
+                    center:   [0.0, 0.0, 0.0].into(),
+                    radius:   1.0,
+                    material: Material::NormalMap(NormalMap),
+                })],
             }
             .to_string()
             .unwrap(),
@@ -171,7 +207,8 @@ mod tests {
         );
         assert_eq!(
             SceneFile {
-                objects: vec![Object::Sphere(Sphere {
+                environment: Environment::default(),
+                objects:     vec![Object::Sphere(Sphere {
                     center:   [0.0, 0.0, 0.0].into(),
                     radius:   1.0,
                     material: Material::Diffuse(Diffuse { colour: Colour::new(1.0, 1.0, 1.0, 1.0) }),

@@ -15,6 +15,7 @@
 
 use serde::{Deserialize, Serialize};
 
+use super::super::scene::Environment;
 use super::Material;
 use crate::math::{Colour, Ray};
 use crate::specifications::objects::HitRecord;
@@ -29,7 +30,7 @@ pub struct StaticColour {
 }
 impl Material for StaticColour {
     #[inline]
-    fn scatter(&self, _ray: Ray, _record: HitRecord) -> (Option<Ray>, Colour) {
+    fn scatter(&self, _ray: Ray, _record: HitRecord, _env: &Environment) -> (Option<Ray>, Colour) {
         // Compute the normal map colour based on the normal
         (None, self.colour)
     }
@@ -42,7 +43,7 @@ impl Material for StaticColour {
 pub struct NormalMap;
 impl Material for NormalMap {
     #[inline]
-    fn scatter(&self, _ray: Ray, record: HitRecord) -> (Option<Ray>, Colour) {
+    fn scatter(&self, _ray: Ray, record: HitRecord, _env: &Environment) -> (Option<Ray>, Colour) {
         // Compute the normal map colour based on the normal
         (None, 0.5 * Colour::new(record.normal.x + 1.0, record.normal.y + 1.0, record.normal.z + 1.0, 2.0))
     }

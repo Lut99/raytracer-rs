@@ -14,6 +14,7 @@
 
 use serde::{Deserialize, Serialize};
 
+use super::super::scene::Environment;
 use super::spec::{BoundingBoxable, HitRecord, Hittable};
 use crate::math::vec3::dot3;
 use crate::math::{AABB, Ray, Vec3};
@@ -37,7 +38,7 @@ impl<M> BoundingBoxable for Sphere<M> {
     fn aabb(&self) -> AABB { AABB::new(self.center - self.radius, self.center + self.radius) }
 }
 impl<M> Hittable for Sphere<M> {
-    fn hit(&self, ray: Ray, t_min: f64, t_max: f64) -> Option<HitRecord> {
+    fn hit(&self, ray: Ray, t_min: f64, t_max: f64, _env: &Environment) -> Option<HitRecord> {
         // Compute the distance between the origin of the ray and the center of the sphere
         let oc: Vec3 = ray.origin - self.center;
 

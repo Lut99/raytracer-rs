@@ -27,6 +27,7 @@ use crate::math::camera::Camera;
 use crate::math::colour::Colour;
 use crate::render::iter::Samples;
 use crate::specifications::features::Features;
+use crate::specifications::scene::Environment;
 
 
 /***** LIBRARY *****/
@@ -59,7 +60,7 @@ impl SingleThreadRenderer {
 impl RayRenderer for SingleThreadRenderer {
     type Error = std::convert::Infallible;
 
-    fn render_frame(&self, list: &HitList) -> Result<crate::render::image::Image, Self::Error> {
+    fn render_frame(&self, list: &HitList, env: &Environment) -> Result<crate::render::image::Image, Self::Error> {
         info!("Rendering scene ({} objects)...", list.len());
 
         // Create the image to render
@@ -87,7 +88,7 @@ impl RayRenderer for SingleThreadRenderer {
         for (i, coord) in Coords::new(self.dims).enumerate() {
             for (s, ray) in Samples::new(self.features.n_samples, [coord].into_iter()).cast(camera, self.dims).enumerate() {
                 // Compute the colour of the Ray
-                let colour: Colour = ray_colour(ray, list, self.features.max_depth);
+                let colour: Colour = ray_colour(ray, list, self.features.max_depth, env);
 
                 // Add the colour to the image.
                 *image.at_mut(i) += colour;

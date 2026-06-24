@@ -188,7 +188,7 @@ fn main() {
                         RenderBackend::SingleThreaded => {
                             debug!("Rendering with single-threaded backend");
                             let renderer: SingleThreadRenderer = SingleThreadRenderer::new(render.dims.into(), features, true);
-                            renderer.render_frame(&list).unwrap()
+                            renderer.render_frame(&list, &scene.environment).unwrap()
                         },
 
                         RenderBackend::MultiThreaded => {
@@ -219,7 +219,7 @@ fn main() {
                             };
 
                             // Now render with this backend
-                            renderer.render_frame(&list).unwrap()
+                            renderer.render_frame(&list, &scene.environment).unwrap()
                         },
                     };
 

@@ -17,9 +17,9 @@ use std::ops::Index;
 
 use crate::math::aabb::surround;
 use crate::math::{AABB, Colour, Ray, Vec3};
-use crate::specifications::materials::{Diffuse, Lambertian, Material, Metal, NormalMap, PartialDielectric, StaticColour};
+use crate::specifications::materials::{Dielectric, Diffuse, Lambertian, Material, Metal, NormalMap, PartialDielectric, StaticColour};
 use crate::specifications::objects::{BoundingBoxable, HitRecord, Hittable, Sphere};
-use crate::specifications::scene::{IntoInner, Object};
+use crate::specifications::scene::{Environment, IntoInner, Object};
 
 
 /***** HELPER STRUCTS *****/
@@ -82,7 +82,7 @@ impl<T: Hittable> HitVec<T> {
     ///
     /// # Returns
     /// A tuple of the index of the item that was hit and a [`HitRecord`] that contains information about the hit. If the ray never hits anything at all, then [`None`] is returned.
-    fn hit(&self, ray: Ray, t_min: f64, t_max: f64) -> Option<(usize, HitRecord)> {
+    fn hit(&self, ray: Ray, t_min: f64, t_max: f64, env: &Environment) -> Option<(usize, HitRecord)> {
         // Prepare the placeholder for the closest hit
         let mut closest: Option<(usize, HitRecord)> = None;
 
@@ -94,7 +94,7 @@ impl<T: Hittable> HitVec<T> {
                 HitItem::Object(obj, aabb) => {
                     // Compute the AABB first as a cheap hit, then the expensive object hit
                     if aabb.hit(ray, t_min, t_max) {
-                        if let Some(record) = obj.hit(ray, t_min, t_max) {
+                        if let Some(record) = obj.hit(ray, t_min, t_max, env) {
                             // Now only replace the closest if the new one is closer (or there wasn't one yet)
                             if let Some(old_record) = &closest {
                                 if record.t < old_record.1.t {
@@ -239,10 +239,10 @@ macro_rules! hit_list_impl {
                 ///
                 /// # Returns
                 /// A tuple of the index within this HitList of the object that was hit and a new [`HitRecord`] that contains information about the hit. If the ray never hits anything at all, then [`None`] is returned.
-                pub fn hit(&self, ray: Ray, t_min: f64, t_max: f64) -> Option<(HitIndex, HitRecord)> {
+                pub fn hit(&self, ray: Ray, t_min: f64, t_max: f64, env: &Environment) -> Option<(HitIndex, HitRecord)> {
                     let mut closest: Option<(HitIndex, HitRecord)> = None;
 
-                    $(if let Some(record) = self.[<$obj:lower _ $mat:lower>].hit(ray, t_min, t_max) {
+                    $(if let Some(record) = self.[<$obj:lower _ $mat:lower>].hit(ray, t_min, t_max, env) {
                         if let Some(old_record) = &closest {
                             if record.1.t < old_record.1.t {
                                 closest = Some((HitIndex::[<$obj $mat>](record.0), record.1));
@@ -267,10 +267,10 @@ macro_rules! hit_list_impl {
                 ///
                 /// # Returns
                 /// A tuple of an optional, new [`Ray`] and a mandatory colour. If the ray is [`None`], then it may be interepreted as that the material does not bounce further.
-                pub fn scatter(&self, ray: Ray, index: HitIndex, record: HitRecord) -> (Option<Ray>, Colour) {
+                pub fn scatter(&self, ray: Ray, index: HitIndex, record: HitRecord, env: &Environment) -> (Option<Ray>, Colour) {
                     // Get the object that was talked about
                     match index {
-                        $(HitIndex::[<$obj $mat>](i) => self.[<$obj:lower _ $mat:lower>][i].material.scatter(ray, record),)*
+                        $(HitIndex::[<$obj $mat>](i) => self.[<$obj:lower _ $mat:lower>][i].material.scatter(ray, record, env),)*
                     }
                 }
 
@@ -310,4 +310,12 @@ macro_rules! hit_list_impl {
 }
 
 // Actual implementation
-hit_list_impl!(Sphere<StaticColour>, Sphere<NormalMap>, Sphere<Diffuse>, Sphere<Lambertian>, Sphere<Metal>, Sphere<PartialDielectric>);
+hit_list_impl!(
+    Sphere<StaticColour>,
+    Sphere<NormalMap>,
+    Sphere<Diffuse>,
+    Sphere<Lambertian>,
+    Sphere<Metal>,
+    Sphere<PartialDielectric>,
+    Sphere<Dielectric>
+);
