@@ -23,7 +23,19 @@ use crate::math::vec3::cross3;
 /***** HELPER FUNCTION *****/
 /// Turns degrees into radians, crazy.
 #[inline]
-const fn degrees_to_radians(degrees: f64) -> f64 { degrees * PI / 180.0 }
+pub const fn degrees_to_radians(degrees: f64) -> f64 { degrees * PI / 180.0 }
+
+/// Samples a random point in a unit disk.
+#[inline]
+pub fn random_in_unit_disk() -> Vec3 {
+    // NOTE: Terrible, but hard to do better?
+    loop {
+        let vec = Vec3::new(2.0 * fastrand::f64_inclusive() - 1.0, 2.0 * fastrand::f64_inclusive() - 1.0, 0.0);
+        if vec.length2() < 1.0 {
+            return vec;
+        }
+    }
+}
 
 
 
@@ -43,6 +55,12 @@ pub struct Camera {
     horizontal: Vec3,
     /// The direction of the camera's triangle downward.
     vertical: Vec3,
+    /// The amount of defocus to use. Set to 0 to disable.
+    defocus_angle: f64,
+    /// The amount of defocus to render in the horizontal direction.
+    defocus_u: Vec3,
+    /// The amount of defocus to render in the vertical direction.
+    defocus_v: Vec3,
 }
 
 // Constructors
@@ -52,22 +70,28 @@ impl Camera {
     /// # Arguments
     /// - `dims`: Defines the width x height of the resulting image, in pixels.
     /// - `vfov`: Defines the vertical field-of-view (fov) for the camera.
+    /// - `defocus_angle`: The amount of defocus to use. Set to 0 to disable.
+    /// - `focus_dist`: The distance between us and the focal point where the camera is sharp.
     /// - `lookfrom`: Defines the point where we are looking _from_.
     /// - `lookat`: Defines the point where we are looking _to_.
     /// - `up`: Defines the vertex pointing to the up.
     ///
     /// # Returns
     /// A new Camera instance derived from the given properties.
-    pub fn new(dims: (u32, u32), vfov: f64, lookfrom: Vec3, lookat: Vec3, up: Vec3) -> Self {
+    pub fn new(dims: (u32, u32), vfov: f64, defocus_angle: f64, mut focus_dist: f64, lookfrom: Vec3, lookat: Vec3, up: Vec3) -> Self {
         // Compute the origin
         let origin: Vec3 = lookfrom;
 
+        // Update the focal dist if it is bogus
+        if focus_dist == 0.0 {
+            focus_dist = (lookfrom - lookat).length();
+        }
+
         // Compute the viewport dimensions
         let aspect_ratio: f64 = dims.0 as f64 / dims.1 as f64;
-        let focal_length: f64 = (lookfrom - lookat).length();
         let theta = degrees_to_radians(vfov);
         let h = (theta / 2.0).tan();
-        let viewport_height = 2.0 * h * focal_length;
+        let viewport_height = 2.0 * h * focus_dist;
         let viewport_width = viewport_height * aspect_ratio;
 
         // Compute the viewport's vectors
@@ -78,10 +102,15 @@ impl Camera {
         let vertical: Vec3 = viewport_height * v;
 
         // Compute the lower left corner position of the vector (such that we can add the horizontal and vertical vectors)
-        let lower_left: Vec3 = origin - (focal_length * w) - horizontal / 2.0 - vertical / 2.0;
+        let lower_left: Vec3 = origin - (focus_dist * w) - horizontal / 2.0 - vertical / 2.0;
+
+        // Calculate the defocus disk
+        let defocus_radius = focus_dist * (degrees_to_radians(defocus_angle / 2.0)).tan();
+        let defocus_u = u * defocus_radius;
+        let defocus_v = v * defocus_radius;
 
         // Use that to create ourselves
-        Self { dims, origin, lower_left, horizontal, vertical }
+        Self { dims, origin, lower_left, horizontal, vertical, defocus_angle, defocus_u, defocus_v }
     }
 }
 
@@ -96,7 +125,20 @@ impl Camera {
     /// # Returns
     /// A new [`Ray`], casted from this camera's `origin` through the viewport spanned by it.
     #[inline]
-    pub fn cast(&self, u: f64, v: f64) -> Ray { Ray::new(self.origin, self.lower_left + u * self.horizontal + v * self.vertical - self.origin) }
+    pub fn cast(&self, u: f64, v: f64) -> Ray {
+        let ray_origin: Vec3 = if self.defocus_angle <= 0.0 { self.origin } else { self.defocus_disk_sample() };
+        Ray::new(ray_origin, self.lower_left + u * self.horizontal + v * self.vertical - ray_origin)
+    }
+
+    /// Samples a random point on the "defocus disk"
+    ///
+    /// This is a small disk around the camera's center (aligned with the viewport) that we will
+    /// sample from to simulate focal point blurring.
+    #[inline]
+    fn defocus_disk_sample(&self) -> Vec3 {
+        let p = random_in_unit_disk();
+        self.origin + (p.x * self.defocus_u) + (p.y * self.defocus_v)
+    }
 
     /// Returns the dimensions we're rendering to, as a width x height pair.
     #[inline]

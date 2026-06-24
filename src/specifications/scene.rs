@@ -151,31 +151,39 @@ impl Default for Environment {
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Serialize)]
 pub struct Camera {
     /// The dimensions of the camera.
-    pub dims:     (u32, u32),
+    pub dims: (u32, u32),
     /// The vertical field-of-view of the camera.
-    pub vfov:     f64,
+    pub vfov: f64,
+    /// The vertical field-of-view of the camera.
+    pub defocus_angle: f64,
+    /// The vertical field-of-view of the camera.
+    pub focus_dist: f64,
     /// The point the camera is looking _from_.
     pub lookfrom: Vec3,
     /// The point the camera is looking _at_.
-    pub lookat:   Vec3,
+    pub lookat: Vec3,
     /// The vector pointing the camera up.
-    pub lookup:   Vec3,
+    pub lookup: Vec3,
 }
 impl Default for Camera {
     #[inline]
     fn default() -> Self {
         Camera {
-            dims:     (800, 600),
-            vfov:     90.0,
+            dims: (800, 600),
+            vfov: 90.0,
+            defocus_angle: 0.0,
+            focus_dist: 0.0,
             lookfrom: Vec3::new(0.0, 0.0, 0.0),
-            lookat:   Vec3::new(0.0, 0.0, -1.0),
-            lookup:   Vec3::new(0.0, 1.0, 0.0),
+            lookat: Vec3::new(0.0, 0.0, -1.0),
+            lookup: Vec3::new(0.0, 1.0, 0.0),
         }
     }
 }
 impl From<Camera> for crate::math::Camera {
     #[inline]
-    fn from(value: Camera) -> Self { crate::math::Camera::new(value.dims, value.vfov, value.lookfrom, value.lookat, value.lookup) }
+    fn from(value: Camera) -> Self {
+        crate::math::Camera::new(value.dims, value.vfov, value.defocus_angle, value.focus_dist, value.lookfrom, value.lookat, value.lookup)
+    }
 }
 
 

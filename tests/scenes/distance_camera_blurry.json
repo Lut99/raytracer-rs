@@ -2,8 +2,8 @@
     "camera": {
         "dims": [800, 600],
         "vfov": 20,
-        "defocus_angle": 0,
-        "focus_dist": 0,
+        "defocus_angle": 10,
+        "focus_dist": 3.4,
         "lookfrom": [-2, 2, 1],
         "lookat": [0, 0, -1],
         "lookup": [0, 1, 0]

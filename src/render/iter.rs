@@ -407,7 +407,7 @@ mod tests {
 
     #[test]
     fn test_cast() {
-        let cam = Camera::new((1920, 1000), 90.0, Vec3::new(0.0, 0.0, 0.0), Vec3::new(0.0, 0.0, -1.0), Vec3::new(0.0, 1.0, 0.0));
+        let cam = Camera::new((1920, 1000), 90.0, 0.0, 0.0, Vec3::new(0.0, 0.0, 0.0), Vec3::new(0.0, 0.0, -1.0), Vec3::new(0.0, 1.0, 0.0));
 
         assert_eq!(Coords::new((0, 0)).cast(cam, (0, 0)).collect::<Vec<_>>(), Vec::new());
         assert_eq!(Coords::new((0, 1)).cast(cam, (0, 1)).collect::<Vec<_>>(), Vec::new());
