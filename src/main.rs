@@ -21,13 +21,15 @@ use log::{debug, error, info};
 use raytracer::common::input::Dimensions;
 use raytracer::generate;
 use raytracer::hitlist::HitList;
-use raytracer::math::Camera;
+use raytracer::math::{Camera, Colour, Vec3};
 use raytracer::render::backends::multi::{MultiThreadRenderer, MultiThreadRendererConfig};
 use raytracer::render::backends::single::SingleThreadRenderer;
 use raytracer::render::image::Image;
 use raytracer::render::spec::{RayRenderer as _, RenderBackend};
 use raytracer::specifications::features::{Features, FeaturesCli, FeaturesFile};
-use raytracer::specifications::scene::SceneFile;
+use raytracer::specifications::materials::{Dielectric, Lambertian, Metal};
+use raytracer::specifications::objects::Sphere;
+use raytracer::specifications::scene::{Environment, Material, Object, SceneFile};
 
 
 /***** ARGUMENTS *****/
@@ -97,6 +99,9 @@ enum RenderSubcommand {
     /// Renders a single frame/image.
     #[clap(name = "image", alias = "frame", about = "Renders a single frame of the given scene.")]
     Image(RenderImageArguments),
+    /// Renders the cover of the book.
+    #[clap(name = "cover", alias = "book", about = "Renders the cover of the Raytracing In One Weekend book.")]
+    Cover(RenderCoverArguments),
 }
 /// Defines the arguments for the `render image` subcommand.
 #[derive(Debug, Parser)]
@@ -104,6 +109,13 @@ struct RenderImageArguments {
     /// The path to the scene file to render.
     #[clap(name = "SCENE_PATH", help = "The path to the scene file which we want to render.")]
     scene_path:  PathBuf,
+    /// The path to the image file to output.
+    #[clap(name = "OUTPUT_PATH", default_value = "./image.png", help = "The path to write the rendered image to.")]
+    output_path: PathBuf,
+}
+/// Defines the arguments for the `render image` subcommand.
+#[derive(Debug, Parser)]
+struct RenderCoverArguments {
     /// The path to the image file to output.
     #[clap(name = "OUTPUT_PATH", default_value = "./image.png", help = "The path to write the rendered image to.")]
     output_path: PathBuf,
@@ -230,6 +242,112 @@ fn main() {
                     // Now write the image to disk
                     if let Err(err) = output.to_path(&image.output_path, render.fix_dirs) {
                         error!("Failed to save rendered image to '{}': {}", image.output_path.display(), err);
+                        std::process::exit(1);
+                    }
+                },
+
+                RenderSubcommand::Cover(cover) => {
+                    // Generate the list of objects
+                    let mut objects: Vec<Object> = Vec::with_capacity(1 + 21 * 21 + 3);
+                    objects.push(Object::Sphere(Sphere {
+                        center:   Vec3::new(0.0, -1000.0, 0.0),
+                        radius:   1000.0,
+                        material: Material::Lambertian(Lambertian { colour: Colour::new(0.5, 0.5, 0.5, 1.0) }),
+                    }));
+                    for a in -11..11 {
+                        for b in -11..11 {
+                            let mat = fastrand::f64();
+                            let center = Vec3::new(a as f64 + 0.9 * fastrand::f64(), 0.2, b as f64 + 0.9 * fastrand::f64());
+                            if (center - Vec3::new(4.0, 0.2, 0.0)).length() > 0.9 {
+                                if mat < 0.8 {
+                                    // It'll be a tiny diffuse sphere
+                                    let colour = Colour::new(fastrand::f64(), fastrand::f64(), fastrand::f64(), 1.0);
+                                    objects.push(Object::Sphere(Sphere {
+                                        center,
+                                        radius: 0.2,
+                                        material: Material::Lambertian(Lambertian { colour }),
+                                    }));
+                                } else if mat < 0.95 {
+                                    // Metal, with random fuzziness
+                                    let colour =
+                                        Colour::new(fastrand::f64() / 2.0 + 0.5, fastrand::f64() / 2.0 + 0.5, fastrand::f64() / 2.0 + 0.5, 1.0);
+                                    let fuzz = fastrand::f64() / 2.0;
+                                    objects.push(Object::Sphere(Sphere { center, radius: 0.2, material: Material::Metal(Metal { colour, fuzz }) }));
+                                } else {
+                                    // Glass
+                                    objects.push(Object::Sphere(Sphere {
+                                        center,
+                                        radius: 0.2,
+                                        material: Material::Dielectric(Dielectric { refraction_index: 1.5, colour: Colour::new(1.0, 1.0, 1.0, 1.0) }),
+                                    }));
+                                }
+                            }
+                        }
+                    }
+                    objects.push(Object::Sphere(Sphere {
+                        center:   Vec3::new(0.0, 1.0, 0.0),
+                        radius:   1.0,
+                        material: Material::Dielectric(Dielectric { refraction_index: 1.5, colour: Colour::new(1.0, 1.0, 1.0, 1.0) }),
+                    }));
+                    objects.push(Object::Sphere(Sphere {
+                        center:   Vec3::new(-4.0, 1.0, 0.0),
+                        radius:   1.0,
+                        material: Material::Lambertian(Lambertian { colour: Colour::new(0.4, 0.2, 0.1, 1.0) }),
+                    }));
+                    objects.push(Object::Sphere(Sphere {
+                        center:   Vec3::new(4.0, 1.0, 0.0),
+                        radius:   1.0,
+                        material: Material::Metal(Metal { colour: Colour::new(0.7, 0.6, 0.5, 1.0), fuzz: 0.0 }),
+                    }));
+
+                    // Convert that to a static HitList
+                    let list: HitList = HitList::from(&objects);
+                    let dims: (u32, u32) = if let Some(dims) = render.dims { (dims.0, dims.1) } else { (800, 600) };
+                    let cam = Camera::new(dims, 20.0, 0.6, 10.0, Vec3::new(13.0, 2.0, 3.0), Vec3::new(0.0, 0.0, 0.0), Vec3::new(0.0, 1.0, 0.0));
+
+                    // Now render based on the backend
+                    let output: Image = match render.backend {
+                        RenderBackend::SingleThreaded => {
+                            debug!("Rendering with single-threaded backend");
+                            let renderer: SingleThreadRenderer = SingleThreadRenderer::new(features, true);
+                            renderer.render_frame(&list, &cam, &Environment::default()).unwrap()
+                        },
+
+                        RenderBackend::MultiThreaded => {
+                            debug!("Rendering with multi-threaded backend");
+
+                            // Read the given file, if any
+                            let config: MultiThreadRendererConfig = match render.backend_config {
+                                Some(path) => {
+                                    debug!("Loading multi-threaded backend file '{}'...", path.display());
+                                    match MultiThreadRendererConfig::from_path(path) {
+                                        Ok(config) => config,
+                                        Err(err) => {
+                                            error!("{}", err.trace());
+                                            std::process::exit(1);
+                                        },
+                                    }
+                                },
+                                None => Default::default(),
+                            };
+
+                            // Create the backend
+                            let renderer: MultiThreadRenderer = match MultiThreadRenderer::new(features, true, config) {
+                                Ok(renderer) => renderer,
+                                Err(err) => {
+                                    error!("{}", err.trace());
+                                    std::process::exit(1);
+                                },
+                            };
+
+                            // Now render with this backend
+                            renderer.render_frame(&list, &cam, &Environment::default()).unwrap()
+                        },
+                    };
+
+                    // Now write the image to disk
+                    if let Err(err) = output.to_path(&cover.output_path, render.fix_dirs) {
+                        error!("Failed to save rendered image to '{}': {}", cover.output_path.display(), err);
                         std::process::exit(1);
                     }
                 },
