@@ -52,6 +52,17 @@ pub fn refract(vec: Vec3, normal: Vec3, cos_theta: f64, eta_over_eta_prime: f64)
 
 
 
+/// Uses Christophe Slick's refraction approximation solution to have glass look like a mirror
+/// under the right angles.
+pub fn reflectance(cosine: f64, refraction_index: f64) -> f64 {
+    let r0: f64 = (1.0 - refraction_index) / (1.0 + refraction_index);
+    let r02: f64 = r0 * r0;
+    // NOTE: Maybe `powf`?
+    return r02 + (1.0 - r02) * (1.0 - cosine).powi(5);
+}
+
+
+
 
 
 /***** LIBRARY *****/
@@ -122,7 +133,7 @@ impl Material for Dielectric {
         let cannot_refract: bool = eta_over_eta_prime * sin_theta > 1.0;
 
         // Compute the refraction
-        let out: Vec3 = if cannot_refract {
+        let out: Vec3 = if cannot_refract || reflectance(cos_theta, eta_over_eta_prime) > fastrand::f64() {
             reflect(unit_direction, record.normal)
         } else {
             refract(unit_direction, record.normal, cos_theta, eta_over_eta_prime)
