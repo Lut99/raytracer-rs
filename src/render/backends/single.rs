@@ -34,8 +34,6 @@ use crate::specifications::scene::Environment;
 /// The SingleThreadRenderer renders rays straightforwardly on a single thread, no fuss.
 #[derive(Debug)]
 pub struct SingleThreadRenderer {
-    /// The dimensions of the output images.
-    dims:      (u32, u32),
     /// The renderer features to enable/disable.
     features:  Features,
     /// Whether to enable or disable the progress bar.
@@ -46,34 +44,29 @@ impl SingleThreadRenderer {
     /// Constructor for the SingleThreadRenderer.
     ///
     /// # Arguments
-    /// - `dims`: The dimensions of the output images of this renderer.
     /// - `features`: The features to enable in this renderer.
     /// - `show_prgs`: Whether or not to show the progress as we're rendering.
     ///
     /// # Returns
     /// A new SingleThreadRenderer instance.
     #[inline]
-    pub fn new(dims: (impl Into<u32>, impl Into<u32>), features: impl Into<Features>, show_prgs: bool) -> Self {
-        Self { dims: (dims.0.into(), dims.1.into()), features: features.into(), show_prgs }
-    }
+    pub fn new(features: impl Into<Features>, show_prgs: bool) -> Self { Self { features: features.into(), show_prgs } }
 }
 impl RayRenderer for SingleThreadRenderer {
     type Error = std::convert::Infallible;
 
-    fn render_frame(&self, list: &HitList, env: &Environment) -> Result<crate::render::image::Image, Self::Error> {
+    fn render_frame(&self, list: &HitList, cam: &Camera, env: &Environment) -> Result<crate::render::image::Image, Self::Error> {
         info!("Rendering scene ({} objects)...", list.len());
 
         // Create the image to render
-        let mut image: Image = Image::new(self.dims);
-
-        // Let us define the camera (static, for now)
-        let camera: Camera = Camera::new(((image.width() as f64 / image.height() as f64) * 2.0, 2.0), 1.0);
+        let dims: (u32, u32) = cam.dims();
+        let mut image: Image = Image::new(dims);
 
         // Prepare the progressbar if desired
         let mut prgs: Option<(Instant, ProgressBar)> = if self.show_prgs {
             Some((
                 Instant::now(),
-                ProgressBar::new(image.dims().0 as u64 * image.dims().1 as u64 * self.features.n_samples as u64).with_style(
+                ProgressBar::new(dims.0 as u64 * dims.1 as u64 * self.features.n_samples as u64).with_style(
                     ProgressStyle::with_template(" Ray {human_pos}/{human_len} [{wide_bar}] {percent}% (ETA {eta}) ")
                         .unwrap_or_else(|err| panic!("Invalid template given to progress bar: {err}"))
                         .progress_chars("=> "),
@@ -85,8 +78,8 @@ impl RayRenderer for SingleThreadRenderer {
 
         // Let us fire all the rays (we go top-to-bottom)
         let start: Instant = Instant::now();
-        for (i, coord) in Coords::new(self.dims).enumerate() {
-            for (s, ray) in Samples::new(self.features.n_samples, [coord].into_iter()).cast(camera, self.dims).enumerate() {
+        for (i, coord) in Coords::new(dims).enumerate() {
+            for (s, ray) in Samples::new(self.features.n_samples, [coord].into_iter()).cast(*cam, dims).enumerate() {
                 // Compute the colour of the Ray
                 let colour: Colour = ray_colour(ray, list, self.features.max_depth, env);
 
@@ -113,7 +106,7 @@ impl RayRenderer for SingleThreadRenderer {
         if let Some(prgs) = prgs {
             prgs.1.finish_with_message(format!(
                 "Done (averaged {:.2} rays/s)",
-                (image.dims().0 as u64 * image.dims().1 as u64 * self.features.n_samples as u64) as f64 / start.elapsed().as_secs() as f64
+                (dims.0 as u64 * dims.1 as u64 * self.features.n_samples as u64) as f64 / start.elapsed().as_secs() as f64
             ));
         }
 

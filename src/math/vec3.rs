@@ -76,7 +76,7 @@ pub fn dot3<T: Number>(lhs: Vec3<T>, rhs: Vec3<T>) -> T { lhs.x * rhs.x + lhs.y 
 /// The value of the cross product, as `T`.
 #[inline]
 pub fn cross3<T: Number>(lhs: Vec3<T>, rhs: Vec3<T>) -> Vec3<T> {
-    Vec3 { x: lhs.y * rhs.z + lhs.z * rhs.y, y: lhs.z * rhs.x + lhs.x * rhs.z, z: lhs.x * rhs.y + lhs.y * rhs.x }
+    Vec3 { x: lhs.y * rhs.z - lhs.z * rhs.y, y: lhs.z * rhs.x - lhs.x * rhs.z, z: lhs.x * rhs.y - lhs.y * rhs.x }
 }
 
 

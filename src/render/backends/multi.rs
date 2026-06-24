@@ -95,8 +95,6 @@ impl MultiThreadRendererConfig {
 /// The SingleThreadRenderer renders rays on multiple threads at once.
 #[derive(Debug)]
 pub struct MultiThreadRenderer {
-    /// The dimensions of the output images.
-    dims:      (u32, u32),
     /// The renderer features to enable/disable.
     features:  Features,
     /// Whether to enable or disable the progress bar.
@@ -123,12 +121,7 @@ impl MultiThreadRenderer {
     /// # Errors
     /// This function may error if the user left the number of threads unspecified and we failed to query the number ourselves.
     #[inline]
-    pub fn new(
-        dims: (impl Into<u32>, impl Into<u32>),
-        features: impl Into<Features>,
-        show_prgs: bool,
-        config: impl Into<MultiThreadRendererConfig>,
-    ) -> Result<Self, Error> {
+    pub fn new(features: impl Into<Features>, show_prgs: bool, config: impl Into<MultiThreadRendererConfig>) -> Result<Self, Error> {
         // Resolve the number of threads first
         let config = config.into();
         let n_threads: usize = match config.n_threads {
@@ -142,18 +135,17 @@ impl MultiThreadRenderer {
         };
 
         // Done
-        Ok(Self { dims: (dims.0.into(), dims.1.into()), features: features.into(), show_prgs, n_threads, work_size: config.work_size })
+        Ok(Self { features: features.into(), show_prgs, n_threads, work_size: config.work_size })
     }
 }
 impl RayRenderer for MultiThreadRenderer {
     type Error = std::convert::Infallible;
 
-    fn render_frame(&self, list: &HitList, env: &Environment) -> Result<crate::render::image::Image, Self::Error> {
+    fn render_frame(&self, list: &HitList, cam: &Camera, env: &Environment) -> Result<crate::render::image::Image, Self::Error> {
         info!("Rendering scene ({} objects)...", list.len());
 
         // Let us define the camera (static, for now)
-        let dims: (u32, u32) = self.dims;
-        let camera: Camera = Camera::new(((dims.0 as f64 / dims.1 as f64) * 2.0, 2.0), 1.0);
+        let dims: (u32, u32) = cam.dims();
         let scale: f64 = 1.0 / self.features.n_samples as f64;
 
         // Now have the threads each do chunk of rays, popping them off the main queue
@@ -211,7 +203,7 @@ impl RayRenderer for MultiThreadRenderer {
 
                             // Iterate over the allocated rays to compute them
                             for (i, coord) in buf.drain(..) {
-                                for ray in Samples::new(self.features.n_samples, [coord].into_iter()).cast(camera, dims) {
+                                for ray in Samples::new(self.features.n_samples, [coord].into_iter()).cast(*cam, dims) {
                                     // Compute the colour of the Ray
                                     let colour: Colour = ray_colour(ray, list, self.features.max_depth, env);
 

@@ -15,14 +15,19 @@
 use serde::{Deserialize, Serialize};
 
 use crate::common::file::{impl_toml_from_path, impl_toml_from_string, impl_toml_to_path, impl_toml_to_string};
+use crate::math::Vec3;
 use crate::specifications::materials::{Dielectric, Diffuse, Lambertian, Metal, NormalMap, PartialDielectric, StaticColour};
 use crate::specifications::objects::Sphere;
 
 
 /***** HELPER FUNCTIONS *****/
-/// Checks for the default air refraction index.
+/// Checks for the default environment props.
 #[inline]
 pub fn is_default_environment(env: &Environment) -> bool { env == &Environment::default() }
+
+/// Checks for the default camera props.
+#[inline]
+pub fn is_default_camera(cam: &Camera) -> bool { cam == &Camera::default() }
 
 
 
@@ -142,12 +147,48 @@ impl Default for Environment {
 
 
 
+/// Defines properties of the camera in a scene.
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Serialize)]
+pub struct Camera {
+    /// The dimensions of the camera.
+    pub dims:     (u32, u32),
+    /// The vertical field-of-view of the camera.
+    pub vfov:     f64,
+    /// The point the camera is looking _from_.
+    pub lookfrom: Vec3,
+    /// The point the camera is looking _at_.
+    pub lookat:   Vec3,
+    /// The vector pointing the camera up.
+    pub lookup:   Vec3,
+}
+impl Default for Camera {
+    #[inline]
+    fn default() -> Self {
+        Camera {
+            dims:     (800, 600),
+            vfov:     90.0,
+            lookfrom: Vec3::new(0.0, 0.0, 0.0),
+            lookat:   Vec3::new(0.0, 0.0, -1.0),
+            lookup:   Vec3::new(0.0, 1.0, 0.0),
+        }
+    }
+}
+impl From<Camera> for crate::math::Camera {
+    #[inline]
+    fn from(value: Camera) -> Self { crate::math::Camera::new(value.dims, value.vfov, value.lookfrom, value.lookat, value.lookup) }
+}
+
+
+
 /// The SceneFile defines the scene's file.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct SceneFile {
     /// The environment properties.
     #[serde(default, skip_serializing_if = "is_default_environment")]
     pub environment: Environment,
+    /// The environment properties.
+    #[serde(default, skip_serializing_if = "is_default_camera")]
+    pub camera:      Camera,
     /// The objects found in this scene.
     pub objects:     Vec<Object>,
 }
@@ -171,13 +212,14 @@ mod tests {
     #[test]
     fn test_scene_file_serialize() {
         assert_eq!(
-            SceneFile { environment: Environment::default(), objects: Vec::new() }.to_string().unwrap(),
+            SceneFile { camera: Camera::default(), environment: Environment::default(), objects: Vec::new() }.to_string().unwrap(),
             r#"{
   "objects": []
 }"#
         );
         assert_eq!(
             SceneFile {
+                camera:      Camera::default(),
                 environment: Environment::default(),
                 objects:     vec![Object::Sphere(Sphere {
                     center:   [0.0, 0.0, 0.0].into(),
@@ -207,6 +249,7 @@ mod tests {
         );
         assert_eq!(
             SceneFile {
+                camera:      Camera::default(),
                 environment: Environment::default(),
                 objects:     vec![Object::Sphere(Sphere {
                     center:   [0.0, 0.0, 0.0].into(),

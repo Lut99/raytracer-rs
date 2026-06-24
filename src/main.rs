@@ -21,6 +21,7 @@ use log::{debug, error, info};
 use raytracer::common::input::Dimensions;
 use raytracer::generate;
 use raytracer::hitlist::HitList;
+use raytracer::math::Camera;
 use raytracer::render::backends::multi::{MultiThreadRenderer, MultiThreadRendererConfig};
 use raytracer::render::backends::single::SingleThreadRenderer;
 use raytracer::render::image::Image;
@@ -67,8 +68,8 @@ enum RaytracerSubcommand {
 #[derive(Debug, Parser)]
 struct RenderArguments {
     /// The output size of the image.
-    #[clap(short, long, default_value = "800x600", help = "The size of the output image for this render.")]
-    dims:     Dimensions,
+    #[clap(short, long, help = "The size of the output image for this render. If omitted, defaults to the value in the scene file.")]
+    dims:     Option<Dimensions>,
     /// Whether to fix missing directories when generating the output image or not.
     #[clap(short, long, help = "If given, will generate missing directories for the output image.")]
     fix_dirs: bool,
@@ -172,13 +173,16 @@ fn main() {
                 RenderSubcommand::Image(image) => {
                     // Load the given scene file
                     debug!("Loading scene file '{}'...", image.scene_path.display());
-                    let scene: SceneFile = match SceneFile::from_path(&image.scene_path) {
+                    let mut scene: SceneFile = match SceneFile::from_path(&image.scene_path) {
                         Ok(scene) => scene,
                         Err(err) => {
                             error!("{}", err.trace());
                             std::process::exit(1);
                         },
                     };
+                    if let Some(dims) = render.dims {
+                        scene.camera.dims = (dims.0, dims.1);
+                    }
 
                     // Convert that to a static HitList
                     let list: HitList = HitList::from(&scene.objects);
@@ -187,8 +191,8 @@ fn main() {
                     let output: Image = match render.backend {
                         RenderBackend::SingleThreaded => {
                             debug!("Rendering with single-threaded backend");
-                            let renderer: SingleThreadRenderer = SingleThreadRenderer::new(render.dims.into(), features, true);
-                            renderer.render_frame(&list, &scene.environment).unwrap()
+                            let renderer: SingleThreadRenderer = SingleThreadRenderer::new(features, true);
+                            renderer.render_frame(&list, &Camera::from(scene.camera), &scene.environment).unwrap()
                         },
 
                         RenderBackend::MultiThreaded => {
@@ -210,7 +214,7 @@ fn main() {
                             };
 
                             // Create the backend
-                            let renderer: MultiThreadRenderer = match MultiThreadRenderer::new(render.dims.into(), features, true, config) {
+                            let renderer: MultiThreadRenderer = match MultiThreadRenderer::new(features, true, config) {
                                 Ok(renderer) => renderer,
                                 Err(err) => {
                                     error!("{}", err.trace());
@@ -219,7 +223,7 @@ fn main() {
                             };
 
                             // Now render with this backend
-                            renderer.render_frame(&list, &scene.environment).unwrap()
+                            renderer.render_frame(&list, &Camera::from(scene.camera), &scene.environment).unwrap()
                         },
                     };
 
