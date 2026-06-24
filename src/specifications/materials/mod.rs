@@ -17,11 +17,13 @@
 
 // Declare submodules
 pub mod diffuse;
+pub mod lambertian;
 pub mod metal;
 pub mod simple;
 
 // Put some of it into the module namespace
 pub use diffuse::*;
+pub use lambertian::*;
 pub use metal::*;
 pub use simple::*;
 

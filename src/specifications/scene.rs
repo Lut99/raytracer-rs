@@ -15,7 +15,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::common::file::{impl_toml_from_path, impl_toml_from_string, impl_toml_to_path, impl_toml_to_string};
-use crate::specifications::materials::{Diffuse, Metal, NormalMap, StaticColour};
+use crate::specifications::materials::{Diffuse, Lambertian, Metal, NormalMap, StaticColour};
 use crate::specifications::objects::Sphere;
 
 
@@ -75,6 +75,8 @@ pub enum Material {
     // Diffuse materials
     /// The basic diffuse material.
     Diffuse(Diffuse),
+    /// A better diffuse material.
+    Lambertian(Lambertian),
     /// Metallic material.
     Metal(Metal),
 }
@@ -91,6 +93,10 @@ impl IntoInner<NormalMap> for Material {
 impl IntoInner<Diffuse> for Material {
     #[inline]
     fn into_inner(self) -> Option<Diffuse> { if let Self::Diffuse(d) = self { Some(d) } else { None } }
+}
+impl IntoInner<Lambertian> for Material {
+    #[inline]
+    fn into_inner(self) -> Option<Lambertian> { if let Self::Lambertian(d) = self { Some(d) } else { None } }
 }
 impl IntoInner<Metal> for Material {
     #[inline]

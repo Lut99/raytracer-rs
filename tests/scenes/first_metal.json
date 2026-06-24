@@ -5,7 +5,7 @@
         "center": [0, -100.5, -1],
         "radius": 100,
         "material": {
-          "Diffuse": {
+          "Lambertian": {
             "colour": [0.8, 0.8, 0, 1]
           }
         }
@@ -16,7 +16,7 @@
         "center": [0, 0, -1.2],
         "radius": 0.5,
         "material": {
-          "Diffuse": {
+          "Lambertian": {
             "colour": [0.1, 0.2, 0.5, 1]
           }
         }

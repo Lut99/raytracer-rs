@@ -16,6 +16,7 @@
 use serde::{Deserialize, Serialize};
 
 use super::Material;
+use crate::math::vec3::dot3;
 use crate::math::{Colour, Ray, Vec3};
 use crate::specifications::objects::HitRecord;
 
@@ -33,6 +34,12 @@ pub fn random3_uniform() -> Vec3 {
     res.unit()
 }
 
+/// Generates a random, uniformly sampled vector on a hemisphere w.r.t. the normal.
+pub fn random3_on_hemisphere(normal: Vec3) -> Vec3 {
+    let on_unit_sphere: Vec3 = random3_uniform();
+    if dot3(on_unit_sphere, normal) > 0.0 { on_unit_sphere } else { -on_unit_sphere }
+}
+
 
 
 
@@ -47,13 +54,17 @@ pub struct Diffuse {
 impl Material for Diffuse {
     #[inline]
     fn scatter(&self, _ray: Ray, record: HitRecord) -> (Option<Ray>, Colour) {
-        // Compute the scattered ray, making sure the scattered one is not zero
-        let mut scattered: Vec3 = record.normal + random3_uniform();
-        if scattered.is_nearly_zero() {
-            scattered = record.normal;
-        }
+        // // Compute the scattered ray, making sure the scattered one is not zero
+        // let mut scattered: Vec3 = record.normal + random3_uniform();
+        // if scattered.is_nearly_zero() {
+        //     scattered = record.normal;
+        // }
 
-        // Now we can simply return the new ray to bounce and the colour
-        (Some(Ray::new(record.hit, scattered)), self.colour)
+        // // Now we can simply return the new ray to bounce and the colour
+        // (Some(Ray::new(record.hit, scattered)), self.colour)
+
+        // Return a ray scattered in a random direction
+        let direction: Vec3 = random3_on_hemisphere(record.normal);
+        (Some(Ray::new(record.hit, direction)), self.colour)
     }
 }

@@ -17,7 +17,7 @@ use std::ops::Index;
 
 use crate::math::aabb::surround;
 use crate::math::{AABB, Colour, Ray, Vec3};
-use crate::specifications::materials::{Diffuse, Material, Metal, NormalMap, StaticColour};
+use crate::specifications::materials::{Diffuse, Lambertian, Material, Metal, NormalMap, StaticColour};
 use crate::specifications::objects::{BoundingBoxable, HitRecord, Hittable, Sphere};
 use crate::specifications::scene::{IntoInner, Object};
 
@@ -217,6 +217,8 @@ pub enum HitIndex {
     SphereNormalMap(usize),
     /// It's a [`Sphere`] with the [`Diffuse`] material.
     SphereDiffuse(usize),
+    /// It's a [`Sphere`] with the [`Lambertian`] material.
+    SphereLambertian(usize),
     /// It's a [`Sphere`] with the [`Metal`] material.
     SphereMetal(usize),
 }
@@ -235,6 +237,8 @@ pub struct HitList {
     sphere_normalmap: HitVec<Sphere<NormalMap>>,
     /// The list of spheres that have the diffuse material.
     sphere_diffuse: HitVec<Sphere<Diffuse>>,
+    /// The list of spheres that have the lambertian material.
+    sphere_lambertian: HitVec<Sphere<Lambertian>>,
     /// The list of spheres that have the metal material.
     sphere_metal: HitVec<Sphere<Metal>>,
 }
@@ -273,6 +277,15 @@ impl HitList {
                 closest = Some((HitIndex::SphereDiffuse(record.0), record.1));
             }
         }
+        if let Some(record) = self.sphere_lambertian.hit(ray, t_min, t_max) {
+            if let Some(old_record) = &closest {
+                if record.1.t < old_record.1.t {
+                    closest = Some((HitIndex::SphereLambertian(record.0), record.1));
+                }
+            } else {
+                closest = Some((HitIndex::SphereLambertian(record.0), record.1));
+            }
+        }
         if let Some(record) = self.sphere_metal.hit(ray, t_min, t_max) {
             if let Some(old_record) = &closest {
                 if record.1.t < old_record.1.t {
@@ -304,6 +317,7 @@ impl HitList {
             HitIndex::SphereStaticColour(i) => self.sphere_staticcolour[i].material.scatter(ray, record),
             HitIndex::SphereNormalMap(i) => self.sphere_normalmap[i].material.scatter(ray, record),
             HitIndex::SphereDiffuse(i) => self.sphere_diffuse[i].material.scatter(ray, record),
+            HitIndex::SphereLambertian(i) => self.sphere_lambertian[i].material.scatter(ray, record),
             HitIndex::SphereMetal(i) => self.sphere_metal[i].material.scatter(ray, record),
         }
     }
@@ -326,6 +340,7 @@ impl From<&[Object]> for HitList {
             sphere_staticcolour: HitVec::from(value),
             sphere_normalmap: HitVec::from(value),
             sphere_diffuse: HitVec::from(value),
+            sphere_lambertian: HitVec::from(value),
             sphere_metal: HitVec::from(value),
         }
     }
