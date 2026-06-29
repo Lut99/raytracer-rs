@@ -61,24 +61,41 @@ pub struct Camera {
     defocus_u: Vec3,
     /// The amount of defocus to render in the vertical direction.
     defocus_v: Vec3,
+    /// The shutter time of the Camera, in microseconds.
+    ///
+    /// Use a shutter time of `1` to disable motion blur.
+    shutter_time: u64,
 }
 
 // Constructors
 impl Camera {
-    /// Constructor for the Camera that initializes at the origin (0, 0, 0), looking forward, with the given settings.
+    /// Constructor for the Camera that initializes at the origin (0, 0, 0), looking forward, with
+    /// the given settings.
     ///
     /// # Arguments
     /// - `dims`: Defines the width x height of the resulting image, in pixels.
     /// - `vfov`: Defines the vertical field-of-view (fov) for the camera.
     /// - `defocus_angle`: The amount of defocus to use. Set to 0 to disable.
     /// - `focus_dist`: The distance between us and the focal point where the camera is sharp.
+    /// - `shutter_time_us`:  The shutter time of the Camera, in microseconds. Use a shutter time
+    ///   of `1` to disable motion blur.
     /// - `lookfrom`: Defines the point where we are looking _from_.
     /// - `lookat`: Defines the point where we are looking _to_.
     /// - `up`: Defines the vertex pointing to the up.
     ///
     /// # Returns
     /// A new Camera instance derived from the given properties.
-    pub fn new(dims: (u32, u32), vfov: f64, defocus_angle: f64, mut focus_dist: f64, lookfrom: Vec3, lookat: Vec3, up: Vec3) -> Self {
+    #[track_caller]
+    pub fn new(
+        dims: (u32, u32),
+        vfov: f64,
+        defocus_angle: f64,
+        mut focus_dist: f64,
+        shutter_time_us: u64,
+        lookfrom: Vec3,
+        lookat: Vec3,
+        up: Vec3,
+    ) -> Self {
         // Compute the origin
         let origin: Vec3 = lookfrom;
 
@@ -110,7 +127,17 @@ impl Camera {
         let defocus_v = v * defocus_radius;
 
         // Use that to create ourselves
-        Self { dims, origin, lower_left, horizontal, vertical, defocus_angle, defocus_u, defocus_v }
+        Self {
+            dims,
+            origin,
+            lower_left,
+            horizontal,
+            vertical,
+            defocus_angle,
+            defocus_u,
+            defocus_v,
+            shutter_time: if shutter_time_us > 0 { shutter_time_us } else { panic!("Shutter time cannot be 0") },
+        }
     }
 }
 
@@ -121,13 +148,15 @@ impl Camera {
     /// # Arguments
     /// - `u`: The virtual X-coordinate, ranging [0.0, 1.0].
     /// - `v`: The virtual Y-coordinate, ranging [0.0, 1.0].
+    /// - `t`: The current time in microseconds. Note that rays may be casted a tiny amount in the
+    ///   future to emulate shutter time.
     ///
     /// # Returns
     /// A new [`Ray`], casted from this camera's `origin` through the viewport spanned by it.
     #[inline]
-    pub fn cast(&self, u: f64, v: f64) -> Ray {
+    pub fn cast(&self, u: f64, v: f64, t: u64) -> Ray {
         let ray_origin: Vec3 = if self.defocus_angle <= 0.0 { self.origin } else { self.defocus_disk_sample() };
-        Ray::new(ray_origin, self.lower_left + u * self.horizontal + v * self.vertical - ray_origin)
+        Ray::with_time(ray_origin, self.lower_left + u * self.horizontal + v * self.vertical - ray_origin, fastrand::u64(t..t + self.shutter_time))
     }
 
     /// Samples a random point on the "defocus disk"

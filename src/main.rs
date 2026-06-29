@@ -116,9 +116,12 @@ struct RenderImageArguments {
 /// Defines the arguments for the `render image` subcommand.
 #[derive(Debug, Parser)]
 struct RenderCoverArguments {
+    /// Any shutter time (in microseconds) to set. Since the cover is secretly animated, setting this will reveal motion blur.
+    #[clap(short, long, default_value = "1")]
+    shutter_time: u64,
     /// The path to the image file to output.
     #[clap(name = "OUTPUT_PATH", default_value = "./image.png", help = "The path to write the rendered image to.")]
-    output_path: PathBuf,
+    output_path:  PathBuf,
 }
 
 /// Defines the arguments for the `generate` subcommand.
@@ -303,7 +306,16 @@ fn main() {
                     // Convert that to a static HitList
                     let list: HitList = HitList::from(&objects);
                     let dims: (u32, u32) = if let Some(dims) = render.dims { (dims.0, dims.1) } else { (800, 600) };
-                    let cam = Camera::new(dims, 20.0, 0.6, 10.0, Vec3::new(13.0, 2.0, 3.0), Vec3::new(0.0, 0.0, 0.0), Vec3::new(0.0, 1.0, 0.0));
+                    let cam = Camera::new(
+                        dims,
+                        20.0,
+                        0.6,
+                        10.0,
+                        cover.shutter_time,
+                        Vec3::new(13.0, 2.0, 3.0),
+                        Vec3::new(0.0, 0.0, 0.0),
+                        Vec3::new(0.0, 1.0, 0.0),
+                    );
 
                     // Now render based on the backend
                     let output: Image = match render.backend {

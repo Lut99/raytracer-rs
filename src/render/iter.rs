@@ -288,7 +288,7 @@ impl<I: ExactSizeIterator<Item = (f64, f64)>> Iterator for Cast<I> {
         let v: f64 = y / (self.dims.1 as f64 - 1.0);
 
         // Compute the Ray with those and the Camera viewport
-        Some(self.cam.cast(u, v))
+        Some(self.cam.cast(u, v, 0))
     }
 }
 
@@ -407,7 +407,7 @@ mod tests {
 
     #[test]
     fn test_cast() {
-        let cam = Camera::new((1920, 1000), 90.0, 0.0, 0.0, Vec3::new(0.0, 0.0, 0.0), Vec3::new(0.0, 0.0, -1.0), Vec3::new(0.0, 1.0, 0.0));
+        let cam = Camera::new((1920, 1000), 90.0, 0.0, 0.0, 1, Vec3::new(0.0, 0.0, 0.0), Vec3::new(0.0, 0.0, -1.0), Vec3::new(0.0, 1.0, 0.0));
 
         assert_eq!(Coords::new((0, 0)).cast(cam, (0, 0)).collect::<Vec<_>>(), Vec::new());
         assert_eq!(Coords::new((0, 1)).cast(cam, (0, 1)).collect::<Vec<_>>(), Vec::new());

@@ -15,10 +15,10 @@
 
 use std::ops::Index;
 
-use crate::math::aabb::surround;
-use crate::math::{AABB, Colour, Ray, Vec3};
+use crate::math::{Colour, Ray};
+use crate::specifications::animations::Vertical;
 use crate::specifications::materials::{Dielectric, Diffuse, Lambertian, Material, Metal, NormalMap, PartialDielectric, StaticColour};
-use crate::specifications::objects::{BoundingBoxable, HitRecord, Hittable, Sphere};
+use crate::specifications::objects::{AnimatedSphere, BoundingBoxable, HitRecord, Hittable, Sphere};
 use crate::specifications::scene::{Environment, IntoInner, Object};
 
 
@@ -27,9 +27,7 @@ use crate::specifications::scene::{Environment, IntoInner, Object};
 #[derive(Clone, Copy, Debug)]
 enum HitItem<T> {
     /// It's a real object.
-    Object(T, AABB),
-    /// It's a group marker.
-    GroupMarker(usize, AABB),
+    Object(T),
 }
 impl<T> HitItem<T> {
     /// Returns the internal object if this HitItem is one.
@@ -41,25 +39,8 @@ impl<T> HitItem<T> {
     /// This function may panic if [`Self::is_object()`] returns false (i.e., we are not a [`HitItem::Object`] after all).
     #[inline]
     fn object(&self) -> &T {
-        if let Self::Object(o, _) = self {
-            o
-        } else {
-            panic!("Cannot unwrap non-HitItem::Object as HitItem::Object");
-        }
-    }
-
-
-
-    /// Returns the Axis-Aligned Bounding Box (AABB) for this item.
-    ///
-    /// # Returns
-    /// The internal [`AABB`].
-    #[inline]
-    fn aabb(&self) -> AABB {
-        match self {
-            Self::Object(_, aabb) => *aabb,
-            Self::GroupMarker(_, aabb) => *aabb,
-        }
+        let Self::Object(o) = self;
+        o
     }
 }
 
@@ -91,8 +72,9 @@ impl<T: Hittable> HitVec<T> {
         while let Some((i, item)) = iter.next() {
             // Match on the type of item
             match item {
-                HitItem::Object(obj, aabb) => {
+                HitItem::Object(obj) => {
                     // Compute the AABB first as a cheap hit, then the expensive object hit
+                    let aabb = obj.aabb(ray.time);
                     if aabb.hit(ray, t_min, t_max) {
                         if let Some(record) = obj.hit(ray, t_min, t_max, env) {
                             // Now only replace the closest if the new one is closer (or there wasn't one yet)
@@ -105,19 +87,6 @@ impl<T: Hittable> HitVec<T> {
                             }
                         }
                     }
-                },
-
-                HitItem::GroupMarker(n, aabb) => {
-                    // If the bounding box does _not_ hit, we can skip all these objects
-                    if !aabb.hit(ray, t_min, t_max) {
-                        // Note that we skip one less element than `n`, since it is a count and not an index (i.e., one-indexed -> zero-indexed)
-                        if *n > 0 {
-                            iter.nth(n - 1);
-                        }
-                    }
-
-                    // Now continue with whatever element is on top
-                    continue;
                 },
             }
         }
@@ -145,21 +114,7 @@ where
             // Check if we are ourselves
             if let Some(o) = <Object as IntoInner<T>>::into_inner(o.clone()) {
                 // We are, so we can now just add us (neat!)
-                let aabb: AABB = o.aabb();
-                items.push(HitItem::Object(o, aabb));
-            } else if let Object::Group(g) = o {
-                // If it's a group, let us recurse to find the set of items we need
-                let group_items: Vec<HitItem<T>> = Self::from(g).items;
-
-                // Construct a bounding box perfectly fitting these items
-                let mut aabb: AABB = AABB::new(Vec3::zeroes(), Vec3::zeroes());
-                for g in &group_items {
-                    aabb = surround(aabb, g.aabb());
-                }
-
-                // Insert the group marker for these items, and then the items
-                items.push(HitItem::GroupMarker(group_items.len(), aabb));
-                items.extend(group_items);
+                items.push(HitItem::Object(o));
             }
 
             // We ignore other cases (that's for other lists)
@@ -210,7 +165,7 @@ where
 /***** LIBRARY *****/
 /// Implements the [`HitList`] based on a list of object/material pairs.
 macro_rules! hit_list_impl {
-    ($($obj:ident<$mat:ident>),* $(,)?) => {
+    ([$($obj:ident<$mat:ident>),* $(,)?], [$($aobj:ident<$amat:ident, $ani:ident>),* $(,)?] $(,)?) => {
         ::paste::paste! {
             /// The `HitIndex` enum sources a hit to a location within the [`HitList`].
             #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -218,6 +173,10 @@ macro_rules! hit_list_impl {
                 $(
                 #[doc = concat!("It's a [`", stringify!($obj), "`] with the [`", stringify!($mat), "`] material.")]
                 [<$obj $mat>](usize),
+                )*
+                $(
+                #[doc = concat!("It's a [`", stringify!($aobj), "`] with the [`", stringify!($amat), "`] material and [`", stringify!($ani), "`] animation.")]
+                [<$aobj $amat $ani>](usize),
                 )*
             }
 
@@ -227,6 +186,7 @@ macro_rules! hit_list_impl {
             #[derive(Clone, Debug)]
             pub struct HitList {
                 $([<$obj:lower _ $mat:lower>]: HitVec<$obj<$mat>>,)*
+                $([<$aobj:lower _ $amat:lower _ $ani:lower>]: HitVec<$aobj<$amat, $ani>>,)*
             }
 
             impl HitList {
@@ -251,6 +211,15 @@ macro_rules! hit_list_impl {
                             closest = Some((HitIndex::[<$obj $mat>](record.0), record.1));
                         }
                     })*
+                    $(if let Some(record) = self.[<$aobj:lower _ $amat:lower _ $ani:lower>].hit(ray, t_min, t_max, env) {
+                        if let Some(old_record) = &closest {
+                            if record.1.t < old_record.1.t {
+                                closest = Some((HitIndex::[<$aobj $amat $ani>](record.0), record.1));
+                            }
+                        } else {
+                            closest = Some((HitIndex::[<$aobj $amat $ani>](record.0), record.1));
+                        }
+                    })*
 
                     // Return the closest hit (if any)
                     closest
@@ -271,6 +240,7 @@ macro_rules! hit_list_impl {
                     // Get the object that was talked about
                     match index {
                         $(HitIndex::[<$obj $mat>](i) => self.[<$obj:lower _ $mat:lower>][i].material.scatter(ray, record, env),)*
+                        $(HitIndex::[<$aobj $amat $ani>](i) => self.[<$aobj:lower _ $amat:lower _ $ani:lower>][i].sphere.material.scatter(ray, record, env),)*
                     }
                 }
 
@@ -278,7 +248,7 @@ macro_rules! hit_list_impl {
 
                 /// Returns the total number of objects in this list.
                 #[inline]
-                pub fn len(&self) -> usize { 0 $(+ self.[<$obj:lower _ $mat:lower>].items.len())* }
+                pub fn len(&self) -> usize { 0 $(+ self.[<$obj:lower _ $mat:lower>].items.len())* $(+ self.[<$aobj:lower _ $amat:lower _ $ani:lower>].items.len())* }
             }
 
             impl From<&[Object]> for HitList {
@@ -286,6 +256,7 @@ macro_rules! hit_list_impl {
                 fn from(value: &[Object]) -> Self {
                     Self {
                         $([<$obj:lower _ $mat:lower>]: HitVec::from(value),)*
+                        $([<$aobj:lower _ $amat:lower _ $ani:lower>]: HitVec::from(value),)*
                     }
                 }
             }
@@ -310,12 +281,20 @@ macro_rules! hit_list_impl {
 }
 
 // Actual implementation
-hit_list_impl!(
+hit_list_impl!([
     Sphere<StaticColour>,
     Sphere<NormalMap>,
     Sphere<Diffuse>,
     Sphere<Lambertian>,
     Sphere<Metal>,
     Sphere<PartialDielectric>,
-    Sphere<Dielectric>
-);
+    Sphere<Dielectric>,
+], [
+    AnimatedSphere<StaticColour, Vertical>,
+    AnimatedSphere<NormalMap, Vertical>,
+    AnimatedSphere<Diffuse, Vertical>,
+    AnimatedSphere<Lambertian, Vertical>,
+    AnimatedSphere<Metal, Vertical>,
+    AnimatedSphere<PartialDielectric, Vertical>,
+    AnimatedSphere<Dielectric, Vertical>,
+]);

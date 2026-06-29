@@ -60,17 +60,21 @@ impl HitRecord {
 pub trait BoundingBoxable {
     /// Computes the Axis-Aligned Bounding Box (AABB) of this object.
     ///
+    /// # Arguments
+    /// - `t_us`: The time at which we compute the bounding box. Matters if this object is
+    ///   animated. Time is in microseconds since the start of the scene.
+    ///
     /// # Returns
     /// A new [`AABB`] struct that describes the computed bounding box.
-    fn aabb(&self) -> AABB;
+    fn aabb(&self, t_us: u64) -> AABB;
 }
 impl<T: BoundingBoxable> BoundingBoxable for &T {
     #[inline]
-    fn aabb(&self) -> AABB { (**self).aabb() }
+    fn aabb(&self, t_us: u64) -> AABB { (**self).aabb(t_us) }
 }
 impl<T: BoundingBoxable> BoundingBoxable for &mut T {
     #[inline]
-    fn aabb(&self) -> AABB { (**self).aabb() }
+    fn aabb(&self, t_us: u64) -> AABB { (**self).aabb(t_us) }
 }
 
 

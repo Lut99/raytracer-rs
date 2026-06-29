@@ -16,8 +16,10 @@ use serde::{Deserialize, Serialize};
 
 use crate::common::file::{impl_toml_from_path, impl_toml_from_string, impl_toml_to_path, impl_toml_to_string};
 use crate::math::Vec3;
+use crate::specifications::animations::vertical::Vertical;
 use crate::specifications::materials::{Dielectric, Diffuse, Lambertian, Metal, NormalMap, PartialDielectric, StaticColour};
 use crate::specifications::objects::Sphere;
+use crate::specifications::objects::sphere::AnimatedSphere;
 
 
 /***** HELPER FUNCTIONS *****/
@@ -51,23 +53,30 @@ pub enum Object {
     // Normal objects
     /// A perfect sphere.
     Sphere(Sphere<Material>),
-
-    // Represents a group of objects.
-    Group(Vec<Self>),
+    /// A perfect sphere with animation.
+    AnimatedSphere(AnimatedSphere<Material, Animation>),
 }
 
-impl<T: Clone> IntoInner<Sphere<T>> for Object
+impl<M> IntoInner<Sphere<M>> for Object
 where
-    Material: IntoInner<T>,
+    Material: IntoInner<M>,
 {
     #[inline]
-    fn into_inner(self) -> Option<Sphere<T>> {
-        if let Self::Sphere(s) = self {
-            s.material.into_inner().map(|m| Sphere {
-                center: s.center,
-                radius: s.radius,
-
-                material: m,
+    fn into_inner(self) -> Option<Sphere<M>> {
+        if let Self::Sphere(s) = self { Some(Sphere { center: s.center, radius: s.radius, material: s.material.into_inner()? }) } else { None }
+    }
+}
+impl<M, A> IntoInner<AnimatedSphere<M, A>> for Object
+where
+    Material: IntoInner<M>,
+    Animation: IntoInner<A>,
+{
+    #[inline]
+    fn into_inner(self) -> Option<AnimatedSphere<M, A>> {
+        if let Self::AnimatedSphere(s) = self {
+            Some(AnimatedSphere {
+                sphere:    Sphere { center: s.sphere.center, radius: s.sphere.radius, material: s.sphere.material.into_inner()? },
+                animation: s.animation.into_inner()?,
             })
         } else {
             None
@@ -131,6 +140,22 @@ impl IntoInner<Dielectric> for Material {
 
 
 
+/// Collects all animations.
+#[derive(Clone, Copy, Debug, Deserialize, Serialize)]
+pub enum Animation {
+    Vertical(Vertical),
+}
+
+impl IntoInner<Vertical> for Animation {
+    #[inline]
+    fn into_inner(self) -> Option<Vertical> {
+        let Self::Vertical(v) = self;
+        Some(v)
+    }
+}
+
+
+
 
 
 /***** LIBRARY *****/
@@ -158,6 +183,10 @@ pub struct Camera {
     pub defocus_angle: f64,
     /// The vertical field-of-view of the camera.
     pub focus_dist: f64,
+    /// The shutter time, in microseconds, of the camera.
+    ///
+    /// Use `1` to disable it (instant shutter).
+    pub shutter_time: u64,
     /// The point the camera is looking _from_.
     pub lookfrom: Vec3,
     /// The point the camera is looking _at_.
@@ -173,6 +202,7 @@ impl Default for Camera {
             vfov: 90.0,
             defocus_angle: 0.0,
             focus_dist: 0.0,
+            shutter_time: 1,
             lookfrom: Vec3::new(0.0, 0.0, 0.0),
             lookat: Vec3::new(0.0, 0.0, -1.0),
             lookup: Vec3::new(0.0, 1.0, 0.0),
@@ -182,7 +212,16 @@ impl Default for Camera {
 impl From<Camera> for crate::math::Camera {
     #[inline]
     fn from(value: Camera) -> Self {
-        crate::math::Camera::new(value.dims, value.vfov, value.defocus_angle, value.focus_dist, value.lookfrom, value.lookat, value.lookup)
+        crate::math::Camera::new(
+            value.dims,
+            value.vfov,
+            value.defocus_angle,
+            value.focus_dist,
+            value.shutter_time,
+            value.lookfrom,
+            value.lookat,
+            value.lookup,
+        )
     }
 }
 
