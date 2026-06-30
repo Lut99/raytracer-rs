@@ -15,7 +15,6 @@
 // Declare submodules
 pub mod backends;
 pub mod image;
-pub mod iter;
 pub mod spec;
 
 // Bring some stuff into this namespace

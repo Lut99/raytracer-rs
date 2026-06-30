@@ -27,10 +27,6 @@ pub struct FeaturesFile {
     /// Whether to correct for gamma or not.
     #[serde(alias = "gamma")]
     pub gamma_correction: Option<bool>,
-
-    /// Whether to enable anti-aliasing or not. Specifically, aliasing is enabled if the number of samples > 1.
-    #[serde(alias = "anti_aliasing")]
-    pub n_samples: Option<usize>,
     /// How many times we bounce a Ray, at most.
     #[serde(alias = "bounce_depth")]
     pub max_depth: Option<usize>,
@@ -77,23 +73,13 @@ pub struct FeaturesCli {
 pub struct Features {
     /// Whether to correct for gamma or not.
     pub gamma_correction: bool,
-
-    /// The number of samples to shoot through each ray.
-    pub n_samples: usize,
     /// The number of times we bounce a ray at maximum.
     pub max_depth: usize,
 }
 
 impl Default for Features {
     #[inline]
-    fn default() -> Self {
-        Self {
-            gamma_correction: true,
-
-            n_samples: 100,
-            max_depth: 50,
-        }
-    }
+    fn default() -> Self { Self { gamma_correction: true, max_depth: 50 } }
 }
 impl Features {
     /// Constructor for the Features that constructs it from an optional features file and the CLI values.
@@ -111,11 +97,8 @@ impl Features {
 
         // Comput the join of that one and the features file
         let file: Self = match file {
-            Some(file) => Self {
-                gamma_correction: file.gamma_correction.unwrap_or(def.gamma_correction),
-
-                n_samples: file.n_samples.unwrap_or(def.n_samples),
-                max_depth: file.max_depth.unwrap_or(def.max_depth),
+            Some(file) => {
+                Self { gamma_correction: file.gamma_correction.unwrap_or(def.gamma_correction), max_depth: file.max_depth.unwrap_or(def.max_depth) }
             },
             None => def,
         };
@@ -123,8 +106,6 @@ impl Features {
         // Finally, add in the CLI
         Self {
             gamma_correction: if cli.disable_gamma_correction { false } else { file.gamma_correction },
-
-            n_samples: if cli.disable_anti_aliasing { 1 } else { cli.anti_aliasing_rays.unwrap_or(file.n_samples) },
             max_depth: cli.ray_max_depth.unwrap_or(file.max_depth),
         }
     }

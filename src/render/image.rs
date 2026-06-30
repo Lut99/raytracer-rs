@@ -202,6 +202,16 @@ impl Image {
 
 
 
+    /// Returns a read-only iterator over all [`Colour`]s in this Image.
+    #[inline]
+    pub fn iter(&self) -> std::slice::Iter<'_, Colour> { self.into_iter() }
+
+    /// Returns a mutating iterator over all [`Colour`]s in this Image.
+    #[inline]
+    pub fn iter_mut(&mut self) -> std::slice::IterMut<'_, Colour> { self.into_iter() }
+
+
+
     /// Returns the number of pixels in this Image.
     #[inline]
     pub fn len(&self) -> usize { self.pixels.len() }
@@ -331,4 +341,26 @@ impl AddAssign for Image {
             *pixel += rhs;
         }
     }
+}
+
+impl<'a> IntoIterator for &'a Image {
+    type Item = &'a Colour;
+    type IntoIter = std::slice::Iter<'a, Colour>;
+
+    #[inline]
+    fn into_iter(self) -> Self::IntoIter { self.pixels.iter() }
+}
+impl<'a> IntoIterator for &'a mut Image {
+    type Item = &'a mut Colour;
+    type IntoIter = std::slice::IterMut<'a, Colour>;
+
+    #[inline]
+    fn into_iter(self) -> Self::IntoIter { self.pixels.iter_mut() }
+}
+impl IntoIterator for Image {
+    type Item = Colour;
+    type IntoIter = std::vec::IntoIter<Colour>;
+
+    #[inline]
+    fn into_iter(self) -> Self::IntoIter { self.pixels.into_iter() }
 }

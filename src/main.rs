@@ -305,9 +305,10 @@ fn main() {
 
                     // Convert that to a static HitList
                     let list: HitList = HitList::from(&objects);
-                    let dims: (u32, u32) = if let Some(dims) = render.dims { (dims.0, dims.1) } else { (800, 600) };
+                    let dims: (u32, u32) = if let Some(dims) = render.dims { (dims.0.into(), dims.1.into()) } else { (800, 600) };
                     let cam = Camera::new(
                         dims,
+                        1000,
                         20.0,
                         0.6,
                         10.0,
@@ -371,7 +372,7 @@ fn main() {
             match generate.subcommand {
                 GenerateSubcommand::Gradient { path, dims } => {
                     // Run the command
-                    if let Err(err) = generate::gradient(path, dims.into(), generate.fix_dirs) {
+                    if let Err(err) = generate::gradient(path, (dims.0.into(), dims.1.into()), generate.fix_dirs) {
                         error!("{}", err.trace());
                         std::process::exit(1);
                     }

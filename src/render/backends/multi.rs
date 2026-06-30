@@ -15,7 +15,6 @@
 
 use std::error;
 use std::fmt::{Display, Formatter, Result as FResult};
-use std::iter::Enumerate;
 use std::num::NonZeroUsize;
 use std::sync::Arc;
 use std::thread::ScopedJoinHandle;
@@ -27,13 +26,12 @@ use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 
 use super::super::image::Image;
-use super::super::iter::prelude::*;
-use super::super::iter::{Coords, Samples};
 use super::super::spec::RayRenderer;
 use super::cpu::ray_colour;
 use crate::common::file::{impl_toml_from_path, impl_toml_from_string, impl_toml_to_path, impl_toml_to_string};
 use crate::hitlist::HitList;
-use crate::math::{Camera, Colour};
+use crate::math::camera::Rays;
+use crate::math::{Camera, Colour, Ray};
 use crate::specifications::features::Features;
 use crate::specifications::scene::Environment;
 
@@ -146,19 +144,18 @@ impl RayRenderer for MultiThreadRenderer {
 
         // Let us define the camera (static, for now)
         let dims: (u32, u32) = cam.dims();
-        let scale: f64 = 1.0 / self.features.n_samples as f64;
 
         // Now have the threads each do chunk of rays, popping them off the main queue
         std::thread::scope(|s| {
             let start: Instant = Instant::now();
 
             // Define the main queue of rays & the progress bar
-            let queue: Arc<Mutex<(Enumerate<Coords>, Option<(Instant, ProgressBar)>)>> = Arc::new(Mutex::new((
-                Coords::new(dims).enumerate(),
+            let queue: Arc<Mutex<(Rays, Option<(Instant, ProgressBar)>)>> = Arc::new(Mutex::new((
+                cam.rays(0),
                 if self.show_prgs {
                     Some((
                         Instant::now(),
-                        ProgressBar::new(dims.0 as u64 * dims.1 as u64 * self.features.n_samples as u64).with_style(
+                        ProgressBar::new(dims.0 as u64 * dims.1 as u64 * cam.n_samples()).with_style(
                             ProgressStyle::with_template(" Ray {human_pos}/{human_len} [{wide_bar}] {percent}% (ETA {eta}) ")
                                 .unwrap_or_else(|err| panic!("Invalid template given to progress bar: {err}"))
                                 .progress_chars("=> "),
@@ -178,7 +175,7 @@ impl RayRenderer for MultiThreadRenderer {
                         // Prepare this local thread's frame to render to
                         let mut count: u64 = 0;
                         let mut image = Image::new(dims);
-                        let mut buf: Vec<(usize, (f64, f64))> = Vec::with_capacity(self.work_size);
+                        let mut buf: Vec<(u64, u32, u32, Ray)> = Vec::with_capacity(self.work_size);
 
                         // Keep popping work until all pixels are computed
                         loop {
@@ -202,24 +199,15 @@ impl RayRenderer for MultiThreadRenderer {
                             }
 
                             // Iterate over the allocated rays to compute them
-                            for (i, coord) in buf.drain(..) {
-                                for ray in Samples::new(self.features.n_samples, [coord].into_iter()).cast(*cam, dims) {
-                                    // Compute the colour of the Ray
-                                    let colour: Colour = ray_colour(ray, list, self.features.max_depth, env);
+                            for (_, x, y, ray) in buf.drain(..) {
+                                // Compute the colour of the Ray
+                                let colour: Colour = ray_colour(ray, list, self.features.max_depth, env);
 
-                                    // Add the colour to the image.
-                                    *image.at_mut(i) += colour;
+                                // Add the colour to the image.
+                                image[(x, y)] += colour;
 
-                                    // Done this ray
-                                    count += 1;
-                                }
-
-                                // Scale the colour back
-                                if self.features.gamma_correction {
-                                    *image.at_mut(i) = (*image.at(i) * scale).gamma().opaque().clamp();
-                                } else {
-                                    *image.at_mut(i) = (*image.at(i) * scale).opaque().clamp();
-                                }
+                                // Done this ray
+                                count += 1;
                             }
                         }
                     })
@@ -238,20 +226,28 @@ impl RayRenderer for MultiThreadRenderer {
                     None => res = Some(image),
                 }
             }
+            let mut res: Image = res.expect("No thread completed computation");
+
+            // Fix the colours in the resulting image
+            let scale: f64 = 1.0 / cam.n_samples() as f64;
+            for colour in res.iter_mut() {
+                *colour *= scale;
+                if self.features.gamma_correction {
+                    *colour = colour.gamma();
+                }
+                *colour = colour.opaque().clamp();
+            }
 
             // Complete the progress bar
             if let Some(prgs) = &queue.lock().1 {
                 prgs.1.finish_with_message(format!(
                     "Done (averaged {:.2} rays/s)",
-                    (dims.0 as u64 * dims.1 as u64 * self.features.n_samples as u64) as f64 / start.elapsed().as_secs() as f64
+                    (dims.0 as u64 * dims.1 as u64 * cam.n_samples()) as f64 / start.elapsed().as_secs() as f64
                 ));
             }
 
             // Done
-            match res {
-                Some(image) => Ok(image),
-                None => panic!("No thread completed computation"),
-            }
+            Ok(res)
         })
     }
 }

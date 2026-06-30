@@ -18,14 +18,11 @@ use indicatif::{ProgressBar, ProgressStyle};
 use log::info;
 
 use super::super::image::Image;
-use super::super::iter::Coords;
-use super::super::iter::prelude::*;
 use super::super::spec::RayRenderer;
 use super::cpu::ray_colour;
 use crate::hitlist::HitList;
 use crate::math::camera::Camera;
 use crate::math::colour::Colour;
-use crate::render::iter::Samples;
 use crate::specifications::features::Features;
 use crate::specifications::scene::Environment;
 
@@ -66,7 +63,7 @@ impl RayRenderer for SingleThreadRenderer {
         let mut prgs: Option<(Instant, ProgressBar)> = if self.show_prgs {
             Some((
                 Instant::now(),
-                ProgressBar::new(dims.0 as u64 * dims.1 as u64 * self.features.n_samples as u64).with_style(
+                ProgressBar::new(dims.0 as u64 * dims.1 as u64 * cam.n_samples()).with_style(
                     ProgressStyle::with_template(" Ray {human_pos}/{human_len} [{wide_bar}] {percent}% (ETA {eta}) ")
                         .unwrap_or_else(|err| panic!("Invalid template given to progress bar: {err}"))
                         .progress_chars("=> "),
@@ -78,35 +75,36 @@ impl RayRenderer for SingleThreadRenderer {
 
         // Let us fire all the rays (we go top-to-bottom)
         let start: Instant = Instant::now();
-        for (i, coord) in Coords::new(dims).enumerate() {
-            for (s, ray) in Samples::new(self.features.n_samples, [coord].into_iter()).cast(*cam, dims).enumerate() {
-                // Compute the colour of the Ray
-                let colour: Colour = ray_colour(ray, list, self.features.max_depth, env);
+        for (i, (_, x, y, ray)) in cam.rays(0).enumerate() {
+            // Compute the colour of the Ray
+            let colour: Colour = ray_colour(ray, list, self.features.max_depth, env);
 
-                // Add the colour to the image.
-                *image.at_mut(i) += colour;
+            // Add the colour to the image.
+            image[(x, y)] += colour;
 
-                // Computed a ray!
-                if let Some(prgs) = &mut prgs {
-                    if prgs.0.elapsed().as_millis() >= 500 {
-                        prgs.1.update(|state| state.set_pos((i * self.features.n_samples + s) as u64));
-                        prgs.0 += std::time::Duration::from_millis(500);
-                    }
+            // Computed a ray!
+            if let Some(prgs) = &mut prgs {
+                if prgs.0.elapsed().as_millis() >= 500 {
+                    prgs.1.update(|state| state.set_pos(i as u64));
+                    prgs.0 += std::time::Duration::from_millis(500);
                 }
             }
-
-            // Scale the colour back if we're at the end of this pixel
-            let scale: f64 = 1.0 / self.features.n_samples as f64;
-            if self.features.gamma_correction {
-                *image.at_mut(i) = (*image.at(i) * scale).gamma().opaque().clamp();
-            } else {
-                *image.at_mut(i) = (*image.at(i) * scale).opaque().clamp();
-            }
         }
+
+        // Fix the final pixel values
+        let scale: f64 = 1.0 / cam.n_samples() as f64;
+        for colour in image.iter_mut() {
+            *colour *= scale;
+            if self.features.gamma_correction {
+                *colour = colour.gamma();
+            }
+            *colour = colour.opaque().clamp();
+        }
+
         if let Some(prgs) = prgs {
             prgs.1.finish_with_message(format!(
                 "Done (averaged {:.2} rays/s)",
-                (dims.0 as u64 * dims.1 as u64 * self.features.n_samples as u64) as f64 / start.elapsed().as_secs() as f64
+                (dims.0 as u64 * dims.1 as u64 * cam.n_samples()) as f64 / start.elapsed().as_secs() as f64
             ));
         }
 
