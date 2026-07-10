@@ -59,7 +59,7 @@ pub trait Scattering {
 macro_rules! material_impl {
     ($($(#[$($attrs:tt)*])* $mat:ident),* $(,)?) => {
         /// A runtime abstraction of all possible materials.
-        #[derive(Clone, Copy, Debug, Deserialize, Serialize)]
+        #[derive(Clone, Debug, Deserialize, Serialize)]
         pub enum Material {
             $($(#[$($attrs)*])* $mat($mat),)*
         }

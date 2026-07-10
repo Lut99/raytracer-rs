@@ -1,0 +1,28 @@
+{
+  "camera": {
+    "vfov": 20,
+    "pos": {
+      "lookfrom": [0, 0, 12],
+      "lookat": [0, 0, 0],
+      "lookup": [0, 1, 0]
+    }
+  },
+  "objects": [{
+    "Sphere": {
+      "center": [0, 0, 0],
+      "radius": 2,
+      "material": {
+        "LambertianTexture": {
+          "texture": {
+            "Image": {
+              "Path": {
+                "path": "./tests/scenes/earthmap.jpg",
+                "format": "Jpeg"
+              }
+            }
+          }
+        }
+      }
+    }
+  }]
+}

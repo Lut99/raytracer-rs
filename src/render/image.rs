@@ -13,47 +13,83 @@
 //!   that we can render to.
 //
 
-use std::fmt::{Display, Formatter, Result as FResult};
+use std::fs;
+use std::io::{BufRead, BufReader, Cursor, Seek};
 use std::ops::{AddAssign, Index, IndexMut};
 use std::path::{Path, PathBuf};
-use std::{error, fs};
 
-use image::{ColorType, RgbaImage};
+use base64::Engine as _;
+use image::codecs::png::PngEncoder;
+use image::{ColorType, DynamicImage, GenericImageView, ImageFormat, Pixel, RgbaImage};
+use serde::de::Deserializer;
+use serde::ser::Serializer;
+use serde::{Deserialize, Serialize};
+use thiserror::Error;
 
 use crate::math::colour::Colour;
 
 
 /***** ERRORS *****/
 /// Defines the errors that may occur within the [`Image`] struct.
-#[derive(Debug)]
+#[derive(Debug, Error)]
 pub enum Error {
-    /// The parent directories did not exist.
+    #[error("Parent directory {path:?} not found (re-run with '--fix-dirs' to create it)")]
     ParentNotFound { path: PathBuf },
-    /// Failed to fix the parent directories.
-    FixDirs { path: PathBuf, err: std::io::Error },
-    /// Failed to save an Image to disk.
-    ToPath { path: PathBuf, err: image::ImageError },
+    #[error("Failed to create parent directory for {path:?}")]
+    FixDirs {
+        path: PathBuf,
+        #[source]
+        err:  std::io::Error,
+    },
+    #[error("Failed to write Image to {err:?}")]
+    ToPath {
+        path: PathBuf,
+        #[source]
+        err:  image::ImageError,
+    },
+    #[error("Failed to read the Image from a buffer as {fmt:?}.")]
+    Reader {
+        fmt: ImageFormat,
+        #[source]
+        err: image::ImageError,
+    },
+    #[error("Failed to read from reader")]
+    ReaderRead(#[source] std::io::Error),
+    #[error("Failed to guess format of reader bytes")]
+    GuessFormat(#[source] image::ImageError),
+    #[error("Failed to open file {path:?}")]
+    FileOpen {
+        path: PathBuf,
+        #[source]
+        err:  std::io::Error,
+    },
 }
-impl Display for Error {
-    #[inline]
-    fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
-        use Error::*;
-        match self {
-            ParentNotFound { path } => write!(f, "Parent directory '{}' not found (re-run with '--fix-dirs' to create it)", path.display()),
-            FixDirs { path, .. } => write!(f, "Failed to create parent directory for '{}'", path.display()),
-            ToPath { path, .. } => write!(f, "Failed to write Image to '{}'", path.display()),
-        }
-    }
+
+
+
+
+
+/***** HELPERS *****/
+/// A struct that we actually serialize/deserialize
+#[derive(Deserialize, Serialize)]
+enum ImageInfo {
+    Path(ImageInfoPath),
+    Raw(ImageInfoRaw),
 }
-impl error::Error for Error {
-    fn source(&self) -> Option<&(dyn error::Error + 'static)> {
-        use Error::*;
-        match self {
-            ParentNotFound { .. } => None,
-            FixDirs { err, .. } => Some(err),
-            ToPath { err, .. } => Some(err),
-        }
-    }
+
+#[derive(Deserialize, Serialize)]
+struct ImageInfoPath {
+    /// The path where the file resides.
+    path: PathBuf,
+    /// Optional image format.
+    #[serde(alias = "format")]
+    fmt:  Option<ImageFormat>,
+}
+
+#[derive(Deserialize, Serialize)]
+struct ImageInfoRaw {
+    /// The raw data we're reading, encoded as Base64
+    data: String,
 }
 
 
@@ -70,6 +106,7 @@ pub struct Image {
     dims:   (u32, u32),
 }
 
+// Constructors
 impl Image {
     /// Constructor for the Image that initializes it to be empty (all-zero).
     ///
@@ -85,8 +122,90 @@ impl Image {
         Self { pixels: vec![Colour::zeroes(); (width * height) as usize], dims: (width, height) }
     }
 
+    /// Loads the image from a set of encoded bytes with the [`image`]-library.
+    ///
+    /// # Arguments
+    /// - `fmt`: An [`ImageFormat`] declaring how to read the...
+    /// - `bytes`: Raw bytes to load the image from.
+    ///
+    /// # Returns
+    /// A new Image.
+    ///
+    /// # Errors
+    /// This function errors if we couldn't parse the bytes as the given format.
+    pub fn from_reader<R: BufRead + Seek>(fmt: ImageFormat, reader: R) -> Result<Self, Error> {
+        // Read the bytes as an rgba image
+        let image: DynamicImage = image::load(reader, fmt).map_err(|err| Error::Reader { fmt, err })?;
 
+        // Convert to ourselves
+        let dims: (u32, u32) = image.dimensions();
+        let mut pixels = Vec::with_capacity((dims.0 * dims.1) as usize);
+        for (_, _, pixel) in image.pixels() {
+            let rgba = pixel.to_rgba();
+            pixels.push(Colour::new(rgba[0] as f64 / 255.0, rgba[1] as f64 / 255.0, rgba[2] as f64 / 255.0, rgba[3] as f64 / 255.0));
+        }
+        Ok(Self { pixels, dims })
+    }
 
+    /// Loads the image from a set of encoded bytes with the [`image`]-library, attempting to guess
+    /// the format automatically.
+    ///
+    /// # Arguments
+    /// - `bytes`: Raw bytes to load the image from.
+    ///
+    /// # Returns
+    /// A new Image.
+    ///
+    /// # Errors
+    /// This function errors if we couldn't guess the format or if we couldn't parse the bytes as
+    /// that format.
+    pub fn from_reader_auto<R: BufRead + Seek>(mut reader: R) -> Result<Self, Error> {
+        // Attempt to guess the format
+        let mut buffer: [u8; 8192] = [0; 8192];
+        let buffer_len: usize = reader.read(&mut buffer).map_err(Error::ReaderRead)?;
+        let fmt: ImageFormat = image::guess_format(&buffer[..buffer_len]).map_err(Error::GuessFormat)?;
+        Self::from_reader(fmt, reader)
+    }
+
+    /// Loads the image from a file referred to by a path.
+    ///
+    /// # Arguments
+    /// - `fmt`: An [`ImageFormat`] declaring how to read the...
+    /// - `path`: A file pointed to by a path-like.
+    ///
+    /// # Returns
+    /// A new Image.
+    ///
+    /// # Errors
+    /// This function errors if we couldn't read the file or parse the bytes as the given format.
+    pub fn from_path(fmt: ImageFormat, path: impl AsRef<Path>) -> Result<Self, Error> {
+        // Open the file
+        let path: &Path = path.as_ref();
+        let handle = fs::File::open(path).map_err(|err| Error::FileOpen { path: path.into(), err })?;
+        Self::from_reader(fmt, BufReader::new(handle))
+    }
+
+    /// Loads the image from a file referred to by a path, guessing the file format from the bytes.
+    ///
+    /// # Arguments
+    /// - `path`: A file pointed to by a path-like.
+    ///
+    /// # Returns
+    /// A new Image.
+    ///
+    /// # Errors
+    /// This function errors if we couldn't read the file, guess the format or parse the bytes as
+    /// the given format.
+    pub fn from_path_auto(path: impl AsRef<Path>) -> Result<Self, Error> {
+        // Open the file
+        let path: &Path = path.as_ref();
+        let handle = fs::File::open(path).map_err(|err| Error::FileOpen { path: path.into(), err })?;
+        Self::from_reader_auto(BufReader::new(handle))
+    }
+}
+
+// Collection
+impl Image {
     /// Gets a read-only reference to a pixel by linear coordinate.
     ///
     /// To use XY-coordinates, see the various [`IndexMut`]-implementations.
@@ -199,19 +318,10 @@ impl Image {
             Err(err) => Err(Error::ToPath { path: path.into(), err }),
         }
     }
+}
 
-
-
-    /// Returns a read-only iterator over all [`Colour`]s in this Image.
-    #[inline]
-    pub fn iter(&self) -> std::slice::Iter<'_, Colour> { self.into_iter() }
-
-    /// Returns a mutating iterator over all [`Colour`]s in this Image.
-    #[inline]
-    pub fn iter_mut(&mut self) -> std::slice::IterMut<'_, Colour> { self.into_iter() }
-
-
-
+// Collection stats
+impl Image {
     /// Returns the number of pixels in this Image.
     #[inline]
     pub fn len(&self) -> usize { self.pixels.len() }
@@ -226,6 +336,7 @@ impl Image {
     pub fn height(&self) -> u32 { self.dims.1 }
 }
 
+// Ops
 impl Index<u32> for Image {
     type Output = [Colour];
 
@@ -327,7 +438,6 @@ impl IndexMut<(usize, usize)> for Image {
         &mut self.pixels[index]
     }
 }
-
 impl AddAssign for Image {
     #[inline]
     fn add_assign(&mut self, rhs: Self) {
@@ -343,6 +453,71 @@ impl AddAssign for Image {
     }
 }
 
+
+impl Serialize for Image {
+    #[inline]
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        // Cast our internal buffer to a [`Vec<u8>`]
+        let mut buffer: RgbaImage = RgbaImage::new(self.dims.0 as u32, self.dims.1 as u32);
+        for y in 0..self.dims.1 {
+            for x in 0..self.dims.0 {
+                buffer[(x as u32, (self.dims.1 - 1 - y) as u32)] = self.pixels[(x + self.dims.0 * y) as usize].into();
+            }
+        }
+        let mut image: Vec<u8> = Vec::new();
+        buffer.write_with_encoder(PngEncoder::new(&mut image)).map_err(serde::ser::Error::custom)?;
+
+        // Convert that to base64 and serialize _that_
+        let b64_image: String = base64::prelude::BASE64_STANDARD.encode(&image);
+        ImageInfo::Raw(ImageInfoRaw { data: b64_image }).serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for Image {
+    #[inline]
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        // Deserialize the image info
+        let info = ImageInfo::deserialize(deserializer)?;
+
+        // Either load the path, or the raw data
+        match info {
+            ImageInfo::Path(p) => {
+                // First, mod the path to ensure that, if it's relative, it's relative to this file
+                // TODO: Fixthis, but how do we get the parent path?
+                let path: PathBuf = if p.path.is_relative() { p.path } else { p.path };
+
+                // Then consider the format
+                match p.fmt {
+                    Some(fmt) => Image::from_path(fmt, path).map_err(serde::de::Error::custom),
+                    None => Image::from_path_auto(path).map_err(serde::de::Error::custom),
+                }
+            },
+
+            ImageInfo::Raw(r) => {
+                // Decode the Base64 data
+                let image: Vec<u8> = base64::prelude::BASE64_STANDARD.decode(&r.data).map_err(serde::de::Error::custom)?;
+                Image::from_reader_auto(Cursor::new(image)).map_err(serde::de::Error::custom)
+            },
+        }
+    }
+}
+
+// Iteration
+impl Image {
+    /// Returns a read-only iterator over all [`Colour`]s in this Image.
+    #[inline]
+    pub fn iter(&self) -> std::slice::Iter<'_, Colour> { self.into_iter() }
+
+    /// Returns a mutating iterator over all [`Colour`]s in this Image.
+    #[inline]
+    pub fn iter_mut(&mut self) -> std::slice::IterMut<'_, Colour> { self.into_iter() }
+}
 impl<'a> IntoIterator for &'a Image {
     type Item = &'a Colour;
     type IntoIter = std::slice::Iter<'a, Colour>;

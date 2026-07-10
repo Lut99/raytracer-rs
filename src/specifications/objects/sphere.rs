@@ -12,6 +12,8 @@
 //!   Defines a renderable [`Sphere`].
 //
 
+use std::f64::consts::PI;
+
 use serde::{Deserialize, Serialize};
 
 use super::super::animations::{Animating, Animation};
@@ -27,9 +29,14 @@ use crate::math::{AABB, Colour, Ray, Vec3};
 #[inline]
 fn sphere_aabb(center: Vec3, radius: f64) -> AABB { AABB::new(center - radius, [2.0 * radius; 3]) }
 
-/// Computes the uv-coordinate pair on a sphere given a hit.
+/// Computes the uv-coordinate pair on a sphere given a normal point (and direction) on it.
 #[inline]
-fn sphere_uv(_center: Vec3, _radius: f64) -> (f64, f64) { (0.0, 0.0) }
+fn sphere_uv(p: Vec3) -> (f64, f64) {
+    // Compute the polar coordinates on the sphere
+    let theta = (-p.y).acos();
+    let phi = (-p.z).atan2(p.x) + PI;
+    (phi / (2.0 * PI), theta / PI)
+}
 
 /// Computes a sphere's hit yay or nay.
 #[inline]
@@ -65,7 +72,7 @@ fn sphere_hit(center: Vec3, radius: f64, ray: Ray, t_min: f64, t_max: f64) -> Op
         let outward_normal: Vec3 = (hit - center) / radius;
 
         // Populate the rest of the hitrecord on the fly
-        Some(HitRecord::new(ray, hit, root, outward_normal, sphere_uv(center, radius)))
+        Some(HitRecord::new(ray, hit, root, outward_normal, sphere_uv(outward_normal)))
     } else {
         None
     }

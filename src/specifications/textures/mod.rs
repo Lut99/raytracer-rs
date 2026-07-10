@@ -6,8 +6,10 @@
 //
 
 pub mod checker;
+pub mod image;
 
 pub use checker::Checker;
+pub use image::Image;
 use serde::{Deserialize, Serialize};
 
 use crate::math::{Colour, Vec3};
@@ -36,7 +38,7 @@ pub trait Textured {
 macro_rules! object_impl {
     ($($(#[$($attrs:tt)*])* $tex:ident),* $(,)?) => {
         /// A runtime abstraction of all possible textures.
-        #[derive(Clone, Copy, Debug, Deserialize, Serialize)]
+        #[derive(Clone, Debug, Deserialize, Serialize)]
         pub enum Texture {
             $($(#[$($attrs)*])* $tex($tex),)*
         }
@@ -55,4 +57,6 @@ macro_rules! object_impl {
 object_impl!(
     /// A texture rendering as a checkerboard.
     Checker,
+    /// A texture loaded from an image.
+    Image,
 );

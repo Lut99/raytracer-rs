@@ -269,7 +269,7 @@ fn main() {
                         radius:   1000.0,
                         material: Material::LambertianTexture(LambertianTexture {
                             texture: Texture::Checker(Checker {
-                                scale: 0.32,
+                                scale: 0.0015,
                                 black: Colour::new(0.2, 0.3, 0.1, 1.0),
                                 white: Colour::new(0.9, 0.9, 0.9, 1.0),
                             }),
@@ -395,7 +395,7 @@ fn main() {
                         radius:   10.0,
                         material: Material::LambertianTexture(LambertianTexture {
                             texture: Texture::Checker(Checker {
-                                scale: 0.32,
+                                scale: 0.015,
                                 black: Colour::new(0.2, 0.3, 0.1, 1.0),
                                 white: Colour::new(0.9, 0.9, 0.9, 1.0),
                             }),
@@ -406,7 +406,7 @@ fn main() {
                         radius:   10.0,
                         material: Material::LambertianTexture(LambertianTexture {
                             texture: Texture::Checker(Checker {
-                                scale: 0.32,
+                                scale: 0.015,
                                 black: Colour::new(0.2, 0.3, 0.1, 1.0),
                                 white: Colour::new(0.9, 0.9, 0.9, 1.0),
                             }),

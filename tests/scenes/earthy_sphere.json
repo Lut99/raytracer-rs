@@ -1,0 +1,67 @@
+{
+  "objects": [
+    {
+      "Sphere": {
+        "center": [0, -100.5, -1],
+        "radius": 100,
+        "material": {
+          "Lambertian": {
+            "colour": [0.8, 0.8, 0, 1]
+          }
+        }
+      }
+    },
+    {
+      "Sphere": {
+        "center": [0, 0, -1.2],
+        "radius": 0.5,
+        "material": {
+          "LambertianTexture": {
+            "texture": {
+              "Image": {
+                "Path": {
+                  "path": "./tests/scenes/earthmap.jpg",
+                  "format": "Jpeg"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "Sphere": {
+        "center": [-1, 0, -1],
+        "radius": 0.5,
+        "material": {
+          "Dielectric": {
+            "refraction_index": 1.5
+          }
+        }
+      }
+    },
+    {
+      "Sphere": {
+        "center": [-1, 0, -1],
+        "radius": 0.4,
+        "material": {
+          "Dielectric": {
+            "refraction_index": 0.66666667
+          }
+        }
+      }
+    },
+    {
+      "Sphere": {
+        "center": [1, 0, -1],
+        "radius": 0.5,
+        "material": {
+          "Metal": {
+            "colour": [0.8, 0.6, 0.2, 1],
+            "fuzz": 0.0
+          }
+        }
+      }
+    }
+  ]
+}
