@@ -61,7 +61,7 @@ For examples of scene files, check the [`tests/scenes`](./tests/scenes/) directo
 
 
 ## Results
-Some images that we've rendered:
+Some images that we've rendered as based on the tutorial:
 
 ![An image showing the cover of book #1 with bouncy spheres.](./images/cover_bouncy.png)
 
