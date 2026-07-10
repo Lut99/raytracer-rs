@@ -15,11 +15,50 @@
 
 use std::ops::Index;
 
-use crate::math::{Colour, Ray};
+use crate::math::{AABB, Colour, Ray};
 use crate::specifications::animations::Vertical;
 use crate::specifications::materials::{Dielectric, Diffuse, Lambertian, Material, Metal, NormalMap, PartialDielectric, StaticColour};
 use crate::specifications::objects::{AnimatedSphere, BoundingBoxable, HitRecord, Hittable, Sphere};
 use crate::specifications::scene::{Environment, IntoInner, Object};
+
+
+/***** HELPER FUNCTINS *****/
+/// Computes the AABB of a whole slice of objects.
+///
+/// The AABB's are stored in a slice that mirrors the objects.
+fn aabb_slice<T: BoundingBoxable>(slice: &[HitItem<T>], t_us: u64, aabbs: &mut [Option<AABB>]) {
+    let mut iter = slice.into_iter().enumerate();
+    while let Some((i, item)) = iter.next() {
+        match item {
+            HitItem::Object(o) => {
+                aabbs[i] = Some(o.aabb(t_us));
+            },
+            HitItem::BVH(len) => {
+                // Populate the nested AABB's first
+                let nested_aabbs = &mut aabbs[i + 1..i + 1 + *len];
+                aabb_slice(&slice[i + 1..i + 1 + *len], t_us, nested_aabbs);
+
+                // Compute an AABB for this group
+                let mut res: Option<AABB> = None;
+                for aabb in nested_aabbs {
+                    let Some(aabb) = aabb else { continue };
+                    if let Some(res) = &mut res {
+                        *res = AABB::surround(*res, *aabb);
+                    } else {
+                        res = Some(*aabb);
+                    }
+                }
+                aabbs[i] = res;
+
+                // Skip these elements
+                iter.nth(*len);
+            },
+        }
+    }
+}
+
+
+
 
 
 /***** HELPER STRUCTS *****/
@@ -28,6 +67,10 @@ use crate::specifications::scene::{Environment, IntoInner, Object};
 enum HitItem<T> {
     /// It's a real object.
     Object(T),
+    /// It's a marker indicating a group computed by the BVH algorithm.
+    ///
+    /// The index recounts how many of the next items are part of it. This may be nested!
+    BVH(usize),
 }
 impl<T> HitItem<T> {
     /// Returns the internal object if this HitItem is one.
@@ -38,9 +81,12 @@ impl<T> HitItem<T> {
     /// # Panics
     /// This function may panic if [`Self::is_object()`] returns false (i.e., we are not a [`HitItem::Object`] after all).
     #[inline]
+    #[track_caller]
     fn object(&self) -> &T {
-        let Self::Object(o) = self;
-        o
+        match self {
+            Self::Object(o) => o,
+            _ => panic!("Cannot unwrap non-HitItem::Object as a HitItem::Object"),
+        }
     }
 }
 
@@ -54,6 +100,16 @@ struct HitVec<T> {
 }
 
 impl<T: Hittable> HitVec<T> {
+    /// Organise the objects in this HitVec into a BVH (Bounded Volume Hiearchy) for efficient
+    /// hittable search.
+    ///
+    /// # Arguments
+    /// - `t_us`: The time since the start of the scene (as microseconds) at which we compute
+    ///   AABBs.
+    fn recompute_bvh(&mut self) {}
+
+
+
     /// Computes the hit of the given ray with the closest object, if any.
     ///
     /// # Arguments
@@ -64,19 +120,19 @@ impl<T: Hittable> HitVec<T> {
     /// # Returns
     /// A tuple of the index of the item that was hit and a [`HitRecord`] that contains information about the hit. If the ray never hits anything at all, then [`None`] is returned.
     fn hit(&self, ray: Ray, t_min: f64, t_max: f64, env: &Environment) -> Option<(usize, HitRecord)> {
-        // Prepare the placeholder for the closest hit
-        let mut closest: Option<(usize, HitRecord)> = None;
+        // Pre-compute all AABBs
+        let mut aabbs: Vec<Option<AABB>> = vec![None; self.items.len()];
+        aabb_slice(&self.items, ray.time, &mut aabbs);
 
-        // Iterate over the internal objects
+        // Iterate over all the items in the slice to find the closest...
+        let mut closest: Option<(usize, HitRecord)> = None;
         let mut iter = self.items.iter().enumerate();
         while let Some((i, item)) = iter.next() {
-            // Match on the type of item
             match item {
-                HitItem::Object(obj) => {
+                HitItem::Object(o) => {
                     // Compute the AABB first as a cheap hit, then the expensive object hit
-                    let aabb = obj.aabb(ray.time);
-                    if aabb.hit(ray, t_min, t_max) {
-                        if let Some(record) = obj.hit(ray, t_min, t_max, env) {
+                    if aabbs[i].map(|aabb| aabb.hit(ray, t_min, t_max)).unwrap_or(true) {
+                        if let Some(record) = o.hit(ray, t_min, t_max, env) {
                             // Now only replace the closest if the new one is closer (or there wasn't one yet)
                             if let Some(old_record) = &closest {
                                 if record.t < old_record.1.t {
@@ -88,10 +144,15 @@ impl<T: Hittable> HitVec<T> {
                         }
                     }
                 },
+                HitItem::BVH(len) => {
+                    // If we _don't_ hit the AABB, skip this group of items
+                    if !aabbs[i].map(|aabb| aabb.hit(ray, t_min, t_max)).unwrap_or(true) {
+                        iter.nth(*len);
+                    }
+                    // Else, continue and compute the hit of the objects in the group
+                },
             }
         }
-
-        // Done, return the closest hit (if any)
         closest
     }
 }

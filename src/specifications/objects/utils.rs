@@ -13,7 +13,6 @@
 //
 
 use super::spec::BoundingBoxable;
-use crate::math::aabb::surround;
 use crate::math::{AABB, Vec3};
 
 
@@ -39,7 +38,7 @@ pub fn surround_list(t_us: u64, objs: impl IntoIterator<Item = impl BoundingBoxa
 
     // Add any other object in the iterator
     for obj in objs {
-        aabb = surround(aabb, obj.aabb(t_us));
+        aabb = AABB::surround(aabb, obj.aabb(t_us));
     }
 
     // Done
