@@ -54,35 +54,6 @@ macro_rules! number_impl {
 
 
 
-/***** AUXILLARY FUNCTIONS *****/
-/// Computes the dot product of two 3D vectors.
-///
-/// # Arguments
-/// - `lhs`: The lefthand-side of the computation.
-/// - `rhs`: The righthand-side of the computation.
-///
-/// # Returns
-/// The value of the dot product, as `T`.
-#[inline]
-pub fn dot3<T: Number>(lhs: Vec3<T>, rhs: Vec3<T>) -> T { lhs.x * rhs.x + lhs.y * rhs.y + lhs.z * rhs.z }
-
-/// Computes the cross product of two 3D vectors.
-///
-/// # Arguments
-/// - `lhs`: The lefthand-side of the computation.
-/// - `rhs`: The righthand-side of the computation.
-///
-/// # Returns
-/// The value of the cross product, as `T`.
-#[inline]
-pub fn cross3<T: Number>(lhs: Vec3<T>, rhs: Vec3<T>) -> Vec3<T> {
-    Vec3 { x: lhs.y * rhs.z - lhs.z * rhs.y, y: lhs.z * rhs.x - lhs.x * rhs.z, z: lhs.x * rhs.y - lhs.y * rhs.x }
-}
-
-
-
-
-
 /***** AUXILLARY TRAITS *****/
 /// The `Number` trait implements functions for anything in a vector.
 pub trait Number:
@@ -172,7 +143,7 @@ impl<T: Number> Vec3<T> {
     /// # Returns
     /// A new instance of Self with only 0's in it.
     #[inline]
-    pub fn zeroes() -> Self { Self { x: T::ZERO, y: T::ZERO, z: T::ZERO } }
+    pub const fn zeroes() -> Self { Self { x: T::ZERO, y: T::ZERO, z: T::ZERO } }
 }
 
 // Facts
@@ -218,6 +189,29 @@ impl<T: Float> Vec3<T> {
     pub fn unit(&self) -> Vec3<f64> {
         let len: f64 = self.length();
         Vec3 { x: self.x.as_f64() / len, y: self.y.as_f64() / len, z: self.z.as_f64() / len }
+    }
+}
+impl<T: Number> Vec3<T> {
+    /// Computes the dot product of this with another Vec3.
+    ///
+    /// # Arguments
+    /// - `other`: The righthand-side of the computation.
+    ///
+    /// # Returns
+    /// A new Vec3 with the value of `self dot other`.
+    #[inline]
+    pub fn dot(self, other: Self) -> T { self.x * other.x + self.y * other.y + self.z * other.z }
+
+    /// Computes the cross product of this with another Vec3.
+    ///
+    /// # Arguments
+    /// - `other`: The righthand-side of the computation.
+    ///
+    /// # Returns
+    /// A new Vec3 with the value of`self cross other`.
+    #[inline]
+    pub fn cross(self, other: Self) -> Self {
+        Vec3 { x: self.y * other.z - self.z * other.y, y: self.z * other.x - self.x * other.z, z: self.x * other.y - self.y * other.x }
     }
 }
 

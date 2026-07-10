@@ -7,7 +7,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use super::Animation;
+use super::Animating;
 use crate::math::Vec3;
 
 
@@ -23,7 +23,7 @@ pub struct Vertical {
     pub duration: u64,
 }
 
-impl Animation for Vertical {
+impl Animating for Vertical {
     #[inline]
     fn animate(&self, pos: Vec3, t: u64) -> Vec3 {
         if t <= self.at {

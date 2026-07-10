@@ -16,7 +16,7 @@
 use serde::{Deserialize, Serialize};
 
 use super::super::scene::Environment;
-use super::Material;
+use super::Scattering;
 use crate::math::{Colour, Ray};
 use crate::specifications::objects::HitRecord;
 
@@ -26,9 +26,9 @@ use crate::specifications::objects::HitRecord;
 #[derive(Clone, Copy, Debug, Deserialize, Serialize)]
 pub struct StaticColour {
     /// The colour to show.
-    colour: Colour,
+    pub colour: Colour,
 }
-impl Material for StaticColour {
+impl Scattering for StaticColour {
     #[inline]
     fn scatter(&self, _ray: Ray, _record: HitRecord, _env: &Environment) -> (Option<Ray>, Colour) {
         // Compute the normal map colour based on the normal
@@ -41,7 +41,7 @@ impl Material for StaticColour {
 /// Implements a non-bouncing, just-normal-map kind of material. Mostly created for the scene in the [tutorial](https://raytracing.github.io/books/RayTracingInOneWeekend.html#surfacenormalsandmultipleobjects/commonconstantsandutilityfunctions).
 #[derive(Clone, Copy, Debug, Deserialize, Serialize)]
 pub struct NormalMap;
-impl Material for NormalMap {
+impl Scattering for NormalMap {
     #[inline]
     fn scatter(&self, _ray: Ray, record: HitRecord, _env: &Environment) -> (Option<Ray>, Colour) {
         // Compute the normal map colour based on the normal

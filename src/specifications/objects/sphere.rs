@@ -14,17 +14,18 @@
 
 use serde::{Deserialize, Serialize};
 
-use super::super::animations::Animation;
+use super::super::animations::{Animating, Animation};
+use super::super::materials::Scattering;
 use super::super::scene::Environment;
-use super::spec::{BoundingBoxable, HitRecord, Hittable};
-use crate::math::vec3::dot3;
-use crate::math::{AABB, Ray, Vec3};
+use super::hitrecord::HitRecord;
+use super::{BoundingBoxable, Hittable};
+use crate::math::{AABB, Colour, Ray, Vec3};
 
 
 /***** HELPER FUNCTIONS *****/
 /// Computes a sphere's AABB.
 #[inline]
-fn sphere_aabb(center: Vec3, radius: f64) -> AABB { AABB::new(center - radius, center + radius) }
+fn sphere_aabb(center: Vec3, radius: f64) -> AABB { AABB::new(center - radius, [2.0 * radius; 3]) }
 
 /// Computes a sphere's hit yay or nay.
 #[inline]
@@ -35,7 +36,7 @@ fn sphere_hit(center: Vec3, radius: f64, ray: Ray, t_min: f64, t_max: f64) -> Op
     // We compute `a`, `b` and `c` in the classic ABC-formula. This we do to find the intersections between the Ray (origin + t*direction) and the sphere (x^2 + y^2 + z^2 = r^2).
     // For more explanation, see the tutorial (<https://raytracing.github.io/books/RayTracingInOneWeekend.html#addingasphere/ray-sphereintersection>)
     let a: f64 = ray.direct.length2();
-    let half_b: f64 = dot3(oc, ray.direct);
+    let half_b: f64 = oc.dot(ray.direct);
     let c: f64 = oc.length2() - radius * radius;
 
     // Compute the discriminant only, since we're only interested in the number of roots
@@ -92,6 +93,10 @@ impl<M> Hittable for Sphere<M> {
         sphere_hit(self.center, self.radius, ray, t_min, t_max)
     }
 }
+impl<M: Scattering> Scattering for Sphere<M> {
+    #[inline]
+    fn scatter(&self, ray: Ray, record: HitRecord, env: &Environment) -> (Option<Ray>, Colour) { self.material.scatter(ray, record, env) }
+}
 
 
 
@@ -99,20 +104,55 @@ impl<M> Hittable for Sphere<M> {
 ///
 /// This is a regular [`Sphere`] wrapped to do some movement.
 #[derive(Clone, Copy, Debug, Deserialize, Serialize)]
-pub struct AnimatedSphere<M, A> {
+pub struct AnimatedSphere<M, A = Animation> {
     /// The sphere we wrap
     pub sphere:    Sphere<M>,
     /// The animation that determines how the sphere moves over time.
     pub animation: A,
 }
 
-impl<M, A: Animation> BoundingBoxable for AnimatedSphere<M, A> {
+impl<M, A: Animating> BoundingBoxable for AnimatedSphere<M, A> {
     #[inline]
     fn aabb(&self, t_us: u64) -> AABB { sphere_aabb(self.animation.animate(self.sphere.center, t_us), self.sphere.radius) }
 }
-impl<M, A: Animation> Hittable for AnimatedSphere<M, A> {
+impl<M, A: Animating> Hittable for AnimatedSphere<M, A> {
     #[inline]
     fn hit(&self, ray: Ray, t_min: f64, t_max: f64, _env: &Environment) -> Option<HitRecord> {
         sphere_hit(self.animation.animate(self.sphere.center, ray.time), self.sphere.radius, ray, t_min, t_max)
+    }
+}
+impl<M: Scattering, A> Scattering for AnimatedSphere<M, A> {
+    #[inline]
+    fn scatter(&self, ray: Ray, record: HitRecord, env: &Environment) -> (Option<Ray>, Colour) { self.sphere.scatter(ray, record, env) }
+}
+
+
+
+
+
+/***** TESTS *****/
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::specifications::animations::Vertical;
+    use crate::specifications::materials::NormalMap;
+
+    #[test]
+    fn test_sphere_aabb() {
+        let sphere = Sphere { center: Vec3::new(0.0, 0.0, 0.0), radius: 0.5, material: NormalMap };
+        assert_eq!(sphere.aabb(0), AABB::new([-0.5, -0.5, -0.5].into(), [1.0, 1.0, 1.0]));
+    }
+
+    #[test]
+    fn test_animated_sphere_aabb() {
+        let sphere = AnimatedSphere {
+            sphere:    Sphere { center: Vec3::new(0.0, 0.0, 0.0), radius: 0.5, material: NormalMap },
+            animation: Vertical { len: 100.0, at: 0, duration: 100 },
+        };
+        assert_eq!(sphere.aabb(0), AABB::new([-0.5, -0.5, -0.5].into(), [1.0, 1.0, 1.0]));
+        assert_eq!(sphere.aabb(50), AABB::new([-0.5, 49.5, -0.5].into(), [1.0, 1.0, 1.0]));
+        assert_eq!(sphere.aabb(100), AABB::new([-0.5, 99.5, -0.5].into(), [1.0, 1.0, 1.0]));
+        assert_eq!(sphere.aabb(150), AABB::new([-0.5, 99.5, -0.5].into(), [1.0, 1.0, 1.0]));
+        assert_eq!(AABB::surround(sphere.aabb(0), sphere.aabb(100)), AABB::new([-0.5, -0.5, -0.5].into(), [1.0, 101.0, 1.0]));
     }
 }

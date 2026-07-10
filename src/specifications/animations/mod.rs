@@ -8,15 +8,16 @@
 // Modules
 pub mod vertical;
 
-// Imports
+// Imports & Exports
+use serde::{Deserialize, Serialize};
 pub use vertical::Vertical;
 
 use crate::math::Vec3;
 
 
-/***** LIBRARY *****/
+/***** INTERFACES *****/
 /// Defines abstract representation of an animation that determines an object's location over time.
-pub trait Animation {
+pub trait Animating {
     /// Computes the position of an object given it's start position and the current time.
     ///
     /// Note that this computation is absolute: you always compute from the start! This because
@@ -31,3 +32,32 @@ pub trait Animation {
     /// A new position of the sphere.
     fn animate(&self, pos: Vec3, t: u64) -> Vec3;
 }
+
+
+
+
+
+/***** LIBRARY *****/
+macro_rules! animation_impl {
+    ($($(#[$($attrs:tt)*])* $ani:ident),* $(,)?) => {
+        /// A runtime abstraction of all possible animations.
+        #[derive(Clone, Copy, Debug, Deserialize, Serialize)]
+        pub enum Animation {
+            $($(#[$($attrs)*])* $ani($ani),)*
+        }
+
+        // Interface
+        impl Animating for Animation {
+            #[inline]
+            fn animate(&self, pos: Vec3, t: u64) -> Vec3 {
+                match self {
+                    $(Self::$ani(a) => a.animate(pos, t),)*
+                }
+            }
+        }
+    };
+}
+animation_impl!(
+    /// An animation sending some object up.
+    Vertical,
+);

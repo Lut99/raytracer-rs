@@ -16,8 +16,7 @@
 use serde::{Deserialize, Serialize};
 
 use super::super::scene::Environment;
-use super::Material;
-use crate::math::vec3::dot3;
+use super::Scattering;
 use crate::math::{Colour, Ray, Vec3};
 use crate::specifications::objects::HitRecord;
 
@@ -38,7 +37,7 @@ pub fn random3_uniform() -> Vec3 {
 /// Generates a random, uniformly sampled vector on a hemisphere w.r.t. the normal.
 pub fn random3_on_hemisphere(normal: Vec3) -> Vec3 {
     let on_unit_sphere: Vec3 = random3_uniform();
-    if dot3(on_unit_sphere, normal) > 0.0 { on_unit_sphere } else { -on_unit_sphere }
+    if on_unit_sphere.dot(normal) > 0.0 { on_unit_sphere } else { -on_unit_sphere }
 }
 
 
@@ -52,7 +51,7 @@ pub struct Diffuse {
     /// The colour of the material.
     pub colour: Colour,
 }
-impl Material for Diffuse {
+impl Scattering for Diffuse {
     #[inline]
     fn scatter(&self, _ray: Ray, record: HitRecord, _env: &Environment) -> (Option<Ray>, Colour) {
         // Return a ray scattered in a random direction
@@ -69,7 +68,7 @@ pub struct Lambertian {
     /// The colour of the material.
     pub colour: Colour,
 }
-impl Material for Lambertian {
+impl Scattering for Lambertian {
     #[inline]
     fn scatter(&self, _ray: Ray, record: HitRecord, _env: &Environment) -> (Option<Ray>, Colour) {
         // Compute the scattered ray, making sure the scattered one is not zero

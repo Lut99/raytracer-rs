@@ -9,9 +9,8 @@
 use serde::{Deserialize, Serialize};
 
 use super::super::scene::Environment;
-use super::Material;
+use super::Scattering;
 use super::metal::reflect;
-use crate::math::vec3::dot3;
 use crate::math::{Colour, Ray, Vec3};
 use crate::specifications::objects::HitRecord;
 
@@ -79,7 +78,7 @@ pub struct PartialDielectric {
     #[serde(default = "default_dielectric_colour")]
     pub colour: Colour,
 }
-impl Material for PartialDielectric {
+impl Scattering for PartialDielectric {
     #[inline]
     fn scatter(&self, ray: Ray, record: HitRecord, env: &Environment) -> (Option<Ray>, Colour) {
         // NOTE: We are always assuming we are refracting against air here
@@ -88,7 +87,7 @@ impl Material for PartialDielectric {
 
         // Compute the refraction
         let unit_direction: Vec3 = ray.direct.unit();
-        let mut cos_theta = dot3(-unit_direction, record.normal);
+        let mut cos_theta = (-unit_direction).dot(record.normal);
         if cos_theta > 1.0 {
             cos_theta = 1.0;
         }
@@ -116,7 +115,7 @@ pub struct Dielectric {
     #[serde(default = "default_dielectric_colour")]
     pub colour: Colour,
 }
-impl Material for Dielectric {
+impl Scattering for Dielectric {
     #[inline]
     fn scatter(&self, ray: Ray, record: HitRecord, env: &Environment) -> (Option<Ray>, Colour) {
         // NOTE: We are always assuming we are refracting against air here
@@ -125,7 +124,7 @@ impl Material for Dielectric {
 
         // Determine if we can refract
         let unit_direction: Vec3 = ray.direct.unit();
-        let mut cos_theta = dot3(-unit_direction, record.normal);
+        let mut cos_theta = (-unit_direction).dot(record.normal);
         if cos_theta > 1.0 {
             cos_theta = 1.0;
         }

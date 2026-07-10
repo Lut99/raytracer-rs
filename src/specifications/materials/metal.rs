@@ -9,16 +9,15 @@ use serde::{Deserialize, Serialize};
 
 use super::super::objects::HitRecord;
 use super::super::scene::Environment;
-use super::Material;
+use super::Scattering;
 use super::diffuse::random3_uniform;
-use crate::math::vec3::dot3;
 use crate::math::{Colour, Ray, Vec3};
 
 
 /***** HELPER FUNCTIONS *****/
 /// Reflects a vector based on the direction it came in and the normal vector.
 #[inline]
-pub fn reflect(vec: Vec3, norm: Vec3) -> Vec3 { vec - 2.0 * dot3(vec, norm) * norm }
+pub fn reflect(vec: Vec3, norm: Vec3) -> Vec3 { vec - 2.0 * vec.dot(norm) * norm }
 
 
 
@@ -36,7 +35,7 @@ pub struct Metal {
     #[serde(default)]
     pub fuzz:   f64,
 }
-impl Material for Metal {
+impl Scattering for Metal {
     #[inline]
     fn scatter(&self, ray: Ray, record: HitRecord, _env: &Environment) -> (Option<Ray>, Colour) {
         // Compute the scattered ray, making sure the scattered one is not zero

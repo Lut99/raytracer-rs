@@ -17,7 +17,6 @@ use std::f64::consts::PI;
 
 use super::ray::Ray;
 use super::vec3::Vec3;
-use crate::math::vec3::cross3;
 
 
 /***** HELPER FUNCTION *****/
@@ -196,8 +195,8 @@ impl Camera {
 
         // Compute the viewport's vectors
         let w = (lookfrom - lookat).unit();
-        let u = cross3(up, w).unit();
-        let v = cross3(w, u);
+        let u = up.cross(w).unit();
+        let v = w.cross(u);
         let horizontal: Vec3 = viewport_width * u;
         let vertical: Vec3 = viewport_height * v;
 

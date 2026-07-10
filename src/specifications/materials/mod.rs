@@ -21,21 +21,21 @@ pub mod diffuse;
 pub mod metal;
 pub mod simple;
 
-// Put some of it into the module namespace
+// Imports & Exports
 pub use dielectric::{Dielectric, PartialDielectric};
 pub use diffuse::{Diffuse, Lambertian};
 pub use metal::Metal;
+use serde::{Deserialize, Serialize};
 pub use simple::{NormalMap, StaticColour};
 
-// Imports
 use crate::math::{Colour, Ray};
 use crate::specifications::objects::HitRecord;
 use crate::specifications::scene::Environment;
 
 
-/***** LIBRARY *****/
-/// The Material trait implements any material that we can use to cover an object.
-pub trait Material {
+/***** INTERFACES *****/
+/// The Scattering trait implements any material that we can use to cover an object.
+pub trait Scattering {
     /// Bounces (or reflects) a ray from this material.
     ///
     /// # Arguments
@@ -50,3 +50,44 @@ pub trait Material {
     /// [`None`] is returned for the [`Ray`], then no more bounce is necessary.
     fn scatter(&self, ray: Ray, record: HitRecord, env: &Environment) -> (Option<Ray>, Colour);
 }
+
+
+
+
+
+/***** LIBRARY *****/
+macro_rules! material_impl {
+    ($($(#[$($attrs:tt)*])* $mat:ident),* $(,)?) => {
+        /// A runtime abstraction of all possible materials.
+        #[derive(Clone, Copy, Debug, Deserialize, Serialize)]
+        pub enum Material {
+            $($(#[$($attrs)*])* $mat($mat),)*
+        }
+
+        // Interface
+        impl Scattering for Material {
+            #[inline]
+            fn scatter(&self, ray: Ray, record: HitRecord, env: &Environment) -> (Option<Ray>, Colour) {
+                match self {
+                    $(Self::$mat(m) => m.scatter(ray, record, env),)*
+                }
+            }
+        }
+    };
+}
+material_impl!(
+    /// A refracting material (e.g., glass, water-on-air, etc).
+    Dielectric,
+    /// A material randomly scattering rays, imperfectly.
+    Diffuse,
+    /// A material randomly scattering rays.
+    Lambertian,
+    /// A material reflecting rays perfectly.
+    Metal,
+    /// A material having colours of the object's normals.
+    NormalMap,
+    /// A partially refracting material (has some holes in the math that stops is refracting).
+    PartialDielectric,
+    /// A material having a static colour.
+    StaticColour,
+);

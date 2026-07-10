@@ -20,16 +20,17 @@ use humanlog::{DebugMode, HumanLogger};
 use log::{debug, error, info};
 use raytracer::common::input::Dimensions;
 use raytracer::generate;
-use raytracer::hitlist::HitList;
+use raytracer::hittree::HitTree;
 use raytracer::math::{Camera, Colour, Vec3};
 use raytracer::render::backends::multi::{MultiThreadRenderer, MultiThreadRendererConfig};
 use raytracer::render::backends::single::SingleThreadRenderer;
 use raytracer::render::image::Image;
-use raytracer::render::spec::{RayRenderer as _, RenderBackend};
+use raytracer::render::{RayRenderer as _, RenderBackend};
+use raytracer::specifications::animations::{Animation, Vertical};
 use raytracer::specifications::features::{Features, FeaturesCli, FeaturesFile};
-use raytracer::specifications::materials::{Dielectric, Lambertian, Metal};
-use raytracer::specifications::objects::Sphere;
-use raytracer::specifications::scene::{Environment, Material, Object, SceneFile};
+use raytracer::specifications::materials::{Dielectric, Lambertian, Material, Metal};
+use raytracer::specifications::objects::{AnimatedSphere, Object, Sphere};
+use raytracer::specifications::scene::{Environment, SceneFile};
 
 
 /***** ARGUMENTS *****/
@@ -117,7 +118,7 @@ struct RenderImageArguments {
 #[derive(Debug, Parser)]
 struct RenderCoverArguments {
     /// Any shutter time (in microseconds) to set. Since the cover is secretly animated, setting this will reveal motion blur.
-    #[clap(short, long, default_value = "1")]
+    #[clap(short, long, default_value = "1000")]
     shutter_time: u64,
     /// The path to the image file to output.
     #[clap(name = "OUTPUT_PATH", default_value = "./image.png", help = "The path to write the rendered image to.")]
@@ -200,7 +201,7 @@ fn main() {
                     }
 
                     // Convert that to a static HitList
-                    let list: HitList = HitList::from(&scene.objects);
+                    let list: HitTree = HitTree::with_objs(scene.objects, (0..=scene.camera.shutter_time.into()).into());
 
                     // Now render based on the backend
                     let output: Image = match render.backend {
@@ -265,11 +266,15 @@ fn main() {
                                 if mat < 0.8 {
                                     // It'll be a tiny diffuse sphere
                                     let colour = Colour::new(fastrand::f64(), fastrand::f64(), fastrand::f64(), 1.0);
-                                    objects.push(Object::Sphere(Sphere {
-                                        center,
-                                        radius: 0.2,
-                                        material: Material::Lambertian(Lambertian { colour }),
-                                    }));
+                                    let sphere = Sphere { center, radius: 0.2, material: Material::Lambertian(Lambertian { colour }) };
+                                    objects.push(if fastrand::f64() < 0.1 {
+                                        Object::AnimatedSphere(AnimatedSphere {
+                                            sphere,
+                                            animation: Animation::Vertical(Vertical { len: 0.5 * fastrand::f64(), at: 0, duration: 1000 }),
+                                        })
+                                    } else {
+                                        Object::Sphere(sphere)
+                                    });
                                 } else if mat < 0.95 {
                                     // Metal, with random fuzziness
                                     let colour =
@@ -304,11 +309,11 @@ fn main() {
                     }));
 
                     // Convert that to a static HitList
-                    let list: HitList = HitList::from(&objects);
+                    let list: HitTree = HitTree::with_objs(objects, (0..=cover.shutter_time).into());
                     let dims: (u32, u32) = if let Some(dims) = render.dims { (dims.0.into(), dims.1.into()) } else { (800, 600) };
                     let cam = Camera::new(
                         dims,
-                        1000,
+                        100,
                         20.0,
                         0.6,
                         10.0,

@@ -25,11 +25,11 @@ use log::info;
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 
+use super::super::RayRenderer;
 use super::super::image::Image;
-use super::super::spec::RayRenderer;
 use super::cpu::ray_colour;
 use crate::common::file::{impl_toml_from_path, impl_toml_from_string, impl_toml_to_path, impl_toml_to_string};
-use crate::hitlist::HitList;
+use crate::hittree::HitTree;
 use crate::math::camera::Rays;
 use crate::math::{Camera, Colour, Ray};
 use crate::specifications::features::Features;
@@ -139,8 +139,8 @@ impl MultiThreadRenderer {
 impl RayRenderer for MultiThreadRenderer {
     type Error = std::convert::Infallible;
 
-    fn render_frame(&self, list: &HitList, cam: &Camera, env: &Environment) -> Result<crate::render::image::Image, Self::Error> {
-        info!("Rendering scene ({} objects)...", list.len());
+    fn render_frame(&self, world: &HitTree, cam: &Camera, env: &Environment) -> Result<crate::render::image::Image, Self::Error> {
+        info!("Rendering scene ({} objects)...", world.len());
 
         // Let us define the camera (static, for now)
         let dims: (u32, u32) = cam.dims();
@@ -201,7 +201,7 @@ impl RayRenderer for MultiThreadRenderer {
                             // Iterate over the allocated rays to compute them
                             for (_, x, y, ray) in buf.drain(..) {
                                 // Compute the colour of the Ray
-                                let colour: Colour = ray_colour(ray, list, self.features.max_depth, env);
+                                let colour: Colour = ray_colour(ray, world, self.features.max_depth, env);
 
                                 // Add the colour to the image.
                                 image[(x, y)] += colour;

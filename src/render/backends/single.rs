@@ -17,10 +17,10 @@ use std::time::Instant;
 use indicatif::{ProgressBar, ProgressStyle};
 use log::info;
 
+use super::super::RayRenderer;
 use super::super::image::Image;
-use super::super::spec::RayRenderer;
 use super::cpu::ray_colour;
-use crate::hitlist::HitList;
+use crate::hittree::HitTree;
 use crate::math::camera::Camera;
 use crate::math::colour::Colour;
 use crate::specifications::features::Features;
@@ -52,8 +52,8 @@ impl SingleThreadRenderer {
 impl RayRenderer for SingleThreadRenderer {
     type Error = std::convert::Infallible;
 
-    fn render_frame(&self, list: &HitList, cam: &Camera, env: &Environment) -> Result<crate::render::image::Image, Self::Error> {
-        info!("Rendering scene ({} objects)...", list.len());
+    fn render_frame(&self, world: &HitTree, cam: &Camera, env: &Environment) -> Result<crate::render::image::Image, Self::Error> {
+        info!("Rendering scene ({} objects)...", world.len());
 
         // Create the image to render
         let dims: (u32, u32) = cam.dims();
@@ -77,7 +77,7 @@ impl RayRenderer for SingleThreadRenderer {
         let start: Instant = Instant::now();
         for (i, (_, x, y, ray)) in cam.rays(0).enumerate() {
             // Compute the colour of the Ray
-            let colour: Colour = ray_colour(ray, list, self.features.max_depth, env);
+            let colour: Colour = ray_colour(ray, world, self.features.max_depth, env);
 
             // Add the colour to the image.
             image[(x, y)] += colour;
