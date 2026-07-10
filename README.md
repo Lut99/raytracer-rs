@@ -60,6 +60,14 @@ To describe a scene to render, we use our own scene file format. It is written i
 For examples of scene files, check the [`tests/scenes`](./tests/scenes/) directory.
 
 
+## Results
+Some images that we've rendered:
+
+![An image showing the cover of book #1 with bouncy spheres.](./images/cover_bouncy.png)
+
+![An image showing the cover of book #1 with a checkerboard-pattern floor.](./images/cover_checkered.png)
+
+
 ## Contribution
 Note that this is mostly a hobby project for myself, not meant for distribution or serious use. That said, if you like to contribute to this project or use it for something, feel free to let me know by dropping an [issue](https://gihub.com/Lut99/raytracer-rs/issues) or creating a [pull request](https://github.com/Lut99/raytracer-rs/pulls).
 

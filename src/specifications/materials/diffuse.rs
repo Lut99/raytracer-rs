@@ -19,6 +19,7 @@ use super::super::scene::Environment;
 use super::Scattering;
 use crate::math::{Colour, Ray, Vec3};
 use crate::specifications::objects::HitRecord;
+use crate::specifications::textures::{Texture, Textured};
 
 
 /***** HELPER FUNCTIONS *****/
@@ -79,5 +80,27 @@ impl Scattering for Lambertian {
 
         // Now we can simply return the new ray to bounce and the colour
         (Some(Ray::new(record.hit, scattered)), self.colour)
+    }
+}
+
+
+
+/// A diffuse material with truer scattering a texture.
+#[derive(Clone, Copy, Debug, Deserialize, Serialize)]
+pub struct LambertianTexture<T = Texture> {
+    /// The texture to scatter.
+    pub texture: T,
+}
+impl<T: Textured> Scattering for LambertianTexture<T> {
+    #[inline]
+    fn scatter(&self, _ray: Ray, record: HitRecord, _env: &Environment) -> (Option<Ray>, Colour) {
+        // Compute the scattered ray, making sure the scattered one is not zero
+        let mut scattered: Vec3 = record.normal + random3_uniform();
+        if scattered.is_nearly_zero() {
+            scattered = record.normal;
+        }
+
+        // Now we can simply return the new ray to bounce and the colour
+        (Some(Ray::new(record.hit, scattered)), self.texture.value(record.uv, record.hit))
     }
 }

@@ -27,6 +27,10 @@ use crate::math::{AABB, Colour, Ray, Vec3};
 #[inline]
 fn sphere_aabb(center: Vec3, radius: f64) -> AABB { AABB::new(center - radius, [2.0 * radius; 3]) }
 
+/// Computes the uv-coordinate pair on a sphere given a hit.
+#[inline]
+fn sphere_uv(_center: Vec3, _radius: f64) -> (f64, f64) { (0.0, 0.0) }
+
 /// Computes a sphere's hit yay or nay.
 #[inline]
 fn sphere_hit(center: Vec3, radius: f64, ray: Ray, t_min: f64, t_max: f64) -> Option<HitRecord> {
@@ -61,7 +65,7 @@ fn sphere_hit(center: Vec3, radius: f64, ray: Ray, t_min: f64, t_max: f64) -> Op
         let outward_normal: Vec3 = (hit - center) / radius;
 
         // Populate the rest of the hitrecord on the fly
-        Some(HitRecord::new(ray, hit, root, outward_normal))
+        Some(HitRecord::new(ray, hit, root, outward_normal, sphere_uv(center, radius)))
     } else {
         None
     }

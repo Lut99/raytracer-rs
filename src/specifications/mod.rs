@@ -19,3 +19,4 @@ pub mod features;
 pub mod materials;
 pub mod objects;
 pub mod scene;
+pub mod textures;

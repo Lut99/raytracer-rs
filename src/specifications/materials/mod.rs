@@ -23,7 +23,7 @@ pub mod simple;
 
 // Imports & Exports
 pub use dielectric::{Dielectric, PartialDielectric};
-pub use diffuse::{Diffuse, Lambertian};
+pub use diffuse::{Diffuse, Lambertian, LambertianTexture};
 pub use metal::Metal;
 use serde::{Deserialize, Serialize};
 pub use simple::{NormalMap, StaticColour};
@@ -82,6 +82,8 @@ material_impl!(
     Diffuse,
     /// A material randomly scattering rays.
     Lambertian,
+    /// A material randomly scattering rays but with a texture.
+    LambertianTexture,
     /// A material reflecting rays perfectly.
     Metal,
     /// A material having colours of the object's normals.
