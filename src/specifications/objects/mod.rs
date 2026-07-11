@@ -27,7 +27,7 @@ use std::rc::Rc;
 use std::sync::{Arc, MutexGuard, RwLockReadGuard, RwLockWriteGuard};
 
 pub use hitrecord::*;
-pub use plane::Quad;
+pub use plane::{Quad, Vertex};
 use serde::{Deserialize, Serialize};
 pub use sphere::{AnimatedSphere, Sphere};
 
@@ -186,4 +186,6 @@ object_impl!(
     Sphere,
     /// A four-point shape on a 2D-plane.
     Quad,
+    /// A three-point shape on a 2D-plane.
+    Vertex,
 );

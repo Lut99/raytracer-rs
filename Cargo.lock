@@ -936,6 +936,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "obj"
+version = "0.1.0"
+source = "git+https://github.com/Lut99/obj-rs?rev=04b2872aa92b84e8294ce9b28810ad45846b6fa6#04b2872aa92b84e8294ce9b28810ad45846b6fa6"
+dependencies = [
+ "thiserror",
+]
+
+[[package]]
 name = "once_cell"
 version = "1.17.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1186,6 +1194,7 @@ dependencies = [
  "image",
  "indicatif",
  "log",
+ "obj",
  "parking_lot",
  "paste",
  "serde",
