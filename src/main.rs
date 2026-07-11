@@ -31,7 +31,7 @@ use raytracer::specifications::features::{Features, FeaturesCli, FeaturesFile};
 use raytracer::specifications::materials::{Dielectric, Lambertian, LambertianTexture, Material, Metal};
 use raytracer::specifications::objects::{AnimatedSphere, Object, Sphere};
 use raytracer::specifications::scene::{Environment, SceneFile};
-use raytracer::specifications::textures::{Checker, Texture};
+use raytracer::specifications::textures::{SpatialChecker, Texture};
 
 
 /***** ARGUMENTS *****/
@@ -104,9 +104,6 @@ enum RenderSubcommand {
     /// Renders the cover of the book.
     #[clap(name = "cover", alias = "book", about = "Renders the cover of the Raytracing In One Weekend book.")]
     Cover(RenderCoverArguments),
-    /// Renders the texture spheres.
-    #[clap(name = "checkers", about = "Renders the two spheres with checker textures on them.")]
-    Checkers(RenderCheckersArguments),
 }
 /// Defines the arguments for the `render image` subcommand.
 #[derive(Debug, Parser)]
@@ -127,13 +124,6 @@ struct RenderCoverArguments {
     /// The path to the image file to output.
     #[clap(name = "OUTPUT_PATH", default_value = "./image.png", help = "The path to write the rendered image to.")]
     output_path:  PathBuf,
-}
-/// Defines the arguments for the `render checkers` subcommand.
-#[derive(Debug, Parser)]
-struct RenderCheckersArguments {
-    /// The path to the image file to output.
-    #[clap(name = "OUTPUT_PATH", default_value = "./image.png", help = "The path to write the rendered image to.")]
-    output_path: PathBuf,
 }
 
 /// Defines the arguments for the `generate` subcommand.
@@ -268,8 +258,8 @@ fn main() {
                         center:   Vec3::new(0.0, -1000.0, 0.0),
                         radius:   1000.0,
                         material: Material::LambertianTexture(LambertianTexture {
-                            texture: Texture::Checker(Checker {
-                                scale: 0.0015,
+                            texture: Texture::SpatialChecker(SpatialChecker {
+                                scale: 0.32,
                                 black: Colour::new(0.2, 0.3, 0.1, 1.0),
                                 white: Colour::new(0.9, 0.9, 0.9, 1.0),
                             }),
@@ -383,85 +373,6 @@ fn main() {
                     // Now write the image to disk
                     if let Err(err) = output.to_path(&cover.output_path, render.fix_dirs) {
                         error!("Failed to save rendered image to '{}': {}", cover.output_path.display(), err);
-                        std::process::exit(1);
-                    }
-                },
-
-                RenderSubcommand::Checkers(checkers) => {
-                    // Generate the list of objects
-                    let mut objects: Vec<Object> = Vec::with_capacity(1 + 21 * 21 + 3);
-                    objects.push(Object::Sphere(Sphere {
-                        center:   Vec3::new(0.0, -10.0, 0.0),
-                        radius:   10.0,
-                        material: Material::LambertianTexture(LambertianTexture {
-                            texture: Texture::Checker(Checker {
-                                scale: 0.015,
-                                black: Colour::new(0.2, 0.3, 0.1, 1.0),
-                                white: Colour::new(0.9, 0.9, 0.9, 1.0),
-                            }),
-                        }),
-                    }));
-                    objects.push(Object::Sphere(Sphere {
-                        center:   Vec3::new(0.0, 10.0, 0.0),
-                        radius:   10.0,
-                        material: Material::LambertianTexture(LambertianTexture {
-                            texture: Texture::Checker(Checker {
-                                scale: 0.015,
-                                black: Colour::new(0.2, 0.3, 0.1, 1.0),
-                                white: Colour::new(0.9, 0.9, 0.9, 1.0),
-                            }),
-                        }),
-                    }));
-
-                    // Convert that to a static HitList
-                    let list: HitTree = HitTree::with_objs(objects, (0..=1).into());
-                    let dims: (u32, u32) = if let Some(dims) = render.dims { (dims.0.into(), dims.1.into()) } else { (800, 600) };
-                    let cam =
-                        Camera::new(dims, 100, 20.0, 0.0, 0.0, 1, Vec3::new(13.0, 2.0, 3.0), Vec3::new(0.0, 0.0, 0.0), Vec3::new(0.0, 1.0, 0.0));
-
-                    // Now render based on the backend
-                    let output: Image = match render.backend {
-                        RenderBackend::SingleThreaded => {
-                            debug!("Rendering with single-threaded backend");
-                            let renderer: SingleThreadRenderer = SingleThreadRenderer::new(features, true);
-                            renderer.render_frame(&list, &cam, &Environment::default()).unwrap()
-                        },
-
-                        RenderBackend::MultiThreaded => {
-                            debug!("Rendering with multi-threaded backend");
-
-                            // Read the given file, if any
-                            let config: MultiThreadRendererConfig = match render.backend_config {
-                                Some(path) => {
-                                    debug!("Loading multi-threaded backend file '{}'...", path.display());
-                                    match MultiThreadRendererConfig::from_path(path) {
-                                        Ok(config) => config,
-                                        Err(err) => {
-                                            error!("{}", err.trace());
-                                            std::process::exit(1);
-                                        },
-                                    }
-                                },
-                                None => Default::default(),
-                            };
-
-                            // Create the backend
-                            let renderer: MultiThreadRenderer = match MultiThreadRenderer::new(features, true, config) {
-                                Ok(renderer) => renderer,
-                                Err(err) => {
-                                    error!("{}", err.trace());
-                                    std::process::exit(1);
-                                },
-                            };
-
-                            // Now render with this backend
-                            renderer.render_frame(&list, &cam, &Environment::default()).unwrap()
-                        },
-                    };
-
-                    // Now write the image to disk
-                    if let Err(err) = output.to_path(&checkers.output_path, render.fix_dirs) {
-                        error!("Failed to save rendered image to '{}': {}", checkers.output_path.display(), err);
                         std::process::exit(1);
                     }
                 },

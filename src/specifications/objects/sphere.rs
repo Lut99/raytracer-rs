@@ -92,6 +92,7 @@ pub struct Sphere<M> {
     pub radius: f64,
 
     /// The material the sphere is composed of.
+    #[serde(alias = "mat")]
     pub material: M,
 }
 

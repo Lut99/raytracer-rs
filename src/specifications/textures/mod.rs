@@ -8,7 +8,7 @@
 pub mod checker;
 pub mod image;
 
-pub use checker::Checker;
+pub use checker::{Checker, SpatialChecker};
 pub use image::Image;
 use serde::{Deserialize, Serialize};
 
@@ -59,4 +59,6 @@ object_impl!(
     Checker,
     /// A texture loaded from an image.
     Image,
+    /// A texture rendering as a checkerboard but using spatial coordinates.
+    SpatialChecker,
 );

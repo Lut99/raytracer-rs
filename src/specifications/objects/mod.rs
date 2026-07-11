@@ -18,6 +18,7 @@
 
 // Define the submodules
 mod hitrecord;
+pub mod plane;
 pub mod sphere;
 
 // Imports & Exports
@@ -26,6 +27,7 @@ use std::rc::Rc;
 use std::sync::{Arc, MutexGuard, RwLockReadGuard, RwLockWriteGuard};
 
 pub use hitrecord::*;
+pub use plane::Quad;
 use serde::{Deserialize, Serialize};
 pub use sphere::{AnimatedSphere, Sphere};
 
@@ -178,8 +180,10 @@ macro_rules! object_impl {
     };
 }
 object_impl!(
-    /// A regular 3D circle.
-    Sphere,
     /// A regular sphere but animated.
     AnimatedSphere,
+    /// A regular 3D circle.
+    Sphere,
+    /// A four-point shape on a 2D-plane.
+    Quad,
 );

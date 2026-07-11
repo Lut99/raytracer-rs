@@ -281,7 +281,7 @@ impl<T: Hittable> BVHNode<T> {
     #[inline]
     fn hit(&self, ray: Ray, t_min: f64, t_max: f64, env: &Environment) -> Option<(&T, HitRecord)> {
         // Check if we're hit in the first place
-        if !self.aabb(ray.time).hit(ray, t_min, t_max) {
+        if !self.aabb(ray.time).hittest(ray, t_min, t_max) {
             return None;
         }
 

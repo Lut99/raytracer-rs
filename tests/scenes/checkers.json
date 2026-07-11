@@ -1,0 +1,46 @@
+{
+  "camera": {
+    "vfov": 20,
+    "pos": {
+      "lookfrom": [13, 2, 3],
+      "lookat": [0, 0, 0],
+      "lookup": [0, 1, 0]
+    }
+  },
+  "objects": [
+    {
+      "Sphere": {
+        "center": [0, -10, 0],
+        "radius": 10,
+        "material": {
+          "LambertianTexture": {
+            "texture": {
+              "Checker": {
+                "scale": 0.015,
+                "black": [0.2, 0.3, 0.1, 1.0],
+                "white": [0.9, 0.9, 0.9, 1.0]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "Sphere": {
+        "center": [0, 10, 0],
+        "radius": 10,
+        "material": {
+          "LambertianTexture": {
+            "texture": {
+              "Checker": {
+                "scale": 0.015,
+                "black": [0.2, 0.3, 0.1, 1.0],
+                "white": [0.9, 0.9, 0.9, 1.0]
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}
