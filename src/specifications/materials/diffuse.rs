@@ -28,11 +28,20 @@ use crate::specifications::textures::{Texture, Textured};
 /// # Returns
 /// A new [`Vec3`] that represents the random vector.
 pub fn random3_uniform() -> Vec3 {
-    // Generate the three coordinates randomly
-    let res: Vec3 = Vec3 { x: fastrand::f64(), y: fastrand::f64(), z: fastrand::f64() };
+    // // Generate the three coordinates randomly
+    // let res: Vec3 = Vec3 { x: fastrand::f64(), y: fastrand::f64(), z: fastrand::f64() };
 
-    // Always return a unit vector version of this vector
-    res.unit()
+    // // Always return a unit vector version of this vector
+    // res.unit()
+
+    // We'll use a loop - sadly
+    loop {
+        let p = Vec3::new(1.0 - 2.0 * fastrand::f64(), 1.0 - 2.0 * fastrand::f64(), 1.0 - 2.0 * fastrand::f64());
+        let lensq = p.length2();
+        if lensq < 1.0 {
+            return p / lensq.sqrt();
+        }
+    }
 }
 
 /// Generates a random, uniformly sampled vector on a hemisphere w.r.t. the normal.
