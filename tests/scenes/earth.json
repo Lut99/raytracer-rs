@@ -15,10 +15,8 @@
         "LambertianTexture": {
           "texture": {
             "Image": {
-              "Path": {
-                "path": "./tests/scenes/earthmap.jpg",
-                "format": "Jpeg"
-              }
+              "path": "./tests/scenes/earthmap.jpg",
+              "format": "Jpeg"
             }
           }
         }

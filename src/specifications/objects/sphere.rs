@@ -16,6 +16,7 @@ use std::f64::consts::PI;
 
 use serde::{Deserialize, Serialize};
 
+use super::super::Loadable;
 use super::super::animations::{Animating, Animation};
 use super::super::materials::Scattering;
 use super::super::scene::Environment;
@@ -96,6 +97,12 @@ pub struct Sphere<M> {
     pub material: M,
 }
 
+impl<M: Loadable> Loadable for Sphere<M> {
+    type Error = M::Error;
+
+    #[inline]
+    fn load(&mut self) -> Result<(), Self::Error> { self.material.load() }
+}
 impl<M> BoundingBoxable for Sphere<M> {
     #[inline]
     fn aabb(&self, _t_us: u64) -> AABB { sphere_aabb(self.center, self.radius) }
@@ -123,6 +130,12 @@ pub struct AnimatedSphere<M, A = Animation> {
     pub animation: A,
 }
 
+impl<M: Loadable> Loadable for AnimatedSphere<M> {
+    type Error = M::Error;
+
+    #[inline]
+    fn load(&mut self) -> Result<(), Self::Error> { self.sphere.load() }
+}
 impl<M, A: Animating> BoundingBoxable for AnimatedSphere<M, A> {
     #[inline]
     fn aabb(&self, t_us: u64) -> AABB { sphere_aabb(self.animation.animate(self.sphere.center, t_us), self.sphere.radius) }

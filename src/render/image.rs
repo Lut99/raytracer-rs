@@ -69,33 +69,6 @@ pub enum Error {
 
 
 
-/***** HELPERS *****/
-/// A struct that we actually serialize/deserialize
-#[derive(Deserialize, Serialize)]
-enum ImageInfo {
-    Path(ImageInfoPath),
-    Raw(ImageInfoRaw),
-}
-
-#[derive(Deserialize, Serialize)]
-struct ImageInfoPath {
-    /// The path where the file resides.
-    path: PathBuf,
-    /// Optional image format.
-    #[serde(alias = "format")]
-    fmt:  Option<ImageFormat>,
-}
-
-#[derive(Deserialize, Serialize)]
-struct ImageInfoRaw {
-    /// The raw data we're reading, encoded as Base64
-    data: String,
-}
-
-
-
-
-
 /***** LIBRARY *****/
 /// The Image struct represents a single image buffer we can render to.
 #[derive(Clone, Debug)]
@@ -471,8 +444,7 @@ impl Serialize for Image {
         buffer.write_with_encoder(PngEncoder::new(&mut image)).map_err(serde::ser::Error::custom)?;
 
         // Convert that to base64 and serialize _that_
-        let b64_image: String = base64::prelude::BASE64_STANDARD.encode(&image);
-        ImageInfo::Raw(ImageInfoRaw { data: b64_image }).serialize(serializer)
+        base64::prelude::BASE64_STANDARD.encode(&image).serialize(serializer)
     }
 }
 
@@ -482,29 +454,10 @@ impl<'de> Deserialize<'de> for Image {
     where
         D: Deserializer<'de>,
     {
-        // Deserialize the image info
-        let info = ImageInfo::deserialize(deserializer)?;
-
-        // Either load the path, or the raw data
-        match info {
-            ImageInfo::Path(p) => {
-                // First, mod the path to ensure that, if it's relative, it's relative to this file
-                // TODO: Fixthis, but how do we get the parent path?
-                let path: PathBuf = if p.path.is_relative() { p.path } else { p.path };
-
-                // Then consider the format
-                match p.fmt {
-                    Some(fmt) => Image::from_path(fmt, path).map_err(serde::de::Error::custom),
-                    None => Image::from_path_auto(path).map_err(serde::de::Error::custom),
-                }
-            },
-
-            ImageInfo::Raw(r) => {
-                // Decode the Base64 data
-                let image: Vec<u8> = base64::prelude::BASE64_STANDARD.decode(&r.data).map_err(serde::de::Error::custom)?;
-                Image::from_reader_auto(Cursor::new(image)).map_err(serde::de::Error::custom)
-            },
-        }
+        // Decode the Base64 data
+        let raw = String::deserialize(deserializer)?;
+        let image: Vec<u8> = base64::prelude::BASE64_STANDARD.decode(&raw).map_err(serde::de::Error::custom)?;
+        Image::from_reader_auto(Cursor::new(image)).map_err(serde::de::Error::custom)
     }
 }
 

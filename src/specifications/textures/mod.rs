@@ -5,13 +5,17 @@
 //!   Implements supported textures.
 //
 
+// Modules
 pub mod checker;
 pub mod image;
 
+// Imports
 pub use checker::{Checker, SpatialChecker};
 pub use image::Image;
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
 
+use super::Loadable;
 use crate::math::{Colour, Vec3};
 
 
@@ -21,8 +25,7 @@ pub trait Textured {
     /// Returns the colour of this texture at the given hit coordinate.
     ///
     /// # Arguments
-    /// - `u`: The hit coordinate's X-component mapped to the space of the object.
-    /// - `v`: The hit coordinate's Y-component mapped to the space of the object.
+    /// - `uv`: The hit coordinates mapped to the space of the object.
     /// - `p`: The point (in space) where the ray hit the object. I.e., some absolute position.
     ///
     /// # Returns
@@ -35,8 +38,26 @@ pub trait Textured {
 
 
 /***** LIBRARY *****/
-macro_rules! object_impl {
-    ($($(#[$($attrs:tt)*])* $tex:ident),* $(,)?) => {
+macro_rules! texture_impl {
+    // Default error type insertion
+    (__ { $(#[$($fattrs:tt)*])* $ftex:ident $(, $(#[$($rattrs:tt)*])* $rtex:ident $(( $rerrty:ty ))?)* } { $($(#[$($attrs:tt)*])* $tex:ident ( $errty:ty )),* }) => {
+        texture_impl!(__ {$($(#[$($rattrs)*])* $rtex $(($rerrty))?),*} { $(#[$($fattrs)*])* $ftex (::std::convert::Infallible) $(, $(#[$($attrs)*])* $tex ($errty))* });
+    };
+    (__ { $(#[$($fattrs:tt)*])* $ftex:ident ($ferrty:ty) $(, $(#[$($rattrs:tt)*])* $rtex:ident $(( $rerrty:ty ))?)* } { $($(#[$($attrs:tt)*])* $tex:ident ( $errty:ty )),* }) => {
+        texture_impl!(__ {$($(#[$($rattrs)*])* $rtex $(($rerrty))?),*} { $(#[$($fattrs)*])* $ftex ($ferrty) $(, $(#[$($attrs)*])* $tex ($errty))* });
+    };
+
+
+    // Actual impl
+    (__ {} { $($(#[$($attrs:tt)*])* $tex:ident ( $errty:ty )),* }) => {
+        /// Errors occurring when loading the texture.
+        #[derive(Debug, Error)]
+        pub enum Error {
+            $(#[error("{0}")] $tex(#[source] $errty),)*
+        }
+
+
+
         /// A runtime abstraction of all possible textures.
         #[derive(Clone, Debug, Deserialize, Serialize)]
         pub enum Texture {
@@ -44,6 +65,16 @@ macro_rules! object_impl {
         }
 
         // Interface
+        impl Loadable for Texture {
+            type Error = Error;
+
+            #[inline]
+            fn load(&mut self) -> Result<(), Self::Error> {
+                match self {
+                    $(Self::$tex(t) => t.load().map_err(Error::$tex),)*
+                }
+            }
+        }
         impl Textured for Texture {
             #[inline]
             fn value(&self,uv: (f64, f64), p: Vec3) -> Colour {
@@ -53,12 +84,17 @@ macro_rules! object_impl {
             }
         }
     };
+
+    // Public interface
+    ($($(#[$($attrs:tt)*])* $tex:ident $(( $errty:ty ))?),* $(,)?) => {
+        texture_impl!(__ { $($(#[$($attrs)*])? $tex $(($errty))?),* } {});
+    };
 }
-object_impl!(
+texture_impl!(
     /// A texture rendering as a checkerboard.
     Checker,
     /// A texture loaded from an image.
-    Image,
+    Image(crate::render::image::Error),
     /// A texture rendering as a checkerboard but using spatial coordinates.
     SpatialChecker,
 );

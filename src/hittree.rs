@@ -13,6 +13,7 @@
 use std::range::RangeInclusive;
 
 use crate::math::{AABB, Ray};
+use crate::specifications::Loadable;
 use crate::specifications::objects::{BoundingBoxable, HitRecord, Hittable, Object};
 use crate::specifications::scene::Environment;
 
@@ -250,7 +251,22 @@ impl<T> BVHNode<T> {
     fn rebalance(self, len: usize) -> Self { Self::new(iter_obj_aabb(self, len)) }
 }
 
-// Hitting
+// Raytracer
+impl<T: Loadable> Loadable for BVHNode<T> {
+    type Error = T::Error;
+
+    #[inline]
+    fn load(&mut self) -> Result<(), Self::Error> {
+        match self {
+            Self::Object(_, obj) => obj.load(),
+            Self::Next(_, lhs, rhs) => {
+                lhs.load()?;
+                rhs.load()?;
+                Ok(())
+            },
+        }
+    }
+}
 impl<T> BoundingBoxable for BVHNode<T> {
     #[inline]
     fn aabb(&self, _t_us: u64) -> AABB {
@@ -394,6 +410,19 @@ impl<T: BoundingBoxable> HitTree<T> {
     }
 }
 
+// Raytracer
+impl<T: Loadable> Loadable for HitTree<T> {
+    type Error = T::Error;
+
+    #[inline]
+    fn load(&mut self) -> Result<(), Self::Error> {
+        match &mut self.elems {
+            Some(node) => node.load(),
+            None => Ok(()),
+        }
+    }
+}
+
 // Collection
 impl<T: BoundingBoxable> HitTree<T> {
     /// Adds a new object to the HitTree.
@@ -512,7 +541,8 @@ impl<T: BoundingBoxable> HitTree<T> {
         }
         self
     }
-
+}
+impl<T> HitTree<T> {
     /// Rebalances the HitTree.
     ///
     /// This will complete re-allocate all objects in a new tree that is optimally allocated for

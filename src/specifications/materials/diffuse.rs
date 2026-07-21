@@ -13,8 +13,11 @@
 //!   slightly different methods of "randomly" bouncing rays.
 //
 
+use std::convert::Infallible;
+
 use serde::{Deserialize, Serialize};
 
+use super::super::Loadable;
 use super::super::scene::Environment;
 use super::Scattering;
 use crate::math::{Colour, Ray, Vec3};
@@ -61,6 +64,12 @@ pub struct Diffuse {
     /// The colour of the material.
     pub colour: Colour,
 }
+impl Loadable for Diffuse {
+    type Error = Infallible;
+
+    #[inline]
+    fn load(&mut self) -> Result<(), Self::Error> { Ok(()) }
+}
 impl Scattering for Diffuse {
     #[inline]
     fn scatter(&self, _ray: Ray, record: HitRecord, _env: &Environment) -> (Option<Ray>, Colour) {
@@ -77,6 +86,12 @@ impl Scattering for Diffuse {
 pub struct Lambertian {
     /// The colour of the material.
     pub colour: Colour,
+}
+impl Loadable for Lambertian {
+    type Error = Infallible;
+
+    #[inline]
+    fn load(&mut self) -> Result<(), Self::Error> { Ok(()) }
 }
 impl Scattering for Lambertian {
     #[inline]
@@ -99,6 +114,12 @@ impl Scattering for Lambertian {
 pub struct LambertianTexture<T = Texture> {
     /// The texture to scatter.
     pub texture: T,
+}
+impl<T: Loadable> Loadable for LambertianTexture<T> {
+    type Error = T::Error;
+
+    #[inline]
+    fn load(&mut self) -> Result<(), Self::Error> { self.texture.load() }
 }
 impl<T: Textured> Scattering for LambertianTexture<T> {
     #[inline]

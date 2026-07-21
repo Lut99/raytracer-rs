@@ -13,8 +13,11 @@
 //!   represent earlier parts of the tutorial.
 //
 
+use std::convert::Infallible;
+
 use serde::{Deserialize, Serialize};
 
+use super::super::Loadable;
 use super::super::scene::Environment;
 use super::Scattering;
 use crate::math::{Colour, Ray};
@@ -27,6 +30,12 @@ use crate::specifications::objects::HitRecord;
 pub struct StaticColour {
     /// The colour to show.
     pub colour: Colour,
+}
+impl Loadable for StaticColour {
+    type Error = Infallible;
+
+    #[inline]
+    fn load(&mut self) -> Result<(), Self::Error> { Ok(()) }
 }
 impl Scattering for StaticColour {
     #[inline]
@@ -41,6 +50,12 @@ impl Scattering for StaticColour {
 /// Implements a non-bouncing, just-normal-map kind of material. Mostly created for the scene in the [tutorial](https://raytracing.github.io/books/RayTracingInOneWeekend.html#surfacenormalsandmultipleobjects/commonconstantsandutilityfunctions).
 #[derive(Clone, Copy, Debug, Deserialize, Serialize)]
 pub struct NormalMap;
+impl Loadable for NormalMap {
+    type Error = Infallible;
+
+    #[inline]
+    fn load(&mut self) -> Result<(), Self::Error> { Ok(()) }
+}
 impl Scattering for NormalMap {
     #[inline]
     fn scatter(&self, _ray: Ray, record: HitRecord, _env: &Environment) -> (Option<Ray>, Colour) {

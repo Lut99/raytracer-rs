@@ -18,6 +18,8 @@
 
 // Define the submodules
 mod hitrecord;
+#[cfg(feature = "obj")]
+pub mod model;
 pub mod plane;
 pub mod sphere;
 
@@ -30,7 +32,9 @@ pub use hitrecord::*;
 pub use plane::{Quad, Vertex};
 use serde::{Deserialize, Serialize};
 pub use sphere::{AnimatedSphere, Sphere};
+use thiserror::Error;
 
+use super::Loadable;
 use super::materials::{Material, Scattering};
 use super::scene::Environment;
 use crate::math::{AABB, Colour, Ray};
@@ -142,18 +146,46 @@ hittable_ptr_impl!('a, parking_lot::MutexGuard<'a, T>);
 
 /***** LIBRARY *****/
 macro_rules! object_impl {
-    ($($(#[$($attrs:tt)*])* $obj:ident),* $(,)?) => {
+    // Default error type insertion
+    (__ { $(#[$($fattrs:tt)*])* $fobj:ident $(, $(#[$($rattrs:tt)*])* $robj:ident $(( $rerrty:ty ))?)* } { $($(#[$($attrs:tt)*])* $obj:ident ( $errty:ty )),* }) => {
+        object_impl!(__ {$($(#[$($rattrs)*])* $robj $(($rerrty))?),*} { $(#[$($fattrs)*])* $fobj (::std::convert::Infallible) $(, $(#[$($attrs)*])* $obj ($errty))* });
+    };
+    (__ { $(#[$($fattrs:tt)*])* $fobj:ident ($ferrty:ty) $(, $(#[$($rattrs:tt)*])* $robj:ident $(( $rerrty:ty ))?)* } { $($(#[$($attrs:tt)*])* $obj:ident ( $errty:ty )),* }) => {
+        object_impl!(__ {$($(#[$($rattrs)*])* $robj $(($rerrty))?),*} { $(#[$($fattrs)*])* $fobj ($ferrty) $(, $(#[$($attrs)*])* $obj ($errty))* });
+    };
+
+
+    // Actual impl
+    (__ {} { $($(#[$($attrs:tt)*])* $obj:ident ( $errty:ty )),* }) => {
+        /// Errors occurring when loading an object.
+        #[derive(Debug, Error)]
+        pub enum Error {
+            $(#[error("{0}")] $obj(#[source] $errty),)*
+        }
+
+
+
         /// A runtime abstraction of all possible objects.
         ///
         /// # Generics
         /// - `M`: The type of material used.
-        #[derive(Clone, Copy, Debug, Deserialize, Serialize)]
-        pub enum Object<M = Material> {
-            $($(#[$($attrs)*])* $obj($obj<M>),)*
+        #[derive(Clone, Debug, Deserialize, Serialize)]
+        pub enum Object {
+            $($(#[$($attrs)*])* $obj($obj<Material>),)*
         }
 
         // Interface
-        impl<M> BoundingBoxable for Object<M> {
+        impl Loadable for Object {
+            type Error = Error;
+
+            #[inline]
+            fn load(&mut self) -> Result<(), Self::Error> {
+                match self {
+                    $(Self::$obj(o) => o.load().map_err(Error::$obj),)*
+                }
+            }
+        }
+        impl BoundingBoxable for Object {
             #[inline]
             fn aabb(&self, t_us: u64) -> AABB {
                 match self {
@@ -161,7 +193,7 @@ macro_rules! object_impl {
                 }
             }
         }
-        impl<M> Hittable for Object<M> {
+        impl Hittable for Object {
             #[inline]
             fn hit(&self, ray: Ray, t_min: f64, t_max: f64, env: &Environment) -> Option<HitRecord> {
                 match self {
@@ -169,7 +201,7 @@ macro_rules! object_impl {
                 }
             }
         }
-        impl<M: Scattering> Scattering for Object<M> {
+        impl Scattering for Object {
             #[inline]
             fn scatter(&self, ray: Ray, record: HitRecord, env: &Environment) -> (Option<Ray>, Colour) {
                 match self {
@@ -178,14 +210,19 @@ macro_rules! object_impl {
             }
         }
     };
+
+    // Public interface
+    ($($(#[$($attrs:tt)*])* $obj:ident $(( $errty:ty ))?),* $(,)?) => {
+        object_impl!(__ { $($(#[$($attrs)*])? $obj $(($errty))?),* } {});
+    };
 }
 object_impl!(
     /// A regular sphere but animated.
-    AnimatedSphere,
+    AnimatedSphere(super::materials::Error),
     /// A regular 3D circle.
-    Sphere,
+    Sphere(super::materials::Error),
     /// A four-point shape on a 2D-plane.
-    Quad,
+    Quad(super::materials::Error),
     /// A three-point shape on a 2D-plane.
-    Vertex,
+    Vertex(super::materials::Error),
 );

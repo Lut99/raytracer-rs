@@ -7,6 +7,7 @@
 
 use serde::{Deserialize, Serialize};
 
+use super::super::Loadable;
 use super::super::materials::Scattering;
 use super::super::scene::Environment;
 use super::{BoundingBoxable, HitRecord, Hittable};
@@ -108,6 +109,12 @@ pub struct Vertex<M> {
 }
 
 // Object
+impl<M: Loadable> Loadable for Vertex<M> {
+    type Error = M::Error;
+
+    #[inline]
+    fn load(&mut self) -> Result<(), Self::Error> { self.material.load() }
+}
 impl<M> BoundingBoxable for Vertex<M> {
     #[inline]
     fn aabb(&self, _t_us: u64) -> AABB {
@@ -154,6 +161,12 @@ pub struct Quad<M> {
 }
 
 // Object
+impl<M: Loadable> Loadable for Quad<M> {
+    type Error = M::Error;
+
+    #[inline]
+    fn load(&mut self) -> Result<(), Self::Error> { self.material.load() }
+}
 impl<M> BoundingBoxable for Quad<M> {
     #[inline]
     fn aabb(&self, _t_us: u64) -> AABB {

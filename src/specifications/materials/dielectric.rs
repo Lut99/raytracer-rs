@@ -6,8 +6,11 @@
 //!   possible.
 //
 
+use std::convert::Infallible;
+
 use serde::{Deserialize, Serialize};
 
+use super::super::Loadable;
 use super::super::scene::Environment;
 use super::Scattering;
 use super::metal::reflect;
@@ -78,6 +81,12 @@ pub struct PartialDielectric {
     #[serde(default = "default_dielectric_colour")]
     pub colour: Colour,
 }
+impl Loadable for PartialDielectric {
+    type Error = Infallible;
+
+    #[inline]
+    fn load(&mut self) -> Result<(), Self::Error> { Ok(()) }
+}
 impl Scattering for PartialDielectric {
     #[inline]
     fn scatter(&self, ray: Ray, record: HitRecord, env: &Environment) -> (Option<Ray>, Colour) {
@@ -114,6 +123,12 @@ pub struct Dielectric {
     /// By default, this is white, since it doesn't attenuate anything.
     #[serde(default = "default_dielectric_colour")]
     pub colour: Colour,
+}
+impl Loadable for Dielectric {
+    type Error = Infallible;
+
+    #[inline]
+    fn load(&mut self) -> Result<(), Self::Error> { Ok(()) }
 }
 impl Scattering for Dielectric {
     #[inline]

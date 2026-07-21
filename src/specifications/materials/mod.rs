@@ -27,7 +27,9 @@ pub use diffuse::{Diffuse, Lambertian, LambertianTexture};
 pub use metal::Metal;
 use serde::{Deserialize, Serialize};
 pub use simple::{NormalMap, StaticColour};
+use thiserror::Error;
 
+use super::Loadable;
 use crate::math::{Colour, Ray};
 use crate::specifications::objects::HitRecord;
 use crate::specifications::scene::Environment;
@@ -57,7 +59,25 @@ pub trait Scattering {
 
 /***** LIBRARY *****/
 macro_rules! material_impl {
-    ($($(#[$($attrs:tt)*])* $mat:ident),* $(,)?) => {
+    // Default error type insertion
+    (__ { $(#[$($fattrs:tt)*])* $fmat:ident $(, $(#[$($rattrs:tt)*])* $rmat:ident $(( $rerrty:ty ))?)* } { $($(#[$($attrs:tt)*])* $mat:ident ( $errty:ty )),* }) => {
+        material_impl!(__ {$($(#[$($rattrs)*])* $rmat $(($rerrty))?),*} { $(#[$($fattrs)*])* $fmat (::std::convert::Infallible) $(, $(#[$($attrs)*])* $mat ($errty))* });
+    };
+    (__ { $(#[$($fattrs:tt)*])* $fmat:ident ($ferrty:ty) $(, $(#[$($rattrs:tt)*])* $rmat:ident $(( $rerrty:ty ))?)* } { $($(#[$($attrs:tt)*])* $mat:ident ( $errty:ty )),* }) => {
+        material_impl!(__ {$($(#[$($rattrs)*])* $rmat $(($rerrty))?),*} { $(#[$($fattrs)*])* $fmat ($ferrty) $(, $(#[$($attrs)*])* $mat ($errty))* });
+    };
+
+
+    // Actual impl
+    (__ {} { $($(#[$($attrs:tt)*])* $mat:ident ( $errty:ty )),* }) => {
+        /// Errors occurring when loading the material.
+        #[derive(Debug, Error)]
+        pub enum Error {
+            $(#[error("{0}")] $mat(#[source] $errty),)*
+        }
+
+
+
         /// A runtime abstraction of all possible materials.
         #[derive(Clone, Debug, Deserialize, Serialize)]
         pub enum Material {
@@ -65,6 +85,16 @@ macro_rules! material_impl {
         }
 
         // Interface
+        impl Loadable for Material {
+            type Error = Error;
+
+            #[inline]
+            fn load(&mut self) -> Result<(), Self::Error> {
+                match self {
+                    $(Self::$mat(m) => m.load().map_err(Error::$mat),)*
+                }
+            }
+        }
         impl Scattering for Material {
             #[inline]
             fn scatter(&self, ray: Ray, record: HitRecord, env: &Environment) -> (Option<Ray>, Colour) {
@@ -73,6 +103,11 @@ macro_rules! material_impl {
                 }
             }
         }
+    };
+
+    // Public interface
+    ($($(#[$($attrs:tt)*])* $tex:ident $(( $errty:ty ))?),* $(,)?) => {
+        material_impl!(__ { $($(#[$($attrs)*])? $tex $(($errty))?),* } {});
     };
 }
 material_impl!(
@@ -83,7 +118,7 @@ material_impl!(
     /// A material randomly scattering rays.
     Lambertian,
     /// A material randomly scattering rays but with a texture.
-    LambertianTexture,
+    LambertianTexture(super::textures::Error),
     /// A material reflecting rays perfectly.
     Metal,
     /// A material having colours of the object's normals.

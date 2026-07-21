@@ -5,8 +5,11 @@
 //!   Defines a metallic material that reflects more directly and less random.
 //
 
+use std::convert::Infallible;
+
 use serde::{Deserialize, Serialize};
 
+use super::super::Loadable;
 use super::super::objects::HitRecord;
 use super::super::scene::Environment;
 use super::Scattering;
@@ -34,6 +37,12 @@ pub struct Metal {
     /// A value of 0 means perfectly reflecting metal, like a mirror.
     #[serde(default)]
     pub fuzz:   f64,
+}
+impl Loadable for Metal {
+    type Error = Infallible;
+
+    #[inline]
+    fn load(&mut self) -> Result<(), Self::Error> { Ok(()) }
 }
 impl Scattering for Metal {
     #[inline]

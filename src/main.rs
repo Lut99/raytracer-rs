@@ -13,9 +13,10 @@
 //
 
 use std::path::PathBuf;
+use std::process::ExitCode;
 
 use clap::{Parser, Subcommand};
-use error_trace::ErrorTrace as _;
+use error_trace::{ErrorTrace as _, toplevel};
 use humanlog::{DebugMode, HumanLogger};
 use log::{debug, error, info};
 use raytracer::common::input::Dimensions;
@@ -26,6 +27,7 @@ use raytracer::render::backends::multi::{MultiThreadRenderer, MultiThreadRendere
 use raytracer::render::backends::single::SingleThreadRenderer;
 use raytracer::render::image::Image;
 use raytracer::render::{RayRenderer as _, RenderBackend};
+use raytracer::specifications::Loadable as _;
 use raytracer::specifications::animations::{Animation, Vertical};
 use raytracer::specifications::features::{Features, FeaturesCli, FeaturesFile};
 use raytracer::specifications::materials::{Dielectric, Lambertian, LambertianTexture, Material, Metal};
@@ -161,7 +163,7 @@ enum GenerateSubcommand {
 
 
 /***** ENTRYPOINT *****/
-fn main() {
+fn main() -> ExitCode {
     // Read the command-line arguments
     let args: Arguments = Arguments::parse();
 
@@ -175,13 +177,17 @@ fn main() {
     match args.subcommand {
         RaytracerSubcommand::Render(render) => {
             // Load the given feature file, if any.
-            let features: Option<FeaturesFile> = render.features_file.map(|p| match FeaturesFile::from_path(&p) {
-                Ok(features) => features,
-                Err(err) => {
-                    error!("{}", err.trace());
-                    std::process::exit(1);
+            // NOTE: Not a map because we might want to quit with the exit code
+            let features: Option<FeaturesFile> = match render.features_file {
+                Some(p) => match FeaturesFile::from_path(&p) {
+                    Ok(features) => Some(features),
+                    Err(err) => {
+                        error!("{}", err.trace());
+                        return ExitCode::FAILURE;
+                    },
                 },
-            });
+                None => None,
+            };
             // Override it with other options
             let features: Features = Features::new(features, render.features);
 
@@ -194,15 +200,19 @@ fn main() {
                         Ok(scene) => scene,
                         Err(err) => {
                             error!("{}", err.trace());
-                            std::process::exit(1);
+                            return ExitCode::FAILURE;
                         },
                     };
                     if let Some(dims) = render.dims {
                         scene.camera.dims = (dims.0, dims.1);
                     }
 
-                    // Convert that to a static HitList
-                    let list: HitTree = HitTree::with_objs(scene.objects, (0..=scene.camera.shutter_time.into()).into());
+                    // Convert that to a static HitList and load it
+                    let mut list: HitTree = HitTree::with_objs(scene.objects, (0..=scene.camera.shutter_time.into()).into());
+                    if let Err(err) = list.load() {
+                        error!("{}", toplevel!(("Failed to load external references in object list"), err));
+                        return ExitCode::FAILURE;
+                    }
 
                     // Now render based on the backend
                     let output: Image = match render.backend {
@@ -223,7 +233,7 @@ fn main() {
                                         Ok(config) => config,
                                         Err(err) => {
                                             error!("{}", err.trace());
-                                            std::process::exit(1);
+                                            return ExitCode::FAILURE;
                                         },
                                     }
                                 },
@@ -235,7 +245,7 @@ fn main() {
                                 Ok(renderer) => renderer,
                                 Err(err) => {
                                     error!("{}", err.trace());
-                                    std::process::exit(1);
+                                    return ExitCode::FAILURE;
                                 },
                             };
 
@@ -247,8 +257,9 @@ fn main() {
                     // Now write the image to disk
                     if let Err(err) = output.to_path(&image.output_path, render.fix_dirs) {
                         error!("Failed to save rendered image to '{}': {}", image.output_path.display(), err);
-                        std::process::exit(1);
+                        return ExitCode::FAILURE;
                     }
+                    ExitCode::SUCCESS
                 },
 
                 RenderSubcommand::Cover(cover) => {
@@ -349,7 +360,7 @@ fn main() {
                                         Ok(config) => config,
                                         Err(err) => {
                                             error!("{}", err.trace());
-                                            std::process::exit(1);
+                                            return ExitCode::FAILURE;
                                         },
                                     }
                                 },
@@ -361,7 +372,7 @@ fn main() {
                                 Ok(renderer) => renderer,
                                 Err(err) => {
                                     error!("{}", err.trace());
-                                    std::process::exit(1);
+                                    return ExitCode::FAILURE;
                                 },
                             };
 
@@ -373,8 +384,9 @@ fn main() {
                     // Now write the image to disk
                     if let Err(err) = output.to_path(&cover.output_path, render.fix_dirs) {
                         error!("Failed to save rendered image to '{}': {}", cover.output_path.display(), err);
-                        std::process::exit(1);
+                        return ExitCode::FAILURE;
                     }
+                    ExitCode::SUCCESS
                 },
             }
         },
@@ -386,8 +398,9 @@ fn main() {
                     // Run the command
                     if let Err(err) = generate::gradient(path, (dims.0.into(), dims.1.into()), generate.fix_dirs) {
                         error!("{}", err.trace());
-                        std::process::exit(1);
+                        return ExitCode::FAILURE;
                     }
+                    ExitCode::SUCCESS
                 },
             }
         },
