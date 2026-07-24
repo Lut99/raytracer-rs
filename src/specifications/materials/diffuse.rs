@@ -21,7 +21,7 @@ use super::super::Loadable;
 use super::super::scene::Environment;
 use super::Scattering;
 use crate::math::{Colour, Ray, Vec3};
-use crate::specifications::objects::HitRecord;
+use crate::specifications::objects::HitData;
 use crate::specifications::textures::{Texture, Textured};
 
 
@@ -72,7 +72,7 @@ impl Loadable for Diffuse {
 }
 impl Scattering for Diffuse {
     #[inline]
-    fn scatter(&self, _ray: Ray, record: HitRecord, _env: &Environment) -> (Option<Ray>, Colour) {
+    fn scatter(&self, _ray: Ray, record: &HitData, _env: &Environment) -> (Option<Ray>, Colour) {
         // Return a ray scattered in a random direction
         let direction: Vec3 = random3_on_hemisphere(record.normal);
         (Some(Ray::new(record.hit, direction)), self.colour)
@@ -95,7 +95,7 @@ impl Loadable for Lambertian {
 }
 impl Scattering for Lambertian {
     #[inline]
-    fn scatter(&self, _ray: Ray, record: HitRecord, _env: &Environment) -> (Option<Ray>, Colour) {
+    fn scatter(&self, _ray: Ray, record: &HitData, _env: &Environment) -> (Option<Ray>, Colour) {
         // Compute the scattered ray, making sure the scattered one is not zero
         let mut scattered: Vec3 = record.normal + random3_uniform();
         if scattered.is_nearly_zero() {
@@ -123,7 +123,7 @@ impl<T: Loadable> Loadable for LambertianTexture<T> {
 }
 impl<T: Textured> Scattering for LambertianTexture<T> {
     #[inline]
-    fn scatter(&self, _ray: Ray, record: HitRecord, _env: &Environment) -> (Option<Ray>, Colour) {
+    fn scatter(&self, _ray: Ray, record: &HitData, _env: &Environment) -> (Option<Ray>, Colour) {
         // Compute the scattered ray, making sure the scattered one is not zero
         let mut scattered: Vec3 = record.normal + random3_uniform();
         if scattered.is_nearly_zero() {

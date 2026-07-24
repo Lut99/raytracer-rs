@@ -1,0 +1,23 @@
+{
+  "objects": [
+    {
+      "Sphere": {
+        "center": [0, -100.5, -1],
+        "radius": 100,
+        "material": {
+          "Lambertian": {
+            "colour": [0.8, 0.8, 0, 1]
+          }
+        }
+      }
+    },
+    {
+      "Model": {
+        "path": "./tests/scenes/lowpoly_tree_sample.obj",
+        "format": "obj",
+        "pos": [0, 0, -2],
+        "scale": 0.1
+      }
+    }
+  ]
+}

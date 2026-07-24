@@ -10,7 +10,7 @@ use std::convert::Infallible;
 use serde::{Deserialize, Serialize};
 
 use super::super::Loadable;
-use super::super::objects::HitRecord;
+use super::super::objects::HitData;
 use super::super::scene::Environment;
 use super::Scattering;
 use super::diffuse::random3_uniform;
@@ -46,7 +46,7 @@ impl Loadable for Metal {
 }
 impl Scattering for Metal {
     #[inline]
-    fn scatter(&self, ray: Ray, record: HitRecord, _env: &Environment) -> (Option<Ray>, Colour) {
+    fn scatter(&self, ray: Ray, record: &HitData, _env: &Environment) -> (Option<Ray>, Colour) {
         // Compute the scattered ray, making sure the scattered one is not zero
         let reflected: Vec3 = reflect(ray.direct, record.normal);
         // Add some fuzz by offsetting the endpoint of the reflected vector by a small amount.

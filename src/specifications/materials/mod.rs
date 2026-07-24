@@ -22,6 +22,10 @@ pub mod metal;
 pub mod simple;
 
 // Imports & Exports
+use std::cell::{Ref, RefMut};
+use std::rc::Rc;
+use std::sync::{Arc, MutexGuard, RwLockReadGuard, RwLockWriteGuard};
+
 pub use dielectric::{Dielectric, PartialDielectric};
 pub use diffuse::{Diffuse, Lambertian, LambertianTexture};
 pub use metal::Metal;
@@ -31,8 +35,33 @@ use thiserror::Error;
 
 use super::Loadable;
 use crate::math::{Colour, Ray};
-use crate::specifications::objects::HitRecord;
+use crate::specifications::objects::HitData;
 use crate::specifications::scene::Environment;
+
+
+/***** HELPER MACROS *****/
+/// Pointer-like impls for [`Scattering`].
+macro_rules! scattering_ptr_impl {
+    ('a, $ty:ty) => {
+        impl<'a, T: Scattering> Scattering for $ty {
+            #[inline]
+            fn scatter(&self, ray: Ray, record: &HitData, env: &Environment) -> (Option<Ray>, Colour) {
+                <T as Scattering>::scatter(self, ray, record, env)
+            }
+        }
+    };
+    ($ty:ty) => {
+        impl<T: Scattering> Scattering for $ty {
+            #[inline]
+            fn scatter(&self, ray: Ray, record: &HitData, env: &Environment) -> (Option<Ray>, Colour) {
+                <T as Scattering>::scatter(self, ray, record, env)
+            }
+        }
+    };
+}
+
+
+
 
 
 /***** INTERFACES *****/
@@ -50,8 +79,23 @@ pub trait Scattering {
     /// # Returns
     /// A tuple that represents the bounced [`Ray`] and the attenuated colour from this bounce. If
     /// [`None`] is returned for the [`Ray`], then no more bounce is necessary.
-    fn scatter(&self, ray: Ray, record: HitRecord, env: &Environment) -> (Option<Ray>, Colour);
+    fn scatter(&self, ray: Ray, record: &HitData, env: &Environment) -> (Option<Ray>, Colour);
 }
+
+// Pointer-like impls
+scattering_ptr_impl!('a, &'a T);
+scattering_ptr_impl!('a, &'a mut T);
+scattering_ptr_impl!(Box<T>);
+scattering_ptr_impl!('a, Ref<'a, T>);
+scattering_ptr_impl!('a, RefMut<'a, T>);
+scattering_ptr_impl!(Rc<T>);
+scattering_ptr_impl!('a, RwLockReadGuard<'a, T>);
+scattering_ptr_impl!('a, RwLockWriteGuard<'a, T>);
+scattering_ptr_impl!('a, MutexGuard<'a, T>);
+scattering_ptr_impl!(Arc<T>);
+scattering_ptr_impl!('a, parking_lot::RwLockReadGuard<'a, T>);
+scattering_ptr_impl!('a, parking_lot::RwLockWriteGuard<'a, T>);
+scattering_ptr_impl!('a, parking_lot::MutexGuard<'a, T>);
 
 
 
@@ -97,7 +141,7 @@ macro_rules! material_impl {
         }
         impl Scattering for Material {
             #[inline]
-            fn scatter(&self, ray: Ray, record: HitRecord, env: &Environment) -> (Option<Ray>, Colour) {
+            fn scatter(&self, ray: Ray, record: &HitData, env: &Environment) -> (Option<Ray>, Colour) {
                 match self {
                     $(Self::$mat(m) => m.scatter(ray, record, env),)*
                 }

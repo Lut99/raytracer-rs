@@ -22,7 +22,7 @@ serde = { version = "1.0.0", features = ["derive"] }
 serde_json = "1.0.0"
 thiserror = "2.0.0"
 
-obj = { git = "https://github.com/Lut99/obj-rs", rev = "04b2872aa92b84e8294ce9b28810ad45846b6fa6", optional = true }
+obj = { git = "https://github.com/Lut99/obj-rs", rev = "5ac242f7447e1cde07a82603383501916e73a86f", optional = true }
 
 
 [features]

@@ -276,7 +276,7 @@ impl<T> BoundingBoxable for BVHNode<T> {
         }
     }
 }
-impl<T: Hittable> BVHNode<T> {
+impl<T: Hittable<M>, M> Hittable<M> for BVHNode<T> {
     /// Computes a hit on an object in the BVHNode.
     ///
     /// Unlike [`Hittable::hit()`](crate::specifications::objects::Hittable::hit()), this version
@@ -295,7 +295,7 @@ impl<T: Hittable> BVHNode<T> {
     /// A new [`HitRecord`] struct, which collects relevant information of this hit, or else
     /// [`None`] if the ray does not hit.
     #[inline]
-    fn hit(&self, ray: Ray, t_min: f64, t_max: f64, env: &Environment) -> Option<(&T, HitRecord)> {
+    fn hit(&self, ray: Ray, t_min: f64, t_max: f64, env: &Environment) -> Option<HitRecord<&M>> {
         // Check if we're hit in the first place
         if !self.aabb(ray.time).hittest(ray, t_min, t_max) {
             return None;
@@ -304,14 +304,14 @@ impl<T: Hittable> BVHNode<T> {
         // If so, then do a more detailled hit
         match self {
             // Normal object hit
-            Self::Object(_, obj) => obj.hit(ray, t_min, t_max, env).map(|r| (obj, r)),
+            Self::Object(_, obj) => obj.hit(ray, t_min, t_max, env),
             // Check which half of the BVH is hit instead
             Self::Next(_, lhs, rhs) => {
-                let lhs: Option<(&T, HitRecord)> = lhs.hit(ray, t_min, t_max, env);
-                let rhs: Option<(&T, HitRecord)> = rhs.hit(ray, t_min, t_max, env);
+                let lhs: Option<HitRecord<&M>> = lhs.hit(ray, t_min, t_max, env);
+                let rhs: Option<HitRecord<&M>> = rhs.hit(ray, t_min, t_max, env);
                 match (lhs, rhs) {
                     // Return the closest of the two hits if both
-                    (Some((obj, lhs)), Some((_, rhs))) if lhs.t <= rhs.t => Some((obj, lhs)),
+                    (Some(lhs), Some(rhs)) if lhs.data.t <= rhs.data.t => Some(lhs),
                     (Some(_), Some(rhs)) => Some(rhs),
                     // Else, return the hit half
                     (Some(lhs), None) => Some(lhs),
@@ -609,7 +609,7 @@ impl<T> BoundingBoxable for HitTree<T> {
     fn aabb(&self, t_us: u64) -> AABB {
         #[cfg(debug_assertions)]
         if t_us < self.ts[0] || t_us > self.ts[1] {
-            panic!("HitTree initializes for time range {:?} cannot compute AABB at time {}", self.ts, t_us);
+            panic!("HitTree initialized for time range {:?} cannot compute AABB at time {}", self.ts, t_us);
         }
 
         // Return the AABB
@@ -619,30 +619,13 @@ impl<T> BoundingBoxable for HitTree<T> {
         }
     }
 }
-impl<T: Hittable> HitTree<T> {
-    /// Computes a hit on an object in the HitTree.
-    ///
-    /// Unlike [`Hittable::hit()`](crate::specifications::objects::Hittable::hit()), this version
-    /// returns the material of the object that was hit. You can use this to scatter later.
-    ///
-    /// # Arguments
-    /// - `ray`: The [`Ray`] to compute any hits with.
-    /// - `t_min`: The minimum point along the ray we still accept (we don't count it as a hit
-    ///   before that).
-    /// - `t_max`: The maximum point along the ray we still accept (we don't count is as a hit
-    ///   after that).
-    /// - `env`: An [`Environment`] struct relating information about the scene's total
-    ///   environment.
-    ///
-    /// # Returns
-    /// A new [`HitRecord`] struct, which collects relevant information of this hit, or else
-    /// [`None`] if the ray does not hit.
+impl<T: Hittable<M>, M> Hittable<M> for HitTree<T> {
     #[inline]
     #[cfg_attr(debug_assertions, track_caller)]
-    pub fn hit(&self, ray: Ray, t_min: f64, t_max: f64, env: &Environment) -> Option<(&T, HitRecord)> {
+    fn hit(&self, ray: Ray, t_min: f64, t_max: f64, env: &Environment) -> Option<HitRecord<&M>> {
         #[cfg(debug_assertions)]
         if ray.time < self.ts[0] || ray.time > self.ts[1] {
-            panic!("HitTree initializes for time range {:?} cannot compute Ray hit at time {}", self.ts, ray.time);
+            panic!("HitTree initialized for time range {:?} cannot compute Ray hit at time {}", self.ts, ray.time);
         }
 
         // Run the hit

@@ -15,7 +15,7 @@ use super::super::scene::Environment;
 use super::Scattering;
 use super::metal::reflect;
 use crate::math::{Colour, Ray, Vec3};
-use crate::specifications::objects::HitRecord;
+use crate::specifications::objects::HitData;
 
 
 /***** HELPER FUNCTIONS *****/
@@ -89,7 +89,7 @@ impl Loadable for PartialDielectric {
 }
 impl Scattering for PartialDielectric {
     #[inline]
-    fn scatter(&self, ray: Ray, record: HitRecord, env: &Environment) -> (Option<Ray>, Colour) {
+    fn scatter(&self, ray: Ray, record: &HitData, env: &Environment) -> (Option<Ray>, Colour) {
         // NOTE: We are always assuming we are refracting against air here
         let eta_over_eta_prime: f64 =
             if record.front_face { env.air_refraction_index / self.refraction_index } else { self.refraction_index / env.air_refraction_index };
@@ -132,7 +132,7 @@ impl Loadable for Dielectric {
 }
 impl Scattering for Dielectric {
     #[inline]
-    fn scatter(&self, ray: Ray, record: HitRecord, env: &Environment) -> (Option<Ray>, Colour) {
+    fn scatter(&self, ray: Ray, record: &HitData, env: &Environment) -> (Option<Ray>, Colour) {
         // NOTE: We are always assuming we are refracting against air here
         let eta_over_eta_prime: f64 =
             if record.front_face { env.air_refraction_index / self.refraction_index } else { self.refraction_index / env.air_refraction_index };

@@ -208,11 +208,13 @@ fn main() -> ExitCode {
                     }
 
                     // Convert that to a static HitList and load it
-                    let mut list: HitTree = HitTree::with_objs(scene.objects, (0..=scene.camera.shutter_time.into()).into());
-                    if let Err(err) = list.load() {
-                        error!("{}", toplevel!(("Failed to load external references in object list"), err));
-                        return ExitCode::FAILURE;
+                    for (i, obj) in scene.objects.iter_mut().enumerate() {
+                        if let Err(err) = obj.load() {
+                            error!("{}", toplevel!(("Failed to load external references in object {i}"), err));
+                            return ExitCode::FAILURE;
+                        }
                     }
+                    let list: HitTree = HitTree::with_objs(scene.objects, (0..=scene.camera.shutter_time.into()).into());
 
                     // Now render based on the backend
                     let output: Image = match render.backend {

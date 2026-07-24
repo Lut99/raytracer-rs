@@ -21,7 +21,7 @@ use super::super::Loadable;
 use super::super::scene::Environment;
 use super::Scattering;
 use crate::math::{Colour, Ray};
-use crate::specifications::objects::HitRecord;
+use crate::specifications::objects::HitData;
 
 
 /***** LIBRARY *****/
@@ -39,7 +39,7 @@ impl Loadable for StaticColour {
 }
 impl Scattering for StaticColour {
     #[inline]
-    fn scatter(&self, _ray: Ray, _record: HitRecord, _env: &Environment) -> (Option<Ray>, Colour) {
+    fn scatter(&self, _ray: Ray, _record: &HitData, _env: &Environment) -> (Option<Ray>, Colour) {
         // Compute the normal map colour based on the normal
         (None, self.colour)
     }
@@ -58,7 +58,7 @@ impl Loadable for NormalMap {
 }
 impl Scattering for NormalMap {
     #[inline]
-    fn scatter(&self, _ray: Ray, record: HitRecord, _env: &Environment) -> (Option<Ray>, Colour) {
+    fn scatter(&self, _ray: Ray, record: &HitData, _env: &Environment) -> (Option<Ray>, Colour) {
         // Compute the normal map colour based on the normal
         (None, 0.5 * Colour::new(record.normal.x + 1.0, record.normal.y + 1.0, record.normal.z + 1.0, 2.0))
     }

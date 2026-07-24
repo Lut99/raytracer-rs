@@ -162,9 +162,9 @@ impl BoundingBoxable for AABB {
     #[inline]
     fn aabb(&self, _t_us: u64) -> AABB { *self }
 }
-impl Hittable for AABB {
+impl Hittable<()> for AABB {
     #[inline]
-    fn hit(&self, ray: Ray, mut t_min: f64, mut t_max: f64, _env: &Environment) -> Option<HitRecord> {
+    fn hit(&self, ray: Ray, mut t_min: f64, mut t_max: f64, _env: &Environment) -> Option<HitRecord<&()>> {
         let mut hit_axis: usize = 0;
         let mut hit_scale: f64 = 1.0;
         for i in 0..3 {
@@ -199,6 +199,7 @@ impl Hittable for AABB {
                 if hit_axis == 2 { hit_scale } else { 0.0 },
             ),
             (0.0, 0.0),
+            &(),
         ))
     }
 }

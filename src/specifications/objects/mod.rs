@@ -29,15 +29,16 @@ use std::rc::Rc;
 use std::sync::{Arc, MutexGuard, RwLockReadGuard, RwLockWriteGuard};
 
 pub use hitrecord::*;
-pub use plane::{Quad, Vertex};
+pub use model::Model;
+pub use plane::{Quad, Triangle};
 use serde::{Deserialize, Serialize};
 pub use sphere::{AnimatedSphere, Sphere};
 use thiserror::Error;
 
 use super::Loadable;
-use super::materials::{Material, Scattering};
+use super::materials::Material;
 use super::scene::Environment;
-use crate::math::{AABB, Colour, Ray};
+use crate::math::{AABB, Ray};
 
 
 /***** MACRO RULES *****/
@@ -58,18 +59,18 @@ macro_rules! bounding_boxable_ptr_impl {
 
 macro_rules! hittable_ptr_impl {
     ('a, $ty:ty) => {
-        impl<'a, T: Hittable> Hittable for $ty {
+        impl<'a, T: Hittable<M>, M> Hittable<M> for $ty {
             #[inline]
-            fn hit(&self, ray: Ray, t_min: f64, t_max: f64, env: &Environment) -> Option<HitRecord> {
-                <T as Hittable>::hit(self, ray, t_min, t_max, env)
+            fn hit(&self, ray: Ray, t_min: f64, t_max: f64, env: &Environment) -> Option<HitRecord<&'_ M>> {
+                <T as Hittable<M>>::hit(self, ray, t_min, t_max, env)
             }
         }
     };
     ($ty:ty) => {
-        impl<T: Hittable> Hittable for $ty {
+        impl<T: Hittable<M>, M> Hittable<M> for $ty {
             #[inline]
-            fn hit(&self, ray: Ray, t_min: f64, t_max: f64, env: &Environment) -> Option<HitRecord> {
-                <T as Hittable>::hit(self, ray, t_min, t_max, env)
+            fn hit(&self, ray: Ray, t_min: f64, t_max: f64, env: &Environment) -> Option<HitRecord<&'_ M>> {
+                <T as Hittable<M>>::hit(self, ray, t_min, t_max, env)
             }
         }
     };
@@ -111,7 +112,7 @@ bounding_boxable_ptr_impl!('a, parking_lot::MutexGuard<'a, T>);
 
 
 /// Defines the functions that hittable objects have in common.
-pub trait Hittable: BoundingBoxable {
+pub trait Hittable<M>: BoundingBoxable {
     /// Computes any hitpoints of the given ray with this object.
     ///
     /// # Arguments
@@ -122,7 +123,7 @@ pub trait Hittable: BoundingBoxable {
     ///
     /// # Returns
     /// A new [`HitRecord`] struct, which collects relevant information of this hit, or else [`None`] if the ray does not hit.
-    fn hit(&self, ray: Ray, t_min: f64, t_max: f64, env: &Environment) -> Option<HitRecord>;
+    fn hit(&self, ray: Ray, t_min: f64, t_max: f64, env: &Environment) -> Option<HitRecord<&'_ M>>;
 }
 
 // Pointer-like impls
@@ -147,16 +148,16 @@ hittable_ptr_impl!('a, parking_lot::MutexGuard<'a, T>);
 /***** LIBRARY *****/
 macro_rules! object_impl {
     // Default error type insertion
-    (__ { $(#[$($fattrs:tt)*])* $fobj:ident $(, $(#[$($rattrs:tt)*])* $robj:ident $(( $rerrty:ty ))?)* } { $($(#[$($attrs:tt)*])* $obj:ident ( $errty:ty )),* }) => {
-        object_impl!(__ {$($(#[$($rattrs)*])* $robj $(($rerrty))?),*} { $(#[$($fattrs)*])* $fobj (::std::convert::Infallible) $(, $(#[$($attrs)*])* $obj ($errty))* });
+    (__ { $(#[$($fattrs:tt)*])* $fobj:ident $(<$fgen:ident>)? $(, $(#[$($rattrs:tt)*])* $robj:ident $(<$rgen:ident>)? $(( $rerrty:ty ))?)* } { $($(#[$($attrs:tt)*])* $obj:ident $(<$gen:ident>)? ( $errty:ty )),* }) => {
+        object_impl!(__ {$($(#[$($rattrs)*])* $robj $(<$rgen>)? $(($rerrty))?),*} { $(#[$($fattrs)*])* $fobj $(<$fgen>)? (::std::convert::Infallible) $(, $(#[$($attrs)*])* $obj $(<$gen>)? ($errty))* });
     };
-    (__ { $(#[$($fattrs:tt)*])* $fobj:ident ($ferrty:ty) $(, $(#[$($rattrs:tt)*])* $robj:ident $(( $rerrty:ty ))?)* } { $($(#[$($attrs:tt)*])* $obj:ident ( $errty:ty )),* }) => {
-        object_impl!(__ {$($(#[$($rattrs)*])* $robj $(($rerrty))?),*} { $(#[$($fattrs)*])* $fobj ($ferrty) $(, $(#[$($attrs)*])* $obj ($errty))* });
+    (__ { $(#[$($fattrs:tt)*])* $fobj:ident $(<$fgen:ident>)? ($ferrty:ty) $(, $(#[$($rattrs:tt)*])* $robj:ident $(<$rgen:ident>)? $(( $rerrty:ty ))?)* } { $($(#[$($attrs:tt)*])* $obj:ident $(<$gen:ident>)? ( $errty:ty )),* }) => {
+        object_impl!(__ {$($(#[$($rattrs)*])* $robj $(<$rgen>)? $(($rerrty))?),*} { $(#[$($fattrs)*])* $fobj $(<$fgen>)? ($ferrty) $(, $(#[$($attrs)*])* $obj $(<$gen>)? ($errty))* });
     };
 
 
     // Actual impl
-    (__ {} { $($(#[$($attrs:tt)*])* $obj:ident ( $errty:ty )),* }) => {
+    (__ {} { $($(#[$($attrs:tt)*])* $obj:ident $(<$gen:ident>)? ( $errty:ty )),* }) => {
         /// Errors occurring when loading an object.
         #[derive(Debug, Error)]
         pub enum Error {
@@ -171,7 +172,7 @@ macro_rules! object_impl {
         /// - `M`: The type of material used.
         #[derive(Clone, Debug, Deserialize, Serialize)]
         pub enum Object {
-            $($(#[$($attrs)*])* $obj($obj<Material>),)*
+            $($(#[$($attrs)*])* $obj($obj$(<$gen>)?),)*
         }
 
         // Interface
@@ -193,36 +194,32 @@ macro_rules! object_impl {
                 }
             }
         }
-        impl Hittable for Object {
+        impl Hittable<Material> for Object {
             #[inline]
-            fn hit(&self, ray: Ray, t_min: f64, t_max: f64, env: &Environment) -> Option<HitRecord> {
+            fn hit(&self, ray: Ray, t_min: f64, t_max: f64, env: &Environment) -> Option<HitRecord<&Material>> {
                 match self {
                     $(Self::$obj(o) => o.hit(ray, t_min, t_max, env),)*
-                }
-            }
-        }
-        impl Scattering for Object {
-            #[inline]
-            fn scatter(&self, ray: Ray, record: HitRecord, env: &Environment) -> (Option<Ray>, Colour) {
-                match self {
-                    $(Self::$obj(o) => o.scatter(ray, record, env),)*
                 }
             }
         }
     };
 
     // Public interface
-    ($($(#[$($attrs:tt)*])* $obj:ident $(( $errty:ty ))?),* $(,)?) => {
-        object_impl!(__ { $($(#[$($attrs)*])? $obj $(($errty))?),* } {});
+    ($($(#[$($attrs:tt)*])* $obj:ident $(<$gen:ident>)? $(( $errty:ty ))?),* $(,)?) => {
+        object_impl!(__ { $($(#[$($attrs)*])? $obj $(<$gen>)? $(($errty))?),* } {});
     };
 }
 object_impl!(
+    // Flexible-material objects
     /// A regular sphere but animated.
-    AnimatedSphere(super::materials::Error),
+    AnimatedSphere<Material>(super::materials::Error),
     /// A regular 3D circle.
-    Sphere(super::materials::Error),
+    Sphere<Material>(super::materials::Error),
     /// A four-point shape on a 2D-plane.
-    Quad(super::materials::Error),
+    Quad<Material>(super::materials::Error),
     /// A three-point shape on a 2D-plane.
-    Vertex(super::materials::Error),
+    Triangle<Material>(super::materials::Error),
+    // Fixed-material objects
+    /// A complex, triangle-based model.
+    Model(model::Error),
 );

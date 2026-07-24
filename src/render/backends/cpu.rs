@@ -7,8 +7,7 @@
 
 use crate::hittree::HitTree;
 use crate::math::{Colour, Ray, Vec3};
-use crate::specifications::materials::Scattering as _;
-use crate::specifications::objects::Object;
+use crate::specifications::objects::{Hittable as _, Object};
 use crate::specifications::scene::Environment;
 
 
@@ -31,9 +30,9 @@ pub fn ray_colour(ray: Ray, world: &HitTree<Object>, depth: usize, env: &Environ
 
     // Try to find the object that hits closest
     match world.hit(ray, 0.001, f64::INFINITY, env) {
-        Some((obj, record)) => {
+        Some(record) => {
             // Scatter the ray now we've found it
-            match obj.scatter(ray, record, env) {
+            match record.scatter(ray, env) {
                 // Return the recursive bounce of the returned ray
                 (Some(scatter), attenuation) => attenuation * ray_colour(scatter, world, depth - 1, env),
 

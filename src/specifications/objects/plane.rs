@@ -8,10 +8,9 @@
 use serde::{Deserialize, Serialize};
 
 use super::super::Loadable;
-use super::super::materials::Scattering;
 use super::super::scene::Environment;
-use super::{BoundingBoxable, HitRecord, Hittable};
-use crate::math::{AABB, Colour, Ray, Vec3};
+use super::{BoundingBoxable, HitData, HitRecord, Hittable};
+use crate::math::{AABB, Ray, Vec3};
 
 
 /***** HELPER FUNCTIONS *****/
@@ -19,7 +18,7 @@ use crate::math::{AABB, Colour, Ray, Vec3};
 ///
 /// Returns a pair of the hitpoint and `t`.
 #[inline(always)]
-fn plane_hit(pos: Vec3, u: Vec3, v: Vec3, ray: Ray, t_min: f64, t_max: f64) -> Option<HitRecord> {
+fn plane_hit(pos: Vec3, u: Vec3, v: Vec3, ray: Ray, t_min: f64, t_max: f64) -> Option<HitData> {
     #![allow(non_snake_case)]
     // Quad math ***
     //
@@ -85,7 +84,7 @@ fn plane_hit(pos: Vec3, u: Vec3, v: Vec3, ray: Ray, t_min: f64, t_max: f64) -> O
 
     // Return a hitrecord.
     // NOTE: We haven't checked yet for the shape intersection! Maybe it hits the plane but NOT this specific quad!
-    Some(HitRecord::new(ray, hit, t, n, (alpha, beta)))
+    Some(HitData::new(ray, hit, t, n, (alpha, beta)))
 }
 
 
@@ -95,52 +94,48 @@ fn plane_hit(pos: Vec3, u: Vec3, v: Vec3, ray: Ray, t_min: f64, t_max: f64) -> O
 /***** LIBRARY *****/
 /// Implements a triangle but given by a point and two vectors.
 #[derive(Clone, Copy, Debug, Deserialize, Serialize)]
-pub struct Vertex<M> {
-    /// The position of the bottom-left corner of the Vertex.
+pub struct Triangle<M> {
+    /// The position of the bottom-left corner of the Triangle.
     pub pos: Vec3,
-    /// The "X-axis" of the Vertex's plane.
+    /// The "X-axis" of the Triangle's plane.
     pub u:   Vec3,
-    /// The "Y-axis" of the Vertex's plane.
+    /// The "Y-axis" of the Triangle's plane.
     pub v:   Vec3,
 
-    /// The material that scatters rays hitting the Vertex.
+    /// The material that scatters rays hitting the Triangle.
     #[serde(alias = "mat")]
     pub material: M,
 }
 
 // Object
-impl<M: Loadable> Loadable for Vertex<M> {
+impl<M: Loadable> Loadable for Triangle<M> {
     type Error = M::Error;
 
     #[inline]
     fn load(&mut self) -> Result<(), Self::Error> { self.material.load() }
 }
-impl<M> BoundingBoxable for Vertex<M> {
+impl<M> BoundingBoxable for Triangle<M> {
     #[inline]
     fn aabb(&self, _t_us: u64) -> AABB {
         // For a vertex, we only need one diagonal to find the bb
         AABB::from_points(self.pos + self.u, self.pos + self.v)
     }
 }
-impl<M> Hittable for Vertex<M> {
+impl<M> Hittable<M> for Triangle<M> {
     #[inline]
-    fn hit(&self, ray: Ray, t_min: f64, t_max: f64, _env: &Environment) -> Option<HitRecord> {
+    fn hit(&self, ray: Ray, t_min: f64, t_max: f64, _env: &Environment) -> Option<HitRecord<&M>> {
         // Compute a hit with this vertex' plane
-        let rec: HitRecord = plane_hit(self.pos, self.u, self.v, ray, t_min, t_max)?;
+        let rec: HitData = plane_hit(self.pos, self.u, self.v, ray, t_min, t_max)?;
 
         // Now checking if it's inside the primitive is trivial; since we used `u` and `v` already,
         // the alpha and beta are scaled 0-1. Hence:
         if rec.uv.0 >= 0.0 && rec.uv.1 >= 0.0 && rec.uv.0 + rec.uv.1 <= 1.0 {
             // The alpha and beta now form the uv, done!
-            Some(rec)
+            Some(HitRecord { mat: &self.material, data: rec })
         } else {
             None
         }
     }
-}
-impl<M: Scattering> Scattering for Vertex<M> {
-    #[inline]
-    fn scatter(&self, ray: Ray, record: HitRecord, env: &Environment) -> (Option<Ray>, Colour) { self.material.scatter(ray, record, env) }
 }
 
 
@@ -176,23 +171,19 @@ impl<M> BoundingBoxable for Quad<M> {
         diag1.surround(diag2)
     }
 }
-impl<M> Hittable for Quad<M> {
+impl<M> Hittable<M> for Quad<M> {
     #[inline]
-    fn hit(&self, ray: Ray, t_min: f64, t_max: f64, _env: &Environment) -> Option<HitRecord> {
+    fn hit(&self, ray: Ray, t_min: f64, t_max: f64, _env: &Environment) -> Option<HitRecord<&M>> {
         // Compute a hit with this quad's plane
-        let rec: HitRecord = plane_hit(self.pos, self.u, self.v, ray, t_min, t_max)?;
+        let rec: HitData = plane_hit(self.pos, self.u, self.v, ray, t_min, t_max)?;
 
         // Now checking if it's inside the primitive is trivial; since we used `u` and `v` already,
         // the alpha and beta are scaled 0-1. Hence:
         if rec.uv.0 >= 0.0 && rec.uv.0 <= 1.0 && rec.uv.1 >= 0.0 && rec.uv.1 <= 1.0 {
             // The alpha and beta now form the uv, done!
-            Some(rec)
+            Some(HitRecord { data: rec, mat: &self.material })
         } else {
             None
         }
     }
-}
-impl<M: Scattering> Scattering for Quad<M> {
-    #[inline]
-    fn scatter(&self, ray: Ray, record: HitRecord, env: &Environment) -> (Option<Ray>, Colour) { self.material.scatter(ray, record, env) }
 }
