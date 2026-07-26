@@ -77,6 +77,40 @@ const fn vertex_get(vertices: &[Vertex], i: isize) -> Result<&Vertex, Error> {
     }
 }
 
+/// Split a face of four points into two triangles.
+///
+/// # Arguments
+/// - `vs`: The list of vertices that are the points to split along.
+///
+/// # Returns
+/// Two sets of vertices that make two triangles.
+fn split_four_into_triangles(vs: [Vec3; 4]) -> [[Vec3; 3]; 2] {
+    #[inline]
+    const fn midpoint_of(p1: Vec3, p2: Vec3) -> Vec3 { Vec3::new(0.5 * (p1.x + p2.x), 0.5 * (p1.y + p2.y), 0.5 * (p1.z + p2.z)) }
+
+    // The first triangle is the first three vertices
+    let t1 = [vs[0], vs[1], vs[2]];
+
+    // The second triangle is the line + the fourth point s.t. the fourth point is closest to it.
+    // See: <https://stackoverflow.com/a/73431349/5270125>
+    let axis = [(t1[0], t1[1]), (t1[1], t1[2]), (t1[0], t1[2])];
+    let mut smallest_l: Option<(usize, f64)> = None;
+    for (i, (p1, p2)) in axis.into_iter().enumerate() {
+        let m = midpoint_of(p1, p2);
+        let dist = (vs[3] - m).length2();
+        if let Some((si, sd)) = &mut smallest_l {
+            if dist < *sd {
+                *si = i;
+                *sd = dist;
+            }
+        } else {
+            smallest_l = Some((i, dist));
+        }
+    }
+    let smallest_i: usize = smallest_l.unwrap().0;
+    [t1, [axis[smallest_i].0, axis[smallest_i].1, vs[3]]]
+}
+
 
 
 
@@ -177,24 +211,8 @@ impl Loadable for Model {
                                         Vec3::new(v4.x, v4.y, v4.z),
                                     ];
 
-                                    // Find the other point than v1 that will split the face s.t.
-                                    // the other two vertices are on the other side.
-                                    let t1 = v2 - v1;
-                                    let t2 = v3 - v1;
-                                    let t3 = v4 - v1;
-                                    let d1 = t1.dot(t2);
-                                    let d2 = t1.dot(t3);
-                                    let d3 = t2.dot(t3);
-                                    let sides: [[Vec3; 3]; 2] = if d1 <= d2 && d1 <= d3 {
-                                        [[v1, v2, v3], [v1, v2, v4]]
-                                    } else if d2 <= d1 && d2 <= d3 {
-                                        [[v1, v2, v3], [v1, v3, v4]]
-                                    } else {
-                                        // if d3 <= d1 && d3 <= d2
-                                        [[v1, v2, v4], [v1, v3, v4]]
-                                    };
-
-                                    // Now build the triangles along these sides
+                                    // Split it into two triangles and add them
+                                    let sides = split_four_into_triangles([v1, v2, v3, v4]);
                                     triangles.push(Triangle {
                                         pos: scale * sides[0][0],
                                         u: scale * (sides[0][1] - sides[0][0]),
