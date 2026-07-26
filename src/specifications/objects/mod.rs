@@ -22,6 +22,7 @@ mod hitrecord;
 pub mod model;
 pub mod plane;
 pub mod sphere;
+pub mod translate;
 
 // Imports & Exports
 use std::cell::{Ref, RefMut};

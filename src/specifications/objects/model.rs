@@ -12,6 +12,7 @@ use std::fs::File;
 use std::path::PathBuf;
 
 use log::debug;
+use obj::Vertex;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -21,6 +22,7 @@ use super::super::materials::Lambertian;
 use super::super::materials::Material;
 use super::super::scene::Environment;
 use super::plane::Triangle;
+use super::translate::Translate;
 use super::{BoundingBoxable, HitRecord, Hittable};
 use crate::hittree::HitTree;
 use crate::math::{AABB, Colour, Ray, Vec3};
@@ -37,6 +39,9 @@ pub enum Error {
         err:  std::io::Error,
     },
     #[cfg(feature = "obj")]
+    #[error("Index {got} overflows for list of length {len}")]
+    IndexOverflow { got: isize, len: usize },
+    #[cfg(feature = "obj")]
     #[error("Face {i}{}{} in file {path:?} is not a face of 3/4 vertices (i.e., one or two triangle(s)), but rather {got}", if let Some(oname) = oname {format!(" in object {oname:?}")} else { String::new()}, if let Some(gname) = gname {format!(" in group {gname:?}")} else { String::new()})]
     NonTriangleFace { path: PathBuf, oname: Option<String>, gname: Option<String>, i: usize, got: usize },
     #[cfg(feature = "obj")]
@@ -48,6 +53,28 @@ pub enum Error {
     },
     #[error("Cannot guess format from {name:?} (specify it manually instead)")]
     UnknownModelExtension { name: String },
+    #[cfg(feature = "obj")]
+    #[error("Encountered zero index")]
+    ZeroIndex,
+}
+
+
+
+
+
+/***** HELPER FUNCTIONS *****/
+/// Resolves a [`isize`] index to a vertex.
+#[cfg(feature = "obj")]
+#[inline]
+const fn vertex_get(vertices: &[Vertex], i: isize) -> Result<&Vertex, Error> {
+    if i < 0 {
+        let ri: isize = vertices.len() as isize - i;
+        if ri >= 0 { Ok(&vertices[ri as usize]) } else { Err(Error::IndexOverflow { got: i, len: vertices.len() }) }
+    } else if i > 0 {
+        if i as usize <= vertices.len() { Ok(&vertices[i as usize - 1]) } else { Err(Error::IndexOverflow { got: i, len: vertices.len() }) }
+    } else {
+        Err(Error::ZeroIndex)
+    }
 }
 
 
@@ -83,6 +110,7 @@ impl Loadable for Model {
 
     fn load(&mut self) -> Result<(), Self::Error> {
         let Self::ToLoad { path, format, scale, pos } = &*self else { return Ok(()) };
+        let (pos, scale): (Vec3, f64) = (*pos, *scale);
 
         // Determine a format
         let fmt: ModelFormat = format
@@ -112,51 +140,76 @@ impl Loadable for Model {
 
                 // Generate a list of Raytracer vertices from this
                 let mut i: usize = 0;
-                let mut vertices = Vec::with_capacity(obj.objs.values().map(|o| o.faces.values().map(|g| g.faces.len()).sum::<usize>()).sum());
+                let mut triangles = Vec::with_capacity(obj.objs.values().map(|o| o.faces.values().map(|g| g.faces.len()).sum::<usize>()).sum());
                 for (oname, obj) in obj.objs {
                     for (gname, group) in obj.faces {
                         for face in group.faces {
                             // Get the three vertices for this face and turn it into a triangle
                             match face.elems.as_slice() {
                                 [v1, v2, v3] => {
-                                    let [v1, v2, v3] = [obj.vertices[v1.vertex - 1], obj.vertices[v2.vertex - 1], obj.vertices[v3.vertex - 1]];
                                     let [v1, v2, v3] = [
-                                        *pos + *scale * Vec3::new(v1.x, v1.y, v1.z),
-                                        *pos + *scale * Vec3::new(v2.x, v2.y, v2.z),
-                                        *pos + *scale * Vec3::new(v3.x, v3.y, v3.z),
+                                        vertex_get(&obj.vertices, v1.vertex)?,
+                                        vertex_get(&obj.vertices, v2.vertex)?,
+                                        vertex_get(&obj.vertices, v3.vertex)?,
                                     ];
-                                    vertices.push(Triangle {
-                                        pos: v1,
-                                        u: v2 - v1,
-                                        v: v3 - v1,
-                                        material: Material::Lambertian(Lambertian { colour: Colour::new(0.5, 0.5, 0.5, 1.0) }),
+                                    let [v1, v2, v3] = [Vec3::new(v1.x, v1.y, v1.z), Vec3::new(v2.x, v2.y, v2.z), Vec3::new(v3.x, v3.y, v3.z)];
+                                    triangles.push(Triangle {
+                                        pos: scale * v1,
+                                        u: scale * (v2 - v1),
+                                        v: scale * (v3 - v1),
+                                        material: Material::Lambertian(Lambertian {
+                                            colour: Colour::new(fastrand::f64(), fastrand::f64(), fastrand::f64(), 1.0),
+                                        }),
                                     });
                                 },
                                 [v1, v2, v3, v4] => {
-                                    // Split it into TWO triangles
+                                    // Get the vertex equivalent
                                     let [v1, v2, v3, v4] = [
-                                        obj.vertices[v1.vertex - 1],
-                                        obj.vertices[v2.vertex - 1],
-                                        obj.vertices[v3.vertex - 1],
-                                        obj.vertices[v4.vertex - 1],
+                                        vertex_get(&obj.vertices, v1.vertex)?,
+                                        vertex_get(&obj.vertices, v2.vertex)?,
+                                        vertex_get(&obj.vertices, v3.vertex)?,
+                                        vertex_get(&obj.vertices, v4.vertex)?,
                                     ];
                                     let [v1, v2, v3, v4] = [
-                                        *pos + *scale * Vec3::new(v1.x, v1.y, v1.z),
-                                        *pos + *scale * Vec3::new(v2.x, v2.y, v2.z),
-                                        *pos + *scale * Vec3::new(v3.x, v3.y, v3.z),
-                                        *pos + *scale * Vec3::new(v4.x, v4.y, v4.z),
+                                        Vec3::new(v1.x, v1.y, v1.z),
+                                        Vec3::new(v2.x, v2.y, v2.z),
+                                        Vec3::new(v3.x, v3.y, v3.z),
+                                        Vec3::new(v4.x, v4.y, v4.z),
                                     ];
-                                    vertices.push(Triangle {
-                                        pos: v1,
-                                        u: v2 - v1,
-                                        v: v3 - v1,
-                                        material: Material::Lambertian(Lambertian { colour: Colour::new(0.5, 0.5, 0.5, 1.0) }),
+
+                                    // Find the other point than v1 that will split the face s.t.
+                                    // the other two vertices are on the other side.
+                                    let t1 = v2 - v1;
+                                    let t2 = v3 - v1;
+                                    let t3 = v4 - v1;
+                                    let d1 = t1.dot(t2);
+                                    let d2 = t1.dot(t3);
+                                    let d3 = t2.dot(t3);
+                                    let sides: [[Vec3; 3]; 2] = if d1 <= d2 && d1 <= d3 {
+                                        [[v1, v2, v3], [v1, v2, v4]]
+                                    } else if d2 <= d1 && d2 <= d3 {
+                                        [[v1, v2, v3], [v1, v3, v4]]
+                                    } else {
+                                        // if d3 <= d1 && d3 <= d2
+                                        [[v1, v2, v4], [v1, v3, v4]]
+                                    };
+
+                                    // Now build the triangles along these sides
+                                    triangles.push(Triangle {
+                                        pos: scale * sides[0][0],
+                                        u: scale * (sides[0][1] - sides[0][0]),
+                                        v: scale * (sides[0][2] - sides[0][0]),
+                                        material: Material::Lambertian(Lambertian {
+                                            colour: Colour::new(fastrand::f64(), fastrand::f64(), fastrand::f64(), 1.0),
+                                        }),
                                     });
-                                    vertices.push(Triangle {
-                                        pos: v2,
-                                        u: v3 - v2,
-                                        v: v4 - v2,
-                                        material: Material::Lambertian(Lambertian { colour: Colour::new(0.5, 0.5, 0.5, 1.0) }),
+                                    triangles.push(Triangle {
+                                        pos: scale * sides[1][0],
+                                        u: scale * (sides[1][1] - sides[1][0]),
+                                        v: scale * (sides[1][2] - sides[1][0]),
+                                        material: Material::Lambertian(Lambertian {
+                                            colour: Colour::new(fastrand::f64(), fastrand::f64(), fastrand::f64(), 1.0),
+                                        }),
                                     });
                                 },
                                 _ => return Err(Error::NonTriangleFace { path: path.clone(), oname, gname, i, got: face.elems.len() }),
@@ -167,8 +220,11 @@ impl Loadable for Model {
                 }
 
                 // When loaded, replace us with the loaded model
-                debug!("Succesfully loaded model {path:?} with {i} faces");
-                *self = Self::Loaded(LoadedModel { vertices: HitTree::with_objs(vertices, (0..=1).into()) });
+                debug!("Succesfully loaded model {path:?} with {i} faces ({} triangles)", triangles.len());
+                // for t in &triangles {
+                //     println!("{{ {}, {} x {} }}", t.pos, t.u, t.v);
+                // }
+                *self = Self::Loaded(LoadedModel { triangles: Translate { obj: HitTree::with_objs(triangles, (0..=1).into()), pos } });
                 Ok(())
             },
         }
@@ -201,18 +257,37 @@ impl Hittable<Material> for Model {
 /// A loaded counterpart of [`Model`].
 #[derive(Clone, Debug)]
 pub struct LoadedModel {
-    /// The list of vertices in this model.
-    vertices: HitTree<Triangle<Material>>,
+    /// The list of triangles in this model.
+    triangles: Translate<HitTree<Triangle<Material>>>,
+}
+
+// Constructors
+impl LoadedModel {
+    /// Constructor for a LoadedModel.
+    ///
+    /// Note that, typically, you load a model through a [`Model`]. This constructor exists more
+    /// for debugging.
+    ///
+    /// # Arguments
+    /// - `pos`: A [`Vec3`] describing where to place the model.
+    /// - `triangles`: A list of [`Triangle`] objects that make up the model.
+    ///
+    /// # Returns
+    /// A new LoadedModel.
+    #[inline]
+    pub fn new(pos: Vec3, triangles: impl IntoIterator<Item = Triangle<Material>>) -> Self {
+        Self { triangles: Translate { obj: HitTree::with_objs(triangles, (0..=1).into()), pos } }
+    }
 }
 
 // Raytracer
 impl BoundingBoxable for LoadedModel {
     #[inline]
-    fn aabb(&self, t_us: u64) -> AABB { self.vertices.aabb(t_us) }
+    fn aabb(&self, t_us: u64) -> AABB { self.triangles.aabb(t_us) }
 }
 impl Hittable<Material> for LoadedModel {
     #[inline]
     fn hit(&self, ray: Ray, t_min: f64, t_max: f64, env: &Environment) -> Option<HitRecord<&'_ Material>> {
-        self.vertices.hit(ray, t_min, t_max, env)
+        self.triangles.hit(ray, t_min, t_max, env)
     }
 }

@@ -117,8 +117,10 @@ impl<M: Loadable> Loadable for Triangle<M> {
 impl<M> BoundingBoxable for Triangle<M> {
     #[inline]
     fn aabb(&self, _t_us: u64) -> AABB {
-        // For a vertex, we only need one diagonal to find the bb
-        AABB::from_points(self.pos + self.u, self.pos + self.v)
+        // For a triangle, we need to make sure we always have the biggest AABB
+        AABB::from_points(self.pos, self.pos + self.u)
+            .surround(AABB::from_points(self.pos, self.pos + self.v))
+            .surround(AABB::from_points(self.pos + self.u, self.pos + self.v))
     }
 }
 impl<M> Hittable<M> for Triangle<M> {

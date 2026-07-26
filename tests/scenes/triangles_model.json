@@ -1,7 +1,8 @@
 {
   "camera": {
+    "vfov": 80,
     "pos": {
-      "lookfrom": [3, 0, 0],
+      "lookfrom": [0, 0, 9],
       "lookat": [0, 0, 0],
       "lookup": [0, 1, 0]
     }
@@ -9,7 +10,7 @@
   "objects": [
     {
       "Model": {
-        "path": "./tests/scenes/lowpoly_tree_sample.obj",
+        "path": "./tests/scenes/triangles.obj",
         "format": "obj",
         "pos": [0, 0, 0],
         "scale": 1

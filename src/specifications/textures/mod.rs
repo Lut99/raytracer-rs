@@ -7,10 +7,12 @@
 
 // Modules
 pub mod checker;
+pub mod gradient;
 pub mod image;
 
 // Imports
 pub use checker::{Checker, SpatialChecker};
+pub use gradient::Gradient;
 pub use image::Image;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -93,6 +95,8 @@ macro_rules! texture_impl {
 texture_impl!(
     /// A texture rendering as a checkerboard.
     Checker,
+    /// A texture doing a colour gradient.
+    Gradient,
     /// A texture loaded from an image.
     Image(crate::render::image::Error),
     /// A texture rendering as a checkerboard but using spatial coordinates.
