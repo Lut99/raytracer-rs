@@ -10,7 +10,7 @@
   "objects": [
     {
       "Model": {
-        "path": "./tests/scenes/quads.obj",
+        "path": "./quads.obj",
         "format": "obj",
         "pos": [0, 0, 0],
         "scale": 1

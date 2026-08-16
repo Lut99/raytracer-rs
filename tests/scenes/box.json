@@ -10,7 +10,7 @@
   "objects": [
     {
       "Model": {
-        "path": "./tests/scenes/box.obj",
+        "path": "./box.obj",
         "format": "obj",
         "pos": [0, 0, 0],
         "scale": 1

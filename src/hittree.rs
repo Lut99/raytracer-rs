@@ -10,6 +10,7 @@
 //!   fast-access the objects within.
 //
 
+use std::path::Path;
 use std::range::RangeInclusive;
 
 use crate::math::{AABB, Ray};
@@ -256,12 +257,12 @@ impl<T: Loadable> Loadable for BVHNode<T> {
     type Error = T::Error;
 
     #[inline]
-    fn load(&mut self) -> Result<(), Self::Error> {
+    fn load(&mut self, dir: &Path) -> Result<(), Self::Error> {
         match self {
-            Self::Object(_, obj) => obj.load(),
+            Self::Object(_, obj) => obj.load(dir),
             Self::Next(_, lhs, rhs) => {
-                lhs.load()?;
-                rhs.load()?;
+                lhs.load(dir)?;
+                rhs.load(dir)?;
                 Ok(())
             },
         }
@@ -415,9 +416,9 @@ impl<T: Loadable> Loadable for HitTree<T> {
     type Error = T::Error;
 
     #[inline]
-    fn load(&mut self) -> Result<(), Self::Error> {
+    fn load(&mut self, dir: &Path) -> Result<(), Self::Error> {
         match &mut self.elems {
-            Some(node) => node.load(),
+            Some(node) => node.load(dir),
             None => Ok(()),
         }
     }

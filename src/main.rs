@@ -220,7 +220,7 @@ fn main() -> ExitCode {
 
                     // Convert that to a static HitList and load it
                     for (i, obj) in scene.objects.iter_mut().enumerate() {
-                        if let Err(err) = obj.load() {
+                        if let Err(err) = obj.load(image.scene_path.parent().unwrap_or(&image.scene_path)) {
                             error!("{}", toplevel!(("Failed to load external references in object {i}"), err));
                             return ExitCode::FAILURE;
                         }
@@ -410,7 +410,7 @@ fn main() -> ExitCode {
                         pos:    Vec3::zeroes(),
                         scale:  1.0,
                     });
-                    if let Err(err) = model.load() {
+                    if let Err(err) = model.load(&PathBuf::from(env!("CARGO_MANIFEST_DIR"))) {
                         error!("{}", toplevel!(("Failed to load external references in object"), err));
                         return ExitCode::FAILURE;
                     }

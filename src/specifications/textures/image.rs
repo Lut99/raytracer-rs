@@ -8,7 +8,8 @@
 //!   be an image.
 //
 
-use std::path::PathBuf;
+use std::borrow::Cow;
+use std::path::{Path, PathBuf};
 
 use image::ImageFormat;
 use log::debug;
@@ -38,11 +39,15 @@ impl Loadable for Image {
     type Error = crate::render::image::Error;
 
     #[inline(always)]
-    fn load(&mut self) -> Result<(), Self::Error> {
+    fn load(&mut self, dir: &Path) -> Result<(), Self::Error> {
         // Get the image (or quit if we already loaded it)
         match self {
             Self::Loaded(_) => Ok(()),
             Self::ToLoad { path, format } => {
+                // Resolve the path
+                let path: Cow<Path> = if path.is_relative() { Cow::Owned(dir.join(path)) } else { Cow::Borrowed(path) };
+
+                // Load by format
                 let image = match format {
                     Some(fmt) => crate::render::image::Image::from_path(*fmt, &*path)?,
                     None => crate::render::image::Image::from_path_auto(&*path)?,

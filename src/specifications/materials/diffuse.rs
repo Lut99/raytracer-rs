@@ -14,6 +14,7 @@
 //
 
 use std::convert::Infallible;
+use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
@@ -68,7 +69,7 @@ impl Loadable for Diffuse {
     type Error = Infallible;
 
     #[inline]
-    fn load(&mut self) -> Result<(), Self::Error> { Ok(()) }
+    fn load(&mut self, _dir: &Path) -> Result<(), Self::Error> { Ok(()) }
 }
 impl Scattering for Diffuse {
     #[inline]
@@ -91,7 +92,7 @@ impl Loadable for Lambertian {
     type Error = Infallible;
 
     #[inline]
-    fn load(&mut self) -> Result<(), Self::Error> { Ok(()) }
+    fn load(&mut self, _dir: &Path) -> Result<(), Self::Error> { Ok(()) }
 }
 impl Scattering for Lambertian {
     #[inline]
@@ -119,7 +120,7 @@ impl<T: Loadable> Loadable for LambertianTexture<T> {
     type Error = T::Error;
 
     #[inline]
-    fn load(&mut self) -> Result<(), Self::Error> { self.texture.load() }
+    fn load(&mut self, dir: &Path) -> Result<(), Self::Error> { self.texture.load(dir) }
 }
 impl<T: Textured> Scattering for LambertianTexture<T> {
     #[inline]

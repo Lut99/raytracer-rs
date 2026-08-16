@@ -23,6 +23,7 @@ pub mod simple;
 
 // Imports & Exports
 use std::cell::{Ref, RefMut};
+use std::path::Path;
 use std::rc::Rc;
 use std::sync::{Arc, MutexGuard, RwLockReadGuard, RwLockWriteGuard};
 
@@ -133,9 +134,9 @@ macro_rules! material_impl {
             type Error = Error;
 
             #[inline]
-            fn load(&mut self) -> Result<(), Self::Error> {
+            fn load(&mut self, dir: &Path) -> Result<(), Self::Error> {
                 match self {
-                    $(Self::$mat(m) => m.load().map_err(Error::$mat),)*
+                    $(Self::$mat(m) => m.load(dir).map_err(Error::$mat),)*
                 }
             }
         }

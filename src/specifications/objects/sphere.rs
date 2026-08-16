@@ -13,6 +13,7 @@
 //
 
 use std::f64::consts::PI;
+use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
@@ -100,7 +101,7 @@ impl<M: Loadable> Loadable for Sphere<M> {
     type Error = M::Error;
 
     #[inline]
-    fn load(&mut self) -> Result<(), Self::Error> { self.material.load() }
+    fn load(&mut self, dir: &Path) -> Result<(), Self::Error> { self.material.load(dir) }
 }
 impl<M> BoundingBoxable for Sphere<M> {
     #[inline]
@@ -129,7 +130,7 @@ impl<M: Loadable> Loadable for AnimatedSphere<M> {
     type Error = M::Error;
 
     #[inline]
-    fn load(&mut self) -> Result<(), Self::Error> { self.sphere.load() }
+    fn load(&mut self, dir: &Path) -> Result<(), Self::Error> { self.sphere.load(dir) }
 }
 impl<M, A: Animating> BoundingBoxable for AnimatedSphere<M, A> {
     #[inline]

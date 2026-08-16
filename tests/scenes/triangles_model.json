@@ -10,7 +10,7 @@
   "objects": [
     {
       "Model": {
-        "path": "./tests/scenes/triangles.obj",
+        "path": "./triangles.obj",
         "format": "obj",
         "pos": [0, 0, 0],
         "scale": 1

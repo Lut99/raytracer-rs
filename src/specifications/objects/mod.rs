@@ -26,6 +26,7 @@ pub mod translate;
 
 // Imports & Exports
 use std::cell::{Ref, RefMut};
+use std::path::Path;
 use std::rc::Rc;
 use std::sync::{Arc, MutexGuard, RwLockReadGuard, RwLockWriteGuard};
 
@@ -181,9 +182,9 @@ macro_rules! object_impl {
             type Error = Error;
 
             #[inline]
-            fn load(&mut self) -> Result<(), Self::Error> {
+            fn load(&mut self, dir: &Path) -> Result<(), Self::Error> {
                 match self {
-                    $(Self::$obj(o) => o.load().map_err(Error::$obj),)*
+                    $(Self::$obj(o) => o.load(dir).map_err(Error::$obj),)*
                 }
             }
         }

@@ -854,6 +854,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "mtllib"
+version = "0.1.0"
+source = "git+https://github.com/Lut99/mtllib-rs?rev=3672e186157e827962fb23bd55005b218d91641c#3672e186157e827962fb23bd55005b218d91641c"
+dependencies = [
+ "thiserror",
+]
+
+[[package]]
 name = "new_debug_unreachable"
 version = "1.0.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1194,6 +1202,7 @@ dependencies = [
  "image",
  "indicatif",
  "log",
+ "mtllib",
  "obj",
  "parking_lot",
  "paste",

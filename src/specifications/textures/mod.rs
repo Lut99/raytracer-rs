@@ -11,6 +11,8 @@ pub mod gradient;
 pub mod image;
 
 // Imports
+use std::path::Path;
+
 pub use checker::{Checker, SpatialChecker};
 pub use gradient::Gradient;
 pub use image::Image;
@@ -71,9 +73,9 @@ macro_rules! texture_impl {
             type Error = Error;
 
             #[inline]
-            fn load(&mut self) -> Result<(), Self::Error> {
+            fn load(&mut self, dir: &Path) -> Result<(), Self::Error> {
                 match self {
-                    $(Self::$tex(t) => t.load().map_err(Error::$tex),)*
+                    $(Self::$tex(t) => t.load(dir).map_err(Error::$tex),)*
                 }
             }
         }

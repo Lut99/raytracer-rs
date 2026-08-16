@@ -19,7 +19,7 @@
           "LambertianTexture": {
             "texture": {
               "Image": {
-                "path": "./tests/scenes/earthmap.jpg",
+                "path": "./earthmap.jpg",
                 "format": "Jpeg"
               }
             }

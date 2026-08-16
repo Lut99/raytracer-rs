@@ -9,7 +9,7 @@ use std::borrow::Cow;
 use std::ffi::OsStr;
 #[cfg(feature = "obj")]
 use std::fs::File;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use log::debug;
 use obj::Vertex;
@@ -142,7 +142,7 @@ pub enum Model {
 impl Loadable for Model {
     type Error = Error;
 
-    fn load(&mut self) -> Result<(), Self::Error> {
+    fn load(&mut self, dir: &Path) -> Result<(), Self::Error> {
         let Self::ToLoad { path, format, scale, pos } = &*self else { return Ok(()) };
         let (pos, scale): (Vec3, f64) = (*pos, *scale);
 
@@ -166,11 +166,18 @@ impl Loadable for Model {
             #[cfg(feature = "obj")]
             ModelFormat::Obj => {
                 // Open the file
+                let path: Cow<Path> = if path.is_relative() { Cow::Owned(dir.join(path)) } else { Cow::Borrowed(path) };
                 debug!("Loading model {path:?} as .obj file...");
-                let handle = File::open(path).map_err(|err| Error::FileOpen { path: path.clone(), err })?;
+                let handle = match File::open(&path) {
+                    Ok(handle) => handle,
+                    Err(err) => return Err(Error::FileOpen { path: path.into_owned(), err }),
+                };
 
                 // Use our library for this
-                let obj = obj::Obj::from_reader(handle).map_err(|err| Error::Obj { path: path.clone(), err })?;
+                let obj = match obj::Obj::from_reader(handle) {
+                    Ok(handle) => handle,
+                    Err(err) => return Err(Error::Obj { path: path.into_owned(), err }),
+                };
 
                 // Generate a list of Raytracer vertices from this
                 let mut i: usize = 0;
@@ -230,7 +237,7 @@ impl Loadable for Model {
                                         }),
                                     });
                                 },
-                                _ => return Err(Error::NonTriangleFace { path: path.clone(), oname, gname, i, got: face.elems.len() }),
+                                _ => return Err(Error::NonTriangleFace { path: path.into(), oname, gname, i, got: face.elems.len() }),
                             }
                             i += 1;
                         }

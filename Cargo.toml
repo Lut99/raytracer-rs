@@ -22,6 +22,7 @@ serde = { version = "1.0.0", features = ["derive"] }
 serde_json = "1.0.0"
 thiserror = "2.0.0"
 
+mtllib = { git = "https://github.com/Lut99/mtllib-rs", rev = "3672e186157e827962fb23bd55005b218d91641c", optional = true }
 obj = { git = "https://github.com/Lut99/obj-rs", rev = "51b2445052fdf1cacbaaeceef7b60a5607f6baf2", optional = true }
 
 
@@ -30,4 +31,4 @@ default = ["models"]
 
 # Models
 models = ["obj"]
-obj = ["dep:obj"]
+obj = ["dep:mtllib", "dep:obj"]

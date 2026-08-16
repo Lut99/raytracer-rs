@@ -6,6 +6,7 @@
 //
 
 use std::convert::Infallible;
+use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
@@ -42,7 +43,7 @@ impl Loadable for Metal {
     type Error = Infallible;
 
     #[inline]
-    fn load(&mut self) -> Result<(), Self::Error> { Ok(()) }
+    fn load(&mut self, _dir: &Path) -> Result<(), Self::Error> { Ok(()) }
 }
 impl Scattering for Metal {
     #[inline]

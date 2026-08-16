@@ -6,6 +6,8 @@
 //!   transforms.
 //
 
+use std::path::Path;
+
 use serde::{Deserialize, Serialize};
 
 use super::super::Loadable;
@@ -67,7 +69,7 @@ impl<T: Loadable> Loadable for Translate<T> {
     type Error = T::Error;
 
     #[inline]
-    fn load(&mut self) -> Result<(), Self::Error> { self.obj.load() }
+    fn load(&mut self, dir: &Path) -> Result<(), Self::Error> { self.obj.load(dir) }
 }
 impl<T: BoundingBoxable> BoundingBoxable for Translate<T> {
     #[inline]

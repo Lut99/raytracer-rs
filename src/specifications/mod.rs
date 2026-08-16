@@ -23,6 +23,7 @@ pub mod textures;
 
 // Imports
 use std::error::Error;
+use std::path::Path;
 
 
 /***** LIBRARY *****/
@@ -34,7 +35,11 @@ pub trait Loadable {
     ///
     /// After execution, it should be valid for rendering.
     ///
+    /// # Arguments
+    /// - `dir`: The directory in which the file defining the something exists. This might be used
+    ///   to resolve relative paths.
+    ///
     /// # Errors
     /// This function can error if we failed to find -or load- the external file.
-    fn load(&mut self) -> Result<(), Self::Error>;
+    fn load(&mut self, dir: &Path) -> Result<(), Self::Error>;
 }

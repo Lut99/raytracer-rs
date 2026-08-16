@@ -5,6 +5,8 @@
 //!   Implements some planar primitives like quads and (importantly!) vertices.
 //
 
+use std::path::Path;
+
 use serde::{Deserialize, Serialize};
 
 use super::super::Loadable;
@@ -112,7 +114,7 @@ impl<M: Loadable> Loadable for Triangle<M> {
     type Error = M::Error;
 
     #[inline]
-    fn load(&mut self) -> Result<(), Self::Error> { self.material.load() }
+    fn load(&mut self, dir: &Path) -> Result<(), Self::Error> { self.material.load(dir) }
 }
 impl<M> BoundingBoxable for Triangle<M> {
     #[inline]
@@ -162,7 +164,7 @@ impl<M: Loadable> Loadable for Quad<M> {
     type Error = M::Error;
 
     #[inline]
-    fn load(&mut self) -> Result<(), Self::Error> { self.material.load() }
+    fn load(&mut self, dir: &Path) -> Result<(), Self::Error> { self.material.load(dir) }
 }
 impl<M> BoundingBoxable for Quad<M> {
     #[inline]

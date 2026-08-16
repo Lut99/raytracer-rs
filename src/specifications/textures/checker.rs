@@ -6,6 +6,7 @@
 //
 
 use std::convert::Infallible;
+use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
@@ -51,7 +52,7 @@ impl Loadable for SpatialChecker {
     type Error = Infallible;
 
     #[inline(always)]
-    fn load(&mut self) -> Result<(), Self::Error> {
+    fn load(&mut self, _dir: &Path) -> Result<(), Self::Error> {
         /* No op */
         Ok(())
     }
@@ -79,7 +80,7 @@ impl Loadable for Checker {
     type Error = Infallible;
 
     #[inline(always)]
-    fn load(&mut self) -> Result<(), Self::Error> {
+    fn load(&mut self, _dir: &Path) -> Result<(), Self::Error> {
         /* No op */
         Ok(())
     }
