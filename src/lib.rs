@@ -11,8 +11,7 @@
 //  Description:
 //!   A new attempt at writing a simple raytracer. This time, no fumbling
 //!   about with real-time stuff, but instead creating a good-old, offline
-//!   renderer. Based on
-//!   <https://raytracing.github.io/>.
+//!   renderer. Based on <https://raytracing.github.io/>.
 //
 
 // Declare the library modules
