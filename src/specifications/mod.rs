@@ -24,6 +24,7 @@ pub mod textures;
 // Imports
 use std::cell::RefMut;
 use std::error::Error;
+use std::path::Path;
 use std::sync::{MutexGuard, RwLockWriteGuard};
 
 
@@ -35,7 +36,7 @@ macro_rules! loadable_ptr_impl {
             type Error = <T as Loadable>::Error;
 
             #[inline]
-            fn load(&mut self) -> Result<(), Self::Error> { <T as Loadable>::load(self) }
+            fn load(&mut self, dir: &Path) -> Result<(), Self::Error> { <T as Loadable>::load(self, dir) }
         }
     };
     ($ty:ty) => {
@@ -43,7 +44,7 @@ macro_rules! loadable_ptr_impl {
             type Error = <T as Loadable>::Error;
 
             #[inline]
-            fn load(&mut self) -> Result<(), Self::Error> { <T as Loadable>::load(self) }
+            fn load(&mut self, dir: &Path) -> Result<(), Self::Error> { <T as Loadable>::load(self, dir) }
         }
     };
 }

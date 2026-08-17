@@ -188,8 +188,8 @@ macro_rules! object_impl {
             #[inline]
             fn load(&mut self, dir: &Path) -> Result<(), Self::Error> {
                 match self {
-                    $(Self::$obj(o) => o.load().map_err(Error::$obj),)*
-                    Self::Translate(t) => t.load().map_err(Box::new).map_err(Error::Translate),
+                    $(Self::$obj(o) => o.load(dir).map_err(Error::$obj),)*
+                    Self::Translate(t) => t.load(dir).map_err(Box::new).map_err(Error::Translate),
                 }
             }
         }

@@ -947,7 +947,7 @@ dependencies = [
 [[package]]
 name = "obj"
 version = "0.1.0"
-source = "git+https://github.com/Lut99/obj-rs?rev=87c80a8ce55e052bd50f5a47f18fe464b2ec3bd9#87c80a8ce55e052bd50f5a47f18fe464b2ec3bd9"
+source = "git+https://github.com/Lut99/obj-rs?rev=c8a1f4dfd9866b6c9201712edd0b3e046a43d8a7#c8a1f4dfd9866b6c9201712edd0b3e046a43d8a7"
 dependencies = [
  "obj-tokenizer",
  "thiserror",

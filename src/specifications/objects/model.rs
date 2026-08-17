@@ -25,6 +25,24 @@ use super::plane::Triag;
 use super::{BoundingBoxable, HitRecord, Hittable};
 use crate::hittree::HitTree;
 use crate::math::{AABB, Colour, Ray, Vec3};
+use crate::specifications::materials::LambertianTexture;
+use crate::specifications::textures::{SpatialChecker, Texture};
+
+
+/***** CONSTANTS *****/
+/// Default, gray material.
+pub const DEFAULT_MAT: Material = Material::Lambertian(Lambertian { colour: Colour { r: 0.5, g: 0.5, b: 0.5, a: 1.0 } });
+/// Checkered material for when the material was unknown
+pub const UNKNOWN_MAT: Material = Material::LambertianTexture(LambertianTexture {
+    texture: Texture::SpatialChecker(SpatialChecker {
+        scale: 0.35,
+        black: Colour { r: 0.0, g: 0.0, b: 0.0, a: 1.0 },
+        white: Colour { r: 0.0, g: 1.0, b: 1.0, a: 1.0 },
+    }),
+});
+
+
+
 
 
 /***** ERRORS *****/
@@ -148,7 +166,7 @@ pub enum Model {
 impl Loadable for Model {
     type Error = Error;
 
-    fn load(&mut self) -> Result<(), Self::Error> {
+    fn load(&mut self, dir: &Path) -> Result<(), Self::Error> {
         let Self::ToLoad { path, format } = &*self else { return Ok(()) };
 
         // Determine a format
@@ -180,7 +198,7 @@ impl Loadable for Model {
                     Err(err) => return Err(Error::FileOpen { path: path.into_owned(), err }),
                 };
 
-                // Use our libraries for this
+                // Use our libraries to load everything
                 let obj = match obj::Obj::from_reader(handle) {
                     Ok(handle) => handle,
                     Err(err) => return Err(Error::Obj { path: path.into_owned(), err }),
@@ -203,11 +221,28 @@ impl Loadable for Model {
                     mtls.extend(mtl.mtls);
                 }
 
+                // Generate materials from the loaded ones
+                let mtls: HashMap<String, Material> = mtls
+                    .into_iter()
+                    .map(|(name, mtl)| {
+                        // Note: very narrow, extend as we go
+                        if let Some(kd) = mtl.color_diffuse {
+                            (name, Material::Lambertian(Lambertian { colour: Colour::new(kd.r, kd.g, kd.b, 1.0) }))
+                        } else {
+                            panic!("Unsupported coloring on material {name:?}");
+                        }
+                    })
+                    .collect();
+
                 // Generate a list of Raytracer vertices from this
                 let mut i: usize = 0;
-                let mut triangles = Vec::with_capacity(obj.objs.values().map(|o| o.faces.values().map(|g| g.faces.len()).sum::<usize>()).sum());
+                let mut groups: Vec<LoadedGroup> = Vec::with_capacity(obj.objs.values().map(|o| o.faces.len()).sum::<usize>());
                 for (oname, obj) in obj.objs {
-                    for (gname, group) in obj.faces {
+                    for group in obj.faces {
+                        if group.faces.is_empty() {
+                            continue;
+                        }
+                        let mut triags = Vec::with_capacity(group.faces.len());
                         for face in group.faces {
                             // Get the three vertices for this face and turn it into a triangle
                             match face.elems.as_slice() {
@@ -218,7 +253,7 @@ impl Loadable for Model {
                                         vertex_get(&obj.vertices, v3.vertex)?,
                                     ];
                                     let [v1, v2, v3] = [Vec3::new(v1.x, v1.y, v1.z), Vec3::new(v2.x, v2.y, v2.z), Vec3::new(v3.x, v3.y, v3.z)];
-                                    triangles.push(Triag { pos: v1, u: v2 - v1, v: v3 - v1 });
+                                    triags.push(Triag { pos: v1, u: v2 - v1, v: v3 - v1 });
                                 },
                                 [v1, v2, v3, v4] => {
                                     // Get the vertex equivalent
@@ -237,28 +272,26 @@ impl Loadable for Model {
 
                                     // Split it into two triangles and add them
                                     let sides = split_four_into_triangles([v1, v2, v3, v4]);
-                                    triangles.push(Triag { pos: sides[0][0], u: sides[0][1] - sides[0][0], v: sides[0][2] - sides[0][0] });
-                                    triangles.push(Triag { pos: sides[1][0], u: sides[1][1] - sides[1][0], v: sides[1][2] - sides[1][0] });
+                                    triags.push(Triag { pos: sides[0][0], u: sides[0][1] - sides[0][0], v: sides[0][2] - sides[0][0] });
+                                    triags.push(Triag { pos: sides[1][0], u: sides[1][1] - sides[1][0], v: sides[1][2] - sides[1][0] });
                                 },
-                                _ => return Err(Error::NonTriangleFace { path: path.into(), oname, gname, i, got: face.elems.len() }),
+                                _ => return Err(Error::NonTriangleFace { path: path.into(), oname, gname: None, i, got: face.elems.len() }),
                             }
                             i += 1;
                         }
+                        groups.push(LoadedGroup {
+                            triags: HitTree::with_objs(triags, (0..=1).into()),
+                            mat:    group.material.as_ref().map(|m| mtls.get(m).unwrap_or(&UNKNOWN_MAT)).unwrap_or(&DEFAULT_MAT).clone(),
+                        });
                     }
                 }
 
                 // When loaded, replace us with the loaded model
-                debug!("Succesfully loaded model {path:?} with {i} faces ({} triangles)", triangles.len());
+                debug!("Succesfully loaded model {path:?} with {i} faces ({} triangles)", groups.iter().map(|g| g.triags.len()).sum::<usize>());
                 // for t in &triangles {
                 //     println!("{{ {}, {} x {} }}", t.pos, t.u, t.v);
                 // }
-                *self = Self::Loaded(LoadedModel {
-                    aabb:   triangles.iter().map(|t| t.aabb(0)).collect(),
-                    groups: vec![LoadedGroup {
-                        triags: HitTree::with_objs(triangles, (0..=1).into()),
-                        mat:    Material::Lambertian(Lambertian { colour: Colour::new(fastrand::f64(), fastrand::f64(), fastrand::f64(), 1.0) }),
-                    }],
-                });
+                *self = Self::Loaded(LoadedModel { aabb: groups.iter().map(|t| t.aabb(0)).collect(), groups });
                 Ok(())
             },
         }
