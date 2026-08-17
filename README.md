@@ -69,6 +69,8 @@ Some images that we've rendered as based on the tutorial:
 
 ![An image showing some spheres, one of which is the earth.](./images/earth.png)
 
+![An image showing some shapes, a couple of which are light sources.](./images/first_lights.png)
+
 
 ## Contribution
 Note that this is mostly a hobby project for myself, not meant for distribution or serious use. That said, if you like to contribute to this project or use it for something, feel free to let me know by dropping an [issue](https://gihub.com/Lut99/raytracer-rs/issues) or creating a [pull request](https://github.com/Lut99/raytracer-rs/pulls).

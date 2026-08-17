@@ -83,6 +83,13 @@ impl<M> HitRecord<M> {
 
 // Raytracer
 impl<M: Scattering> HitRecord<M> {
+    /// Emits from the internal material using the internal [`HitData`].
+    ///
+    /// # Returns
+    /// A [`Colour`] of the light being emitted. Is black if this emits nothing.
+    #[inline]
+    pub fn emitted(&self) -> Colour { self.mat.emitted(self.data.uv, self.data.hit) }
+
     /// Scatters the internal material using the internal [`HitData`].
     ///
     /// # Arguments

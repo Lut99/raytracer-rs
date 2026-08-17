@@ -18,10 +18,20 @@ use serde::{Deserialize, Serialize};
 
 use super::objects::Object;
 use crate::common::file::{impl_toml_from_path, impl_toml_from_string, impl_toml_to_path, impl_toml_to_string};
-use crate::math::{Camera, Vec3};
+use crate::math::{Camera, Colour, Vec3};
 
 
 /***** HELPER FUNCTIONS *****/
+/// Returns the default refraction index of the world.
+#[inline]
+pub const fn default_environment_air_refraction_index() -> f64 { 1.0 }
+
+/// Returns the default background of the world.
+#[inline]
+pub const fn default_environment_background() -> Background { Background::IlluminatedSky }
+
+
+
 /// Returns the default dimensions for a [`CameraInfo`].
 #[inline]
 pub const fn default_camera_info_dims() -> (NonZeroU32, NonZeroU32) {
@@ -70,11 +80,28 @@ fn is_default<T: Default + PartialEq>(obj: &T) -> bool { obj == &T::default() }
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Serialize)]
 pub struct Environment {
     /// The refraction index of the outer world.
+    #[serde(default = "default_environment_air_refraction_index")]
     pub air_refraction_index: f64,
+    /// The background.
+    #[serde(default = "default_environment_background")]
+    pub background: Background,
 }
 impl Default for Environment {
     #[inline]
-    fn default() -> Self { Self { air_refraction_index: 1.0 } }
+    fn default() -> Self { Self { air_refraction_index: default_environment_air_refraction_index(), background: default_environment_background() } }
+}
+
+
+
+/// Defines possible backgrounds.
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Serialize)]
+pub enum Background {
+    /// A custom color.
+    Colour(Colour),
+    /// The default illuminated skybox from the beginning of the book.
+    IlluminatedSky,
+    /// It's a solid black background, like the night sky.
+    None,
 }
 
 

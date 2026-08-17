@@ -28,14 +28,14 @@ use std::rc::Rc;
 use std::sync::{Arc, MutexGuard, RwLockReadGuard, RwLockWriteGuard};
 
 pub use dielectric::{Dielectric, PartialDielectric};
-pub use diffuse::{Diffuse, Lambertian, LambertianTexture};
+pub use diffuse::{Diffuse, DiffuseLight, Lambertian, LambertianTexture};
 pub use metal::Metal;
 use serde::{Deserialize, Serialize};
 pub use simple::{NormalMap, StaticColour};
 use thiserror::Error;
 
 use super::Loadable;
-use crate::math::{Colour, Ray};
+use crate::math::{Colour, Ray, Vec3};
 use crate::specifications::objects::HitData;
 use crate::specifications::scene::Environment;
 
@@ -46,6 +46,9 @@ macro_rules! scattering_ptr_impl {
     ('a, $ty:ty) => {
         impl<'a, T: Scattering> Scattering for $ty {
             #[inline]
+            fn emitted(&self, uv: (f64, f64), p: Vec3) -> Colour { <T as Scattering>::emitted(self, uv, p) }
+
+            #[inline]
             fn scatter(&self, ray: Ray, record: &HitData, env: &Environment) -> (Option<Ray>, Colour) {
                 <T as Scattering>::scatter(self, ray, record, env)
             }
@@ -53,6 +56,9 @@ macro_rules! scattering_ptr_impl {
     };
     ($ty:ty) => {
         impl<T: Scattering> Scattering for $ty {
+            #[inline]
+            fn emitted(&self, uv: (f64, f64), p: Vec3) -> Colour { <T as Scattering>::emitted(self, uv, p) }
+
             #[inline]
             fn scatter(&self, ray: Ray, record: &HitData, env: &Environment) -> (Option<Ray>, Colour) {
                 <T as Scattering>::scatter(self, ray, record, env)
@@ -68,6 +74,21 @@ macro_rules! scattering_ptr_impl {
 /***** INTERFACES *****/
 /// The Scattering trait implements any material that we can use to cover an object.
 pub trait Scattering {
+    /// Returns the colour of any light emitted by this material.
+    ///
+    /// # Arguments
+    /// - `uv`: A pair of texture coordinates on the object to return the color of the object's
+    ///   light at that spot.
+    /// - `p`: A spatial position of the object's hitted surface.
+    ///
+    /// # Returns
+    /// A [`Colour`] of the light being emitted. Is black if this emits nothing.
+    #[inline]
+    fn emitted(&self, _uv: (f64, f64), _p: Vec3) -> Colour {
+        /* Standard impl: just black */
+        Colour::BLACK
+    }
+
     /// Bounces (or reflects) a ray from this material.
     ///
     /// # Arguments
@@ -80,7 +101,10 @@ pub trait Scattering {
     /// # Returns
     /// A tuple that represents the bounced [`Ray`] and the attenuated colour from this bounce. If
     /// [`None`] is returned for the [`Ray`], then no more bounce is necessary.
-    fn scatter(&self, ray: Ray, record: &HitData, env: &Environment) -> (Option<Ray>, Colour);
+    fn scatter(&self, _ray: Ray, _record: &HitData, _env: &Environment) -> (Option<Ray>, Colour) {
+        /* Standard impl: no scattering */
+        (None, Colour::BLACK)
+    }
 }
 
 // Pointer-like impls
@@ -142,6 +166,13 @@ macro_rules! material_impl {
         }
         impl Scattering for Material {
             #[inline]
+            fn emitted(&self, uv: (f64, f64), p: Vec3) -> Colour {
+                match self {
+                    $(Self::$mat(m) => m.emitted(uv, p),)*
+                }
+            }
+
+            #[inline]
             fn scatter(&self, ray: Ray, record: &HitData, env: &Environment) -> (Option<Ray>, Colour) {
                 match self {
                     $(Self::$mat(m) => m.scatter(ray, record, env),)*
@@ -160,6 +191,8 @@ material_impl!(
     Dielectric,
     /// A material randomly scattering rays, imperfectly.
     Diffuse,
+    /// A meterial emitted light randomly.
+    DiffuseLight,
     /// A material randomly scattering rays.
     Lambertian,
     /// A material randomly scattering rays but with a texture.

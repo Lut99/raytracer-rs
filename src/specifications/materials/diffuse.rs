@@ -82,6 +82,25 @@ impl Scattering for Diffuse {
 
 
 
+/// A diffuse material that emits light in all directions instead of scattering it.
+#[derive(Clone, Copy, Debug, Deserialize, Serialize)]
+pub struct DiffuseLight {
+    /// The colour of the light.
+    pub colour: Colour,
+}
+impl Loadable for DiffuseLight {
+    type Error = Infallible;
+
+    #[inline]
+    fn load(&mut self, _dir: &Path) -> Result<(), Self::Error> { Ok(()) }
+}
+impl Scattering for DiffuseLight {
+    #[inline]
+    fn emitted(&self, _uv: (f64, f64), _p: Vec3) -> Colour { self.colour }
+}
+
+
+
 /// A diffuse material with truer scattering.
 #[derive(Clone, Copy, Debug, Deserialize, Serialize)]
 pub struct Lambertian {

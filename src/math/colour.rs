@@ -38,6 +38,11 @@ pub struct Colour {
     pub a: f64,
 }
 
+impl Colour {
+    /// Black colour.
+    pub const BLACK: Self = Self { r: 0.0, g: 0.0, b: 0.0, a: 1.0 };
+}
+
 impl Default for Colour {
     #[inline]
     fn default() -> Self { Self::zeroes() }
