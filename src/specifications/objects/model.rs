@@ -42,6 +42,13 @@ pub enum Error {
     #[error("Index {got} overflows for list of length {len}")]
     IndexOverflow { got: isize, len: usize },
     #[cfg(feature = "obj")]
+    #[error("Failed to load file {path:?} as .mtl file")]
+    Mtllib {
+        path: PathBuf,
+        #[source]
+        err:  mtllib::Error,
+    },
+    #[cfg(feature = "obj")]
     #[error("Face {i}{}{} in file {path:?} is not a face of 3/4 vertices (i.e., one or two triangle(s)), but rather {got}", if let Some(oname) = oname {format!(" in object {oname:?}")} else { String::new()}, if let Some(gname) = gname {format!(" in group {gname:?}")} else { String::new()})]
     NonTriangleFace { path: PathBuf, oname: Option<String>, gname: Option<String>, i: usize, got: usize },
     #[cfg(feature = "obj")]
@@ -166,6 +173,8 @@ impl Loadable for Model {
             #[cfg(feature = "obj")]
             ModelFormat::Obj => {
                 // Open the file
+
+                use std::collections::HashMap;
                 let path: Cow<Path> = if path.is_relative() { Cow::Owned(dir.join(path)) } else { Cow::Borrowed(path) };
                 debug!("Loading model {path:?} as .obj file...");
                 let handle = match File::open(&path) {
@@ -173,11 +182,28 @@ impl Loadable for Model {
                     Err(err) => return Err(Error::FileOpen { path: path.into_owned(), err }),
                 };
 
-                // Use our library for this
+                // Use our libraries for this
                 let obj = match obj::Obj::from_reader(handle) {
                     Ok(handle) => handle,
                     Err(err) => return Err(Error::Obj { path: path.into_owned(), err }),
                 };
+                let mut mtls = HashMap::<String, mtllib::Material>::new();
+                for mtl in &obj.mtllibs {
+                    // Resolve the path
+                    let mtl: Cow<Path> = if mtl.is_relative() { Cow::Owned(dir.join(mtl)) } else { Cow::Borrowed(mtl) };
+
+                    // Attempt to load the file
+                    debug!("Loading model {mtl:?} as .mtllib file...");
+                    let handle = match File::open(&mtl) {
+                        Ok(handle) => handle,
+                        Err(err) => return Err(Error::FileOpen { path: mtl.into(), err }),
+                    };
+                    let mtl = match mtllib::Mtl::from_reader(handle) {
+                        Ok(mtl) => mtl,
+                        Err(err) => return Err(Error::Mtllib { path: mtl.into(), err }),
+                    };
+                    mtls.extend(mtl.mtls);
+                }
 
                 // Generate a list of Raytracer vertices from this
                 let mut i: usize = 0;

@@ -856,8 +856,9 @@ dependencies = [
 [[package]]
 name = "mtllib"
 version = "0.1.0"
-source = "git+https://github.com/Lut99/mtllib-rs?rev=3672e186157e827962fb23bd55005b218d91641c#3672e186157e827962fb23bd55005b218d91641c"
+source = "git+https://github.com/Lut99/mtllib-rs?rev=b5bf50dede619534ae903b177212ea19dfd9c6b3#b5bf50dede619534ae903b177212ea19dfd9c6b3"
 dependencies = [
+ "obj-tokenizer",
  "thiserror",
 ]
 
@@ -946,7 +947,16 @@ dependencies = [
 [[package]]
 name = "obj"
 version = "0.1.0"
-source = "git+https://github.com/Lut99/obj-rs?rev=51b2445052fdf1cacbaaeceef7b60a5607f6baf2#51b2445052fdf1cacbaaeceef7b60a5607f6baf2"
+source = "git+https://github.com/Lut99/obj-rs?rev=87c80a8ce55e052bd50f5a47f18fe464b2ec3bd9#87c80a8ce55e052bd50f5a47f18fe464b2ec3bd9"
+dependencies = [
+ "obj-tokenizer",
+ "thiserror",
+]
+
+[[package]]
+name = "obj-tokenizer"
+version = "0.1.0"
+source = "git+https://github.com/Lut99/obj-tokenizer-rs?rev=f4016e585a52a3cc489b6580f05f2436398d690a#f4016e585a52a3cc489b6580f05f2436398d690a"
 dependencies = [
  "thiserror",
 ]
