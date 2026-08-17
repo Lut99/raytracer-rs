@@ -22,8 +22,34 @@ pub mod scene;
 pub mod textures;
 
 // Imports
+use std::cell::RefMut;
 use std::error::Error;
-use std::path::Path;
+use std::sync::{MutexGuard, RwLockWriteGuard};
+
+
+/***** HELPER MACROS *****/
+/// Implements pointer-like impls for [`Loadable`].
+macro_rules! loadable_ptr_impl {
+    ('a, $ty:ty) => {
+        impl<'a, T: Loadable> Loadable for $ty {
+            type Error = <T as Loadable>::Error;
+
+            #[inline]
+            fn load(&mut self) -> Result<(), Self::Error> { <T as Loadable>::load(self) }
+        }
+    };
+    ($ty:ty) => {
+        impl<T: Loadable> Loadable for $ty {
+            type Error = <T as Loadable>::Error;
+
+            #[inline]
+            fn load(&mut self) -> Result<(), Self::Error> { <T as Loadable>::load(self) }
+        }
+    };
+}
+
+
+
 
 
 /***** LIBRARY *****/
@@ -43,3 +69,12 @@ pub trait Loadable {
     /// This function can error if we failed to find -or load- the external file.
     fn load(&mut self, dir: &Path) -> Result<(), Self::Error>;
 }
+
+// Pointer-like impls
+loadable_ptr_impl!('a, &'a mut T);
+loadable_ptr_impl!(Box<T>);
+loadable_ptr_impl!('a, RefMut<'a, T>);
+loadable_ptr_impl!('a, RwLockWriteGuard<'a, T>);
+loadable_ptr_impl!('a, MutexGuard<'a, T>);
+loadable_ptr_impl!('a, parking_lot::RwLockWriteGuard<'a, T>);
+loadable_ptr_impl!('a, parking_lot::MutexGuard<'a, T>);

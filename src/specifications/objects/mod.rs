@@ -36,6 +36,7 @@ pub use plane::{Quad, Triangle};
 use serde::{Deserialize, Serialize};
 pub use sphere::{AnimatedSphere, Sphere};
 use thiserror::Error;
+pub use translate::Translate;
 
 use super::Loadable;
 use super::materials::Material;
@@ -150,20 +151,21 @@ hittable_ptr_impl!('a, parking_lot::MutexGuard<'a, T>);
 /***** LIBRARY *****/
 macro_rules! object_impl {
     // Default error type insertion
-    (__ { $(#[$($fattrs:tt)*])* $fobj:ident $(<$fgen:ident>)? $(, $(#[$($rattrs:tt)*])* $robj:ident $(<$rgen:ident>)? $(( $rerrty:ty ))?)* } { $($(#[$($attrs:tt)*])* $obj:ident $(<$gen:ident>)? ( $errty:ty )),* }) => {
-        object_impl!(__ {$($(#[$($rattrs)*])* $robj $(<$rgen>)? $(($rerrty))?),*} { $(#[$($fattrs)*])* $fobj $(<$fgen>)? (::std::convert::Infallible) $(, $(#[$($attrs)*])* $obj $(<$gen>)? ($errty))* });
+    (__ { $(#[$($fattrs:tt)*])* $fobj:ident $({$($fgen:tt)*})? $(, $(#[$($rattrs:tt)*])* $robj:ident $({$($rgen:tt)*})? $(( $rerrty:ty ))?)* } { $($(#[$($attrs:tt)*])* $obj:ident $({$($gen:tt)*})? ( $errty:ty )),* }) => {
+        object_impl!(__ {$($(#[$($rattrs)*])* $robj $({$($rgen)*})? $(($rerrty))?),*} { $(#[$($fattrs)*])* $fobj $({$($fgen)*})? (::std::convert::Infallible) $(, $(#[$($attrs)*])* $obj $({$($gen)*})? ($errty))* });
     };
-    (__ { $(#[$($fattrs:tt)*])* $fobj:ident $(<$fgen:ident>)? ($ferrty:ty) $(, $(#[$($rattrs:tt)*])* $robj:ident $(<$rgen:ident>)? $(( $rerrty:ty ))?)* } { $($(#[$($attrs:tt)*])* $obj:ident $(<$gen:ident>)? ( $errty:ty )),* }) => {
-        object_impl!(__ {$($(#[$($rattrs)*])* $robj $(<$rgen>)? $(($rerrty))?),*} { $(#[$($fattrs)*])* $fobj $(<$fgen>)? ($ferrty) $(, $(#[$($attrs)*])* $obj $(<$gen>)? ($errty))* });
+    (__ { $(#[$($fattrs:tt)*])* $fobj:ident $({$($fgen:tt)*})? ($ferrty:ty) $(, $(#[$($rattrs:tt)*])* $robj:ident $({$($rgen:tt)*})? $(( $rerrty:ty ))?)* } { $($(#[$($attrs:tt)*])* $obj:ident $({$($gen:tt)*})? ( $errty:ty )),* }) => {
+        object_impl!(__ {$($(#[$($rattrs)*])* $robj $({$($rgen)*})? $(($rerrty))?),*} { $(#[$($fattrs)*])* $fobj $({$($fgen)*})? ($ferrty) $(, $(#[$($attrs)*])* $obj $({$($gen)*})? ($errty))* });
     };
 
 
     // Actual impl
-    (__ {} { $($(#[$($attrs:tt)*])* $obj:ident $(<$gen:ident>)? ( $errty:ty )),* }) => {
+    (__ {} { $($(#[$($attrs:tt)*])* $obj:ident $({$($gen:tt)*})? ( $errty:ty )),* }) => {
         /// Errors occurring when loading an object.
         #[derive(Debug, Error)]
         pub enum Error {
             $(#[error("{0}")] $obj(#[source] $errty),)*
+            #[error("{0}")] Translate(#[source] Box<Self>),
         }
 
 
@@ -174,7 +176,9 @@ macro_rules! object_impl {
         /// - `M`: The type of material used.
         #[derive(Clone, Debug, Deserialize, Serialize)]
         pub enum Object {
-            $($(#[$($attrs)*])* $obj($obj$(<$gen>)?),)*
+            $($(#[$($attrs)*])* $obj($obj$(<$($gen)*>)?),)*
+            /// A translation.
+            Translate(Translate<Box<Self>>),
         }
 
         // Interface
@@ -184,7 +188,8 @@ macro_rules! object_impl {
             #[inline]
             fn load(&mut self, dir: &Path) -> Result<(), Self::Error> {
                 match self {
-                    $(Self::$obj(o) => o.load(dir).map_err(Error::$obj),)*
+                    $(Self::$obj(o) => o.load().map_err(Error::$obj),)*
+                    Self::Translate(t) => t.load().map_err(Box::new).map_err(Error::Translate),
                 }
             }
         }
@@ -193,6 +198,7 @@ macro_rules! object_impl {
             fn aabb(&self, t_us: u64) -> AABB {
                 match self {
                     $(Self::$obj(o) => o.aabb(t_us),)*
+                    Self::Translate(t) => t.aabb(t_us),
                 }
             }
         }
@@ -201,27 +207,28 @@ macro_rules! object_impl {
             fn hit(&self, ray: Ray, t_min: f64, t_max: f64, env: &Environment) -> Option<HitRecord<&Material>> {
                 match self {
                     $(Self::$obj(o) => o.hit(ray, t_min, t_max, env),)*
+                    Self::Translate(t) => t.hit(ray, t_min, t_max, env),
                 }
             }
         }
     };
 
     // Public interface
-    ($($(#[$($attrs:tt)*])* $obj:ident $(<$gen:ident>)? $(( $errty:ty ))?),* $(,)?) => {
-        object_impl!(__ { $($(#[$($attrs)*])? $obj $(<$gen>)? $(($errty))?),* } {});
+    ($($(#[$($attrs:tt)*])* $obj:ident $({$($gen:tt)*})? $(( $errty:ty ))?),* $(,)?) => {
+        object_impl!(__ { $($(#[$($attrs)*])? $obj $({$($gen)*})? $(($errty))?),* } {});
     };
 }
 object_impl!(
-    // Flexible-material objects
     /// A regular sphere but animated.
-    AnimatedSphere<Material>(super::materials::Error),
+    AnimatedSphere{Material}(super::materials::Error),
     /// A regular 3D circle.
-    Sphere<Material>(super::materials::Error),
+    Sphere{Material}(super::materials::Error),
     /// A four-point shape on a 2D-plane.
-    Quad<Material>(super::materials::Error),
+    Quad{Material}(super::materials::Error),
+    /// A translation.
+    // Translate{Box<Object>}(Box<Error>),
     /// A three-point shape on a 2D-plane.
-    Triangle<Material>(super::materials::Error),
-    // Fixed-material objects
+    Triangle{Material}(super::materials::Error),
     /// A complex, triangle-based model.
     Model(model::Error),
 );

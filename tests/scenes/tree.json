@@ -8,11 +8,14 @@
   },
   "objects": [
     {
-      "Model": {
-        "path": "./lowpoly_tree_sample.obj",
-        "format": "obj",
-        "pos": [0, 0, 0],
-        "scale": 1
+      "Translate": {
+        "pos": [0, -2, 0],
+        "obj": {
+          "Model": {
+            "path": "./tests/scenes/lowpoly_tree_sample.obj",
+            "format": "obj"
+          }
+        }
       }
     }
   ]

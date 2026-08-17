@@ -93,17 +93,56 @@ fn plane_hit(pos: Vec3, u: Vec3, v: Vec3, ray: Ray, t_min: f64, t_max: f64) -> O
 
 
 
+/***** HELPERS *****/
+/// Defines the internals of [`Triangle`] without the material.
+#[derive(Clone, Copy, Debug, Deserialize, Serialize)]
+pub struct Triag {
+    /// The position of the bottom-left corner of the triangle.
+    pub pos: Vec3,
+    /// The "X-axis" of the triangle's plane.
+    pub u:   Vec3,
+    /// The "Y-axis" of the triangle's plane.
+    pub v:   Vec3,
+}
+
+// Interface
+impl BoundingBoxable for Triag {
+    #[inline]
+    fn aabb(&self, _t_us: u64) -> AABB {
+        // For a triangle, we need to make sure we always have the biggest AABB
+        AABB::from_points(self.pos, self.pos + self.u)
+            .surround(AABB::from_points(self.pos, self.pos + self.v))
+            .surround(AABB::from_points(self.pos + self.u, self.pos + self.v))
+    }
+}
+impl Hittable<()> for Triag {
+    #[inline]
+    fn hit(&self, ray: Ray, t_min: f64, t_max: f64, _env: &Environment) -> Option<HitRecord<&()>> {
+        // Compute a hit with this vertex' plane
+        let rec: HitData = plane_hit(self.pos, self.u, self.v, ray, t_min, t_max)?;
+
+        // Now checking if it's inside the primitive is trivial; since we used `u` and `v` already,
+        // the alpha and beta are scaled 0-1. Hence:
+        if rec.uv.0 >= 0.0 && rec.uv.1 >= 0.0 && rec.uv.0 + rec.uv.1 <= 1.0 {
+            // The alpha and beta now form the uv, done!
+            Some(HitRecord { mat: &(), data: rec })
+        } else {
+            None
+        }
+    }
+}
+
+
+
+
+
 /***** LIBRARY *****/
 /// Implements a triangle but given by a point and two vectors.
 #[derive(Clone, Copy, Debug, Deserialize, Serialize)]
 pub struct Triangle<M> {
-    /// The position of the bottom-left corner of the Triangle.
-    pub pos: Vec3,
-    /// The "X-axis" of the Triangle's plane.
-    pub u:   Vec3,
-    /// The "Y-axis" of the Triangle's plane.
-    pub v:   Vec3,
-
+    /// The inners of the triangle.
+    #[serde(flatten)]
+    pub triag:    Triag,
     /// The material that scatters rays hitting the Triangle.
     #[serde(alias = "mat")]
     pub material: M,
@@ -118,27 +157,12 @@ impl<M: Loadable> Loadable for Triangle<M> {
 }
 impl<M> BoundingBoxable for Triangle<M> {
     #[inline]
-    fn aabb(&self, _t_us: u64) -> AABB {
-        // For a triangle, we need to make sure we always have the biggest AABB
-        AABB::from_points(self.pos, self.pos + self.u)
-            .surround(AABB::from_points(self.pos, self.pos + self.v))
-            .surround(AABB::from_points(self.pos + self.u, self.pos + self.v))
-    }
+    fn aabb(&self, t_us: u64) -> AABB { self.triag.aabb(t_us) }
 }
 impl<M> Hittable<M> for Triangle<M> {
     #[inline]
-    fn hit(&self, ray: Ray, t_min: f64, t_max: f64, _env: &Environment) -> Option<HitRecord<&M>> {
-        // Compute a hit with this vertex' plane
-        let rec: HitData = plane_hit(self.pos, self.u, self.v, ray, t_min, t_max)?;
-
-        // Now checking if it's inside the primitive is trivial; since we used `u` and `v` already,
-        // the alpha and beta are scaled 0-1. Hence:
-        if rec.uv.0 >= 0.0 && rec.uv.1 >= 0.0 && rec.uv.0 + rec.uv.1 <= 1.0 {
-            // The alpha and beta now form the uv, done!
-            Some(HitRecord { mat: &self.material, data: rec })
-        } else {
-            None
-        }
+    fn hit(&self, ray: Ray, t_min: f64, t_max: f64, env: &Environment) -> Option<HitRecord<&M>> {
+        self.triag.hit(ray, t_min, t_max, env).map(|rec| HitRecord { mat: &self.material, data: rec.data })
     }
 }
 

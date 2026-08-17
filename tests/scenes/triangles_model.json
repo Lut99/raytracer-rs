@@ -9,11 +9,14 @@
   },
   "objects": [
     {
-      "Model": {
-        "path": "./triangles.obj",
-        "format": "obj",
+      "Translate": {
         "pos": [0, 0, 0],
-        "scale": 1
+        "obj": {
+          "Model": {
+            "path": "./tests/scenes/triangles.obj",
+            "format": "obj"
+          }
+        }
       }
     }
   ]

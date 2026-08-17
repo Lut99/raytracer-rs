@@ -31,8 +31,7 @@ use raytracer::specifications::Loadable as _;
 use raytracer::specifications::animations::{Animation, Vertical};
 use raytracer::specifications::features::{Features, FeaturesCli, FeaturesFile};
 use raytracer::specifications::materials::{Dielectric, Lambertian, LambertianTexture, Material, Metal};
-use raytracer::specifications::objects::model::ModelFormat;
-use raytracer::specifications::objects::{AnimatedSphere, Model, Object, Sphere};
+use raytracer::specifications::objects::{AnimatedSphere, Object, Sphere};
 use raytracer::specifications::scene::{Environment, SceneFile};
 use raytracer::specifications::textures::{SpatialChecker, Texture};
 
@@ -107,9 +106,6 @@ enum RenderSubcommand {
     /// Renders the cover of the book.
     #[clap(name = "cover", alias = "book", about = "Renders the cover of the Raytracing In One Weekend book.")]
     Cover(RenderCoverArguments),
-    /// Renders a test of models.
-    #[clap(name = "model_test", about = "Renders a test of models.")]
-    ModelTest(RenderModelTestArguments),
 }
 /// Defines the arguments for the `render image` subcommand.
 #[derive(Debug, Parser)]
@@ -130,13 +126,6 @@ struct RenderCoverArguments {
     /// The path to the image file to output.
     #[clap(name = "OUTPUT_PATH", default_value = "./image.png", help = "The path to write the rendered image to.")]
     output_path:  PathBuf,
-}
-/// Defines arguments for the `render model_test` subcommand.
-#[derive(Debug, Parser)]
-struct RenderModelTestArguments {
-    /// The path to the image file to output.
-    #[clap(name = "OUTPUT_PATH", default_value = "./image.png", help = "The path to write the rendered image to.")]
-    output_path: PathBuf,
 }
 
 /// Defines the arguments for the `generate` subcommand.
@@ -397,70 +386,6 @@ fn main() -> ExitCode {
                     // Now write the image to disk
                     if let Err(err) = output.to_path(&cover.output_path, render.fix_dirs) {
                         error!("Failed to save rendered image to '{}': {}", cover.output_path.display(), err);
-                        return ExitCode::FAILURE;
-                    }
-                    ExitCode::SUCCESS
-                },
-
-                RenderSubcommand::ModelTest(model_test) => {
-                    // Run the model
-                    let mut model = Object::Model(Model::ToLoad {
-                        path:   "tests/scenes/triangles.obj".into(),
-                        format: Some(ModelFormat::Obj),
-                        pos:    Vec3::zeroes(),
-                        scale:  1.0,
-                    });
-                    if let Err(err) = model.load(&PathBuf::from(env!("CARGO_MANIFEST_DIR"))) {
-                        error!("{}", toplevel!(("Failed to load external references in object"), err));
-                        return ExitCode::FAILURE;
-                    }
-                    let list: HitTree = HitTree::with_objs([model], (0..=1).into());
-                    let dims: (u32, u32) = if let Some(dims) = render.dims { (dims.0.into(), dims.1.into()) } else { (800, 600) };
-                    let cam = Camera::new(dims, 100, 80.0, 0.0, 1.0, 1, Vec3::new(0.0, 0.0, 9.0), Vec3::new(0.0, 0.0, 0.0), Vec3::new(0.0, 1.0, 0.0));
-
-                    // Now render based on the backend
-                    let output: Image = match render.backend {
-                        RenderBackend::SingleThreaded => {
-                            debug!("Rendering with single-threaded backend");
-                            let renderer: SingleThreadRenderer = SingleThreadRenderer::new(features, true);
-                            renderer.render_frame(&list, &cam, &Environment::default()).unwrap()
-                        },
-
-                        RenderBackend::MultiThreaded => {
-                            debug!("Rendering with multi-threaded backend");
-
-                            // Read the given file, if any
-                            let config: MultiThreadRendererConfig = match render.backend_config {
-                                Some(path) => {
-                                    debug!("Loading multi-threaded backend file '{}'...", path.display());
-                                    match MultiThreadRendererConfig::from_path(path) {
-                                        Ok(config) => config,
-                                        Err(err) => {
-                                            error!("{}", err.trace());
-                                            return ExitCode::FAILURE;
-                                        },
-                                    }
-                                },
-                                None => Default::default(),
-                            };
-
-                            // Create the backend
-                            let renderer: MultiThreadRenderer = match MultiThreadRenderer::new(features, true, config) {
-                                Ok(renderer) => renderer,
-                                Err(err) => {
-                                    error!("{}", err.trace());
-                                    return ExitCode::FAILURE;
-                                },
-                            };
-
-                            // Now render with this backend
-                            renderer.render_frame(&list, &cam, &Environment::default()).unwrap()
-                        },
-                    };
-
-                    // Now write the image to disk
-                    if let Err(err) = output.to_path(&model_test.output_path, render.fix_dirs) {
-                        error!("Failed to save rendered image to '{}': {}", model_test.output_path.display(), err);
                         return ExitCode::FAILURE;
                     }
                     ExitCode::SUCCESS

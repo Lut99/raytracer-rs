@@ -21,8 +21,7 @@ use super::super::Loadable;
 use super::super::materials::Lambertian;
 use super::super::materials::Material;
 use super::super::scene::Environment;
-use super::plane::Triangle;
-use super::translate::Translate;
+use super::plane::Triag;
 use super::{BoundingBoxable, HitRecord, Hittable};
 use crate::hittree::HitTree;
 use crate::math::{AABB, Colour, Ray, Vec3};
@@ -142,16 +141,15 @@ pub enum Model {
     #[serde(skip)]
     Loaded(LoadedModel),
     /// A reference to a to-be-loaded model.
-    ToLoad { path: PathBuf, format: Option<ModelFormat>, pos: Vec3, scale: f64 },
+    ToLoad { path: PathBuf, format: Option<ModelFormat> },
 }
 
 // Interface
 impl Loadable for Model {
     type Error = Error;
 
-    fn load(&mut self, dir: &Path) -> Result<(), Self::Error> {
-        let Self::ToLoad { path, format, scale, pos } = &*self else { return Ok(()) };
-        let (pos, scale): (Vec3, f64) = (*pos, *scale);
+    fn load(&mut self) -> Result<(), Self::Error> {
+        let Self::ToLoad { path, format } = &*self else { return Ok(()) };
 
         // Determine a format
         let fmt: ModelFormat = format
@@ -220,14 +218,7 @@ impl Loadable for Model {
                                         vertex_get(&obj.vertices, v3.vertex)?,
                                     ];
                                     let [v1, v2, v3] = [Vec3::new(v1.x, v1.y, v1.z), Vec3::new(v2.x, v2.y, v2.z), Vec3::new(v3.x, v3.y, v3.z)];
-                                    triangles.push(Triangle {
-                                        pos: scale * v1,
-                                        u: scale * (v2 - v1),
-                                        v: scale * (v3 - v1),
-                                        material: Material::Lambertian(Lambertian {
-                                            colour: Colour::new(fastrand::f64(), fastrand::f64(), fastrand::f64(), 1.0),
-                                        }),
-                                    });
+                                    triangles.push(Triag { pos: v1, u: v2 - v1, v: v3 - v1 });
                                 },
                                 [v1, v2, v3, v4] => {
                                     // Get the vertex equivalent
@@ -246,22 +237,8 @@ impl Loadable for Model {
 
                                     // Split it into two triangles and add them
                                     let sides = split_four_into_triangles([v1, v2, v3, v4]);
-                                    triangles.push(Triangle {
-                                        pos: scale * sides[0][0],
-                                        u: scale * (sides[0][1] - sides[0][0]),
-                                        v: scale * (sides[0][2] - sides[0][0]),
-                                        material: Material::Lambertian(Lambertian {
-                                            colour: Colour::new(fastrand::f64(), fastrand::f64(), fastrand::f64(), 1.0),
-                                        }),
-                                    });
-                                    triangles.push(Triangle {
-                                        pos: scale * sides[1][0],
-                                        u: scale * (sides[1][1] - sides[1][0]),
-                                        v: scale * (sides[1][2] - sides[1][0]),
-                                        material: Material::Lambertian(Lambertian {
-                                            colour: Colour::new(fastrand::f64(), fastrand::f64(), fastrand::f64(), 1.0),
-                                        }),
-                                    });
+                                    triangles.push(Triag { pos: sides[0][0], u: sides[0][1] - sides[0][0], v: sides[0][2] - sides[0][0] });
+                                    triangles.push(Triag { pos: sides[1][0], u: sides[1][1] - sides[1][0], v: sides[1][2] - sides[1][0] });
                                 },
                                 _ => return Err(Error::NonTriangleFace { path: path.into(), oname, gname, i, got: face.elems.len() }),
                             }
@@ -275,7 +252,13 @@ impl Loadable for Model {
                 // for t in &triangles {
                 //     println!("{{ {}, {} x {} }}", t.pos, t.u, t.v);
                 // }
-                *self = Self::Loaded(LoadedModel { triangles: Translate { obj: HitTree::with_objs(triangles, (0..=1).into()), pos } });
+                *self = Self::Loaded(LoadedModel {
+                    aabb:   triangles.iter().map(|t| t.aabb(0)).collect(),
+                    groups: vec![LoadedGroup {
+                        triags: HitTree::with_objs(triangles, (0..=1).into()),
+                        mat:    Material::Lambertian(Lambertian { colour: Colour::new(fastrand::f64(), fastrand::f64(), fastrand::f64(), 1.0) }),
+                    }],
+                });
                 Ok(())
             },
         }
@@ -286,7 +269,7 @@ impl BoundingBoxable for Model {
     fn aabb(&self, t_us: u64) -> AABB {
         match self {
             Self::Loaded(m) => m.aabb(t_us),
-            Self::ToLoad { path, format: _, pos: _, scale: _ } => panic!("Cannot get AABB of unloaded model {path:?}"),
+            Self::ToLoad { path, format: _ } => panic!("Cannot get AABB of unloaded model {path:?}"),
         }
     }
 }
@@ -295,7 +278,7 @@ impl Hittable<Material> for Model {
     fn hit(&self, ray: Ray, t_min: f64, t_max: f64, env: &Environment) -> Option<HitRecord<&'_ Material>> {
         match self {
             Self::Loaded(m) => m.hit(ray, t_min, t_max, env),
-            Self::ToLoad { path, format: _, pos: _, scale: _ } => panic!("Cannot check hit of unloaded model {path:?}"),
+            Self::ToLoad { path, format: _ } => panic!("Cannot check hit of unloaded model {path:?}"),
         }
     }
 }
@@ -305,40 +288,55 @@ impl Hittable<Material> for Model {
 
 
 /***** LIBRARY *****/
+/// Represents a group of triangles, already loaded.
+#[derive(Clone, Debug)]
+struct LoadedGroup {
+    /// A list of triangles that we can render.
+    triags: HitTree<Triag>,
+    /// The material that we render with.
+    mat:    Material,
+}
+
+// Interface
+impl BoundingBoxable for LoadedGroup {
+    #[inline]
+    fn aabb(&self, t_us: u64) -> AABB { self.triags.aabb(t_us) }
+}
+impl Hittable<Material> for LoadedGroup {
+    #[inline]
+    fn hit(&self, ray: Ray, t_min: f64, t_max: f64, env: &Environment) -> Option<HitRecord<&Material>> {
+        self.triags.hit(ray, t_min, t_max, env).map(|rec| HitRecord { mat: &self.mat, data: rec.data })
+    }
+}
+
+
+
 /// A loaded counterpart of [`Model`].
 #[derive(Clone, Debug)]
 pub struct LoadedModel {
-    /// The list of triangles in this model.
-    triangles: Translate<HitTree<Triangle<Material>>>,
-}
-
-// Constructors
-impl LoadedModel {
-    /// Constructor for a LoadedModel.
-    ///
-    /// Note that, typically, you load a model through a [`Model`]. This constructor exists more
-    /// for debugging.
-    ///
-    /// # Arguments
-    /// - `pos`: A [`Vec3`] describing where to place the model.
-    /// - `triangles`: A list of [`Triangle`] objects that make up the model.
-    ///
-    /// # Returns
-    /// A new LoadedModel.
-    #[inline]
-    pub fn new(pos: Vec3, triangles: impl IntoIterator<Item = Triangle<Material>>) -> Self {
-        Self { triangles: Translate { obj: HitTree::with_objs(triangles, (0..=1).into()), pos } }
-    }
+    /// Overarching set of AABBs.
+    aabb:   AABB,
+    /// A set of groups, each with their own material.
+    groups: Vec<LoadedGroup>,
 }
 
 // Raytracer
 impl BoundingBoxable for LoadedModel {
     #[inline]
-    fn aabb(&self, t_us: u64) -> AABB { self.triangles.aabb(t_us) }
+    fn aabb(&self, _t_us: u64) -> AABB { self.aabb }
 }
 impl Hittable<Material> for LoadedModel {
     #[inline]
     fn hit(&self, ray: Ray, t_min: f64, t_max: f64, env: &Environment) -> Option<HitRecord<&'_ Material>> {
-        self.triangles.hit(ray, t_min, t_max, env)
+        // Attempt to hit all groups
+        let mut hit = None;
+        let mut t = t_max;
+        for g in &self.groups {
+            if let Some(ghit) = g.hit(ray, t_min, t, env) {
+                hit = Some(ghit);
+                t = ghit.data.t;
+            }
+        }
+        hit
     }
 }
