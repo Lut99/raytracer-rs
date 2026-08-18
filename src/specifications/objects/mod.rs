@@ -17,6 +17,7 @@
 //
 
 // Define the submodules
+pub mod boxed;
 mod hitrecord;
 #[cfg(feature = "obj")]
 pub mod model;
@@ -30,6 +31,7 @@ use std::path::Path;
 use std::rc::Rc;
 use std::sync::{Arc, MutexGuard, RwLockReadGuard, RwLockWriteGuard};
 
+pub use boxed::Box;
 pub use hitrecord::*;
 pub use model::Model;
 pub use plane::{Quad, Triangle};
@@ -100,7 +102,7 @@ pub trait BoundingBoxable {
 // Pointer-like impls
 bounding_boxable_ptr_impl!('a, &'a T);
 bounding_boxable_ptr_impl!('a, &'a mut T);
-bounding_boxable_ptr_impl!(Box<T>);
+bounding_boxable_ptr_impl!(std::boxed::Box<T>);
 bounding_boxable_ptr_impl!(Rc<T>);
 bounding_boxable_ptr_impl!(Arc<T>);
 bounding_boxable_ptr_impl!('a, Ref<'a, T>);
@@ -132,7 +134,7 @@ pub trait Hittable<M>: BoundingBoxable {
 // Pointer-like impls
 hittable_ptr_impl!('a, &'a T);
 hittable_ptr_impl!('a, &'a mut T);
-hittable_ptr_impl!(Box<T>);
+hittable_ptr_impl!(std::boxed::Box<T>);
 hittable_ptr_impl!(Rc<T>);
 hittable_ptr_impl!(Arc<T>);
 hittable_ptr_impl!('a, Ref<'a, T>);
@@ -165,7 +167,7 @@ macro_rules! object_impl {
         #[derive(Debug, Error)]
         pub enum Error {
             $(#[error("{0}")] $obj(#[source] $errty),)*
-            #[error("{0}")] Translate(#[source] Box<Self>),
+            #[error("{0}")] Translate(#[source] std::boxed::Box<Self>),
         }
 
 
@@ -178,7 +180,7 @@ macro_rules! object_impl {
         pub enum Object {
             $($(#[$($attrs)*])* $obj($obj$(<$($gen)*>)?),)*
             /// A translation.
-            Translate(Translate<Box<Self>>),
+            Translate(Translate<std::boxed::Box<Self>>),
         }
 
         // Interface
@@ -189,7 +191,7 @@ macro_rules! object_impl {
             fn load(&mut self, dir: &Path) -> Result<(), Self::Error> {
                 match self {
                     $(Self::$obj(o) => o.load(dir).map_err(Error::$obj),)*
-                    Self::Translate(t) => t.load(dir).map_err(Box::new).map_err(Error::Translate),
+                    Self::Translate(t) => t.load(dir).map_err(std::boxed::Box::new).map_err(Error::Translate),
                 }
             }
         }
@@ -225,6 +227,8 @@ object_impl!(
     Sphere{Material}(super::materials::Error),
     /// A four-point shape on a 2D-plane.
     Quad{Material}(super::materials::Error),
+    /// A bunch of quads that make a box shape.
+    Box{Material}(super::materials::Error),
     /// A translation.
     // Translate{Box<Object>}(Box<Error>),
     /// A three-point shape on a 2D-plane.

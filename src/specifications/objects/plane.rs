@@ -134,6 +134,46 @@ impl Hittable<()> for Triag {
 
 
 
+/// Defines the internals of a [`Quad`] without the material.
+#[derive(Clone, Copy, Debug, Deserialize, Serialize)]
+pub struct Qd {
+    /// The position of the bottom-left corner of the Quad.
+    pub pos: Vec3,
+    /// The "X-axis" of the Quad's plane.
+    pub u:   Vec3,
+    /// The "Y-axis" of the Quad's plane.
+    pub v:   Vec3,
+}
+
+// Interface
+impl BoundingBoxable for Qd {
+    #[inline]
+    fn aabb(&self, _t_us: u64) -> AABB {
+        // We compute two bounding boxes, one for each diagonal of the Quad
+        let diag1 = AABB::from_points(self.pos, self.pos + self.u + self.v);
+        let diag2 = AABB::from_points(self.pos + self.u, self.pos + self.v);
+        diag1.surround(diag2)
+    }
+}
+impl Hittable<()> for Qd {
+    #[inline]
+    fn hit(&self, ray: Ray, t_min: f64, t_max: f64, _env: &Environment) -> Option<HitRecord<&()>> {
+        // Compute a hit with this quad's plane
+        let rec: HitData = plane_hit(self.pos, self.u, self.v, ray, t_min, t_max)?;
+
+        // Now checking if it's inside the primitive is trivial; since we used `u` and `v` already,
+        // the alpha and beta are scaled 0-1. Hence:
+        if rec.uv.0 >= 0.0 && rec.uv.0 <= 1.0 && rec.uv.1 >= 0.0 && rec.uv.1 <= 1.0 {
+            // The alpha and beta now form the uv, done!
+            Some(HitRecord { data: rec, mat: &() })
+        } else {
+            None
+        }
+    }
+}
+
+
+
 
 
 /***** LIBRARY *****/
@@ -171,13 +211,9 @@ impl<M> Hittable<M> for Triangle<M> {
 /// Implements a rectangle that needn't have straight corners.
 #[derive(Clone, Copy, Debug, Deserialize, Serialize)]
 pub struct Quad<M> {
-    /// The position of the bottom-left corner of the Quad.
-    pub pos: Vec3,
-    /// The "X-axis" of the Quad's plane.
-    pub u:   Vec3,
-    /// The "Y-axis" of the Quad's plane.
-    pub v:   Vec3,
-
+    /// The internal Qd that does the math.
+    #[serde(flatten)]
+    pub qd: Qd,
     /// The material that scatters rays hitting the Quad.
     #[serde(alias = "mat")]
     pub material: M,
@@ -192,26 +228,11 @@ impl<M: Loadable> Loadable for Quad<M> {
 }
 impl<M> BoundingBoxable for Quad<M> {
     #[inline]
-    fn aabb(&self, _t_us: u64) -> AABB {
-        // We compute two bounding boxes, one for each diagonal of the Quad
-        let diag1 = AABB::from_points(self.pos, self.pos + self.u + self.v);
-        let diag2 = AABB::from_points(self.pos + self.u, self.pos + self.v);
-        diag1.surround(diag2)
-    }
+    fn aabb(&self, t_us: u64) -> AABB { self.qd.aabb(t_us) }
 }
 impl<M> Hittable<M> for Quad<M> {
     #[inline]
-    fn hit(&self, ray: Ray, t_min: f64, t_max: f64, _env: &Environment) -> Option<HitRecord<&M>> {
-        // Compute a hit with this quad's plane
-        let rec: HitData = plane_hit(self.pos, self.u, self.v, ray, t_min, t_max)?;
-
-        // Now checking if it's inside the primitive is trivial; since we used `u` and `v` already,
-        // the alpha and beta are scaled 0-1. Hence:
-        if rec.uv.0 >= 0.0 && rec.uv.0 <= 1.0 && rec.uv.1 >= 0.0 && rec.uv.1 <= 1.0 {
-            // The alpha and beta now form the uv, done!
-            Some(HitRecord { data: rec, mat: &self.material })
-        } else {
-            None
-        }
+    fn hit(&self, ray: Ray, t_min: f64, t_max: f64, env: &Environment) -> Option<HitRecord<&M>> {
+        self.qd.hit(ray, t_min, t_max, env).map(|rec| HitRecord { mat: &self.material, data: rec.data })
     }
 }

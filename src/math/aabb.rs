@@ -16,6 +16,8 @@
 
 use std::mem;
 
+use serde::{Deserialize, Serialize};
+
 use super::ray::Ray;
 use super::vec3::Vec3;
 use crate::specifications::objects::{BoundingBoxable, HitRecord, Hittable};
@@ -32,7 +34,7 @@ pub const AABB_MIN_DIM_LEN: f64 = 0.0001;
 
 /***** LIBRARY *****/
 /// The Axis-Aligned Bounding Box (AABB) can be used to cheaply pre-check if we roughly hit an object.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Serialize)]
 pub struct AABB {
     /// The top-left point of the box.
     pub pos:  Vec3,
