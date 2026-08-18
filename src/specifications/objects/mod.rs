@@ -38,7 +38,7 @@ pub use plane::{Quad, Triangle};
 use serde::{Deserialize, Serialize};
 pub use sphere::{AnimatedSphere, Sphere};
 use thiserror::Error;
-pub use translate::{RotateY, Translate};
+pub use translate::{RotateX, RotateY, RotateZ, Translate};
 
 use super::Loadable;
 use super::materials::Material;
@@ -167,7 +167,9 @@ macro_rules! object_impl {
         #[derive(Debug, Error)]
         pub enum Error {
             $(#[error("{0}")] $obj(#[source] $errty),)*
+            #[error("{0}")] RotateX(#[source] std::boxed::Box<Self>),
             #[error("{0}")] RotateY(#[source] std::boxed::Box<Self>),
+            #[error("{0}")] RotateZ(#[source] std::boxed::Box<Self>),
             #[error("{0}")] Translate(#[source] std::boxed::Box<Self>),
         }
 
@@ -180,8 +182,12 @@ macro_rules! object_impl {
         #[derive(Clone, Debug, Deserialize, Serialize)]
         pub enum Object {
             $($(#[$($attrs)*])* $obj($obj$(<$($gen)*>)?),)*
+            /// A rotation around the X-axis.
+            RotateX(RotateX<std::boxed::Box<Self>>),
             /// A rotation around the Y-axis.
             RotateY(RotateY<std::boxed::Box<Self>>),
+            /// A rotation around the Z-axis.
+            RotateZ(RotateZ<std::boxed::Box<Self>>),
             /// A translation.
             Translate(Translate<std::boxed::Box<Self>>),
         }
@@ -194,7 +200,9 @@ macro_rules! object_impl {
             fn load(&mut self, dir: &Path) -> Result<(), Self::Error> {
                 match self {
                     $(Self::$obj(o) => o.load(dir).map_err(Error::$obj),)*
+                    Self::RotateX(r) => r.load(dir).map_err(std::boxed::Box::new).map_err(Error::RotateX),
                     Self::RotateY(r) => r.load(dir).map_err(std::boxed::Box::new).map_err(Error::RotateY),
+                    Self::RotateZ(r) => r.load(dir).map_err(std::boxed::Box::new).map_err(Error::RotateZ),
                     Self::Translate(t) => t.load(dir).map_err(std::boxed::Box::new).map_err(Error::Translate),
                 }
             }
@@ -204,7 +212,9 @@ macro_rules! object_impl {
             fn aabb(&self, t_us: u64) -> AABB {
                 match self {
                     $(Self::$obj(o) => o.aabb(t_us),)*
+                    Self::RotateX(r) => r.aabb(t_us),
                     Self::RotateY(r) => r.aabb(t_us),
+                    Self::RotateZ(r) => r.aabb(t_us),
                     Self::Translate(t) => t.aabb(t_us),
                 }
             }
@@ -214,7 +224,9 @@ macro_rules! object_impl {
             fn hit(&self, ray: Ray, t_min: f64, t_max: f64, env: &Environment) -> Option<HitRecord<&Material>> {
                 match self {
                     $(Self::$obj(o) => o.hit(ray, t_min, t_max, env),)*
+                    Self::RotateX(r) => r.hit(ray, t_min, t_max, env),
                     Self::RotateY(r) => r.hit(ray, t_min, t_max, env),
+                    Self::RotateZ(r) => r.hit(ray, t_min, t_max, env),
                     Self::Translate(t) => t.hit(ray, t_min, t_max, env),
                 }
             }
@@ -235,10 +247,14 @@ object_impl!(
     Quad{Material}(super::materials::Error),
     /// A bunch of quads that make a box shape.
     Box{Material}(super::materials::Error),
-    /// A translation.
-    // Translate{Box<Object>}(Box<Error>),
+    /// A rotation around the X-axis.
+    // RotateX{Box<Object>}(Box<Error>),
     /// A rotation around the Y-axis.
     // RotateY{Box<Object>}(Box<Error>),
+    /// A rotation around the Z-axis.
+    // RotateZ{Box<Object>}(Box<Error>),
+    /// A translation.
+    // Translate{Box<Object>}(Box<Error>),
     /// A three-point shape on a 2D-plane.
     Triangle{Material}(super::materials::Error),
     /// A complex, triangle-based model.
