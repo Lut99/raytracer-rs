@@ -168,7 +168,7 @@ impl<T> BVHNode<T> {
         };
 
         // Sort the list of objects along this axis
-        objs.sort_by(|(_, lhs), (_, rhs)| f64::total_cmp(&lhs.pos[largest], &rhs.pos[largest]));
+        objs.sort_by(|(_, lhs), (_, rhs)| f64::total_cmp(&lhs.dim(largest).min(), &rhs.dim(largest).min()));
 
         // Now split the list equally down the middle... (as best we can)
         let rhs = objs.split_off(objs_len / 2);

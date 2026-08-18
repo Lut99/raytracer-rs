@@ -28,7 +28,10 @@ use crate::math::{AABB, Ray, Vec3};
 /***** HELPER FUNCTIONS *****/
 /// Computes a sphere's AABB.
 #[inline]
-fn sphere_aabb(center: Vec3, radius: f64) -> AABB { AABB::new(center - radius, [2.0 * radius; 3]) }
+fn sphere_aabb(center: Vec3, radius: f64) -> AABB {
+    let aabb = AABB::from_points(center - radius, center + radius);
+    aabb
+}
 
 /// Computes the uv-coordinate pair on a sphere given a normal point (and direction) on it.
 #[inline]
@@ -157,7 +160,7 @@ mod tests {
     #[test]
     fn test_sphere_aabb() {
         let sphere = Sphere { center: Vec3::new(0.0, 0.0, 0.0), radius: 0.5, material: NormalMap };
-        assert_eq!(sphere.aabb(0), AABB::new([-0.5, -0.5, -0.5].into(), [1.0, 1.0, 1.0]));
+        assert_eq!(sphere.aabb(0), AABB::from_points([-0.5, -0.5, -0.5].into(), [0.5, 0.5, 0.5].into()));
     }
 
     #[test]
@@ -166,10 +169,10 @@ mod tests {
             sphere:    Sphere { center: Vec3::new(0.0, 0.0, 0.0), radius: 0.5, material: NormalMap },
             animation: Vertical { len: 100.0, at: 0, duration: 100 },
         };
-        assert_eq!(sphere.aabb(0), AABB::new([-0.5, -0.5, -0.5].into(), [1.0, 1.0, 1.0]));
-        assert_eq!(sphere.aabb(50), AABB::new([-0.5, 49.5, -0.5].into(), [1.0, 1.0, 1.0]));
-        assert_eq!(sphere.aabb(100), AABB::new([-0.5, 99.5, -0.5].into(), [1.0, 1.0, 1.0]));
-        assert_eq!(sphere.aabb(150), AABB::new([-0.5, 99.5, -0.5].into(), [1.0, 1.0, 1.0]));
-        assert_eq!(AABB::surround(sphere.aabb(0), sphere.aabb(100)), AABB::new([-0.5, -0.5, -0.5].into(), [1.0, 101.0, 1.0]));
+        assert_eq!(sphere.aabb(0), AABB::from_points([-0.5, -0.5, -0.5].into(), [0.5, 0.5, 0.5].into()));
+        assert_eq!(sphere.aabb(50), AABB::from_points([-0.5, 49.5, -0.5].into(), [0.5, 50.5, 0.5].into()));
+        assert_eq!(sphere.aabb(100), AABB::from_points([-0.5, 99.5, -0.5].into(), [0.5, 100.5, 0.5].into()));
+        assert_eq!(sphere.aabb(150), AABB::from_points([-0.5, 99.5, -0.5].into(), [0.5, 100.5, 0.5].into()));
+        assert_eq!(AABB::surround(sphere.aabb(0), sphere.aabb(100)), AABB::from_points([-0.5, -0.5, -0.5].into(), [0.5, 100.5, 0.5].into()));
     }
 }
