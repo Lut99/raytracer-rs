@@ -156,7 +156,7 @@ impl RayRenderer for MultiThreadRenderer {
                     Some((
                         Instant::now(),
                         ProgressBar::new(dims.0 as u64 * dims.1 as u64 * cam.n_samples()).with_style(
-                            ProgressStyle::with_template(" Ray {human_pos}/{human_len} [{wide_bar}] {percent}% (ETA {eta}) ")
+                            ProgressStyle::with_template(" Ray {human_pos}/{human_len} [{wide_bar}] {percent}% {elapsed} (ETA {eta}) ")
                                 .unwrap_or_else(|err| panic!("Invalid template given to progress bar: {err}"))
                                 .progress_chars("=> "),
                         ),

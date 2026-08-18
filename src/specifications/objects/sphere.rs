@@ -19,6 +19,7 @@ use serde::{Deserialize, Serialize};
 
 use super::super::Loadable;
 use super::super::animations::{Animating, Animation};
+use super::super::materials::Scattering;
 use super::super::scene::Environment;
 use super::hitrecord::HitRecord;
 use super::{BoundingBoxable, Hittable};
@@ -44,7 +45,7 @@ fn sphere_uv(p: Vec3) -> (f64, f64) {
 
 /// Computes a sphere's hit yay or nay.
 #[inline]
-fn sphere_hit<M>(center: Vec3, radius: f64, ray: Ray, t_min: f64, t_max: f64, mat: &M) -> Option<HitRecord<&M>> {
+fn sphere_hit<M: Scattering>(center: Vec3, radius: f64, ray: Ray, t_min: f64, t_max: f64, mat: &M) -> Option<HitRecord<'_>> {
     // Compute the distance between the origin of the ray and the center of the sphere
     let oc: Vec3 = ray.origin - center;
 
@@ -110,8 +111,8 @@ impl<M> BoundingBoxable for Sphere<M> {
     #[inline]
     fn aabb(&self, _t_us: u64) -> AABB { sphere_aabb(self.center, self.radius) }
 }
-impl<M> Hittable<M> for Sphere<M> {
-    fn hit(&self, ray: Ray, t_min: f64, t_max: f64, _env: &Environment) -> Option<HitRecord<&M>> {
+impl<M: Scattering> Hittable for Sphere<M> {
+    fn hit(&self, ray: Ray, t_min: f64, t_max: f64, _env: &Environment) -> Option<HitRecord<'_>> {
         sphere_hit(self.center, self.radius, ray, t_min, t_max, &self.material)
     }
 }
@@ -139,9 +140,9 @@ impl<M, A: Animating> BoundingBoxable for AnimatedSphere<M, A> {
     #[inline]
     fn aabb(&self, t_us: u64) -> AABB { sphere_aabb(self.animation.animate(self.sphere.center, t_us), self.sphere.radius) }
 }
-impl<M, A: Animating> Hittable<M> for AnimatedSphere<M, A> {
+impl<M: Scattering, A: Animating> Hittable for AnimatedSphere<M, A> {
     #[inline]
-    fn hit(&self, ray: Ray, t_min: f64, t_max: f64, _env: &Environment) -> Option<HitRecord<&M>> {
+    fn hit(&self, ray: Ray, t_min: f64, t_max: f64, _env: &Environment) -> Option<HitRecord<'_>> {
         sphere_hit(self.animation.animate(self.sphere.center, ray.time), self.sphere.radius, ray, t_min, t_max, &self.sphere.material)
     }
 }

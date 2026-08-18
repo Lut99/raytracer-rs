@@ -10,6 +10,7 @@ use std::path::Path;
 use serde::{Deserialize, Serialize};
 
 use super::super::Loadable;
+use super::super::materials::Scattering;
 use super::super::scene::Environment;
 use super::{BoundingBoxable, HitData, HitRecord, Hittable};
 use crate::math::{AABB, Ray, Vec3};
@@ -115,9 +116,9 @@ impl BoundingBoxable for Triag {
             .surround(AABB::from_points(self.pos + self.u, self.pos + self.v))
     }
 }
-impl Hittable<()> for Triag {
+impl Hittable for Triag {
     #[inline]
-    fn hit(&self, ray: Ray, t_min: f64, t_max: f64, _env: &Environment) -> Option<HitRecord<&()>> {
+    fn hit(&self, ray: Ray, t_min: f64, t_max: f64, _env: &Environment) -> Option<HitRecord<'_>> {
         // Compute a hit with this vertex' plane
         let rec: HitData = plane_hit(self.pos, self.u, self.v, ray, t_min, t_max)?;
 
@@ -155,9 +156,9 @@ impl BoundingBoxable for Qd {
         diag1.surround(diag2)
     }
 }
-impl Hittable<()> for Qd {
+impl Hittable for Qd {
     #[inline]
-    fn hit(&self, ray: Ray, t_min: f64, t_max: f64, _env: &Environment) -> Option<HitRecord<&()>> {
+    fn hit(&self, ray: Ray, t_min: f64, t_max: f64, _env: &Environment) -> Option<HitRecord<'_>> {
         // Compute a hit with this quad's plane
         let rec: HitData = plane_hit(self.pos, self.u, self.v, ray, t_min, t_max)?;
 
@@ -199,9 +200,9 @@ impl<M> BoundingBoxable for Triangle<M> {
     #[inline]
     fn aabb(&self, t_us: u64) -> AABB { self.triag.aabb(t_us) }
 }
-impl<M> Hittable<M> for Triangle<M> {
+impl<M: Scattering> Hittable for Triangle<M> {
     #[inline]
-    fn hit(&self, ray: Ray, t_min: f64, t_max: f64, env: &Environment) -> Option<HitRecord<&M>> {
+    fn hit(&self, ray: Ray, t_min: f64, t_max: f64, env: &Environment) -> Option<HitRecord<'_>> {
         self.triag.hit(ray, t_min, t_max, env).map(|rec| HitRecord { mat: &self.material, data: rec.data })
     }
 }
@@ -230,9 +231,9 @@ impl<M> BoundingBoxable for Quad<M> {
     #[inline]
     fn aabb(&self, t_us: u64) -> AABB { self.qd.aabb(t_us) }
 }
-impl<M> Hittable<M> for Quad<M> {
+impl<M: Scattering> Hittable for Quad<M> {
     #[inline]
-    fn hit(&self, ray: Ray, t_min: f64, t_max: f64, env: &Environment) -> Option<HitRecord<&M>> {
+    fn hit(&self, ray: Ray, t_min: f64, t_max: f64, env: &Environment) -> Option<HitRecord<'_>> {
         self.qd.hit(ray, t_min, t_max, env).map(|rec| HitRecord { mat: &self.material, data: rec.data })
     }
 }

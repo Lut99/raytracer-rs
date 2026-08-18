@@ -322,15 +322,17 @@ impl BoundingBoxable for AABB {
     #[inline]
     fn aabb(&self, _t_us: u64) -> AABB { *self }
 }
-impl Hittable<()> for AABB {
+impl Hittable for AABB {
     #[inline]
-    fn hit(&self, ray: Ray, mut t_min: f64, mut t_max: f64, _env: &Environment) -> Option<HitRecord<&()>> {
-        let mut hit_axis: usize = 0;
-        let mut hit_scale: f64 = 1.0;
+    fn hit(&self, ray: Ray, mut t_min: f64, mut t_max: f64, _env: &Environment) -> Option<HitRecord<'_>> {
+        println!("To hit: t_min {t_min} // t_max {t_max}");
+
+        let mut hit: (f64, f64, usize) = (0.0, 0.0, 0);
         let int = [self.x, self.y, self.z];
         for i in 0..3 {
             // Compute the hit points with the AABB
             let inv_direction: f64 = 1.0 / ray.direct[i];
+            let hit_scale: f64 = if inv_direction >= 0.0 { 1.0 } else { -1.0 };
             let mut t0: f64 = (int[i].min() - ray.origin[i]) * inv_direction;
             let mut t1: f64 = (int[i].max() - ray.origin[i]) * inv_direction;
 
@@ -340,8 +342,7 @@ impl Hittable<()> for AABB {
             }
             if t0 > t_min {
                 t_min = t0;
-                hit_axis = i;
-                hit_scale = if inv_direction < 0.0 { -1.0 } else { 1.0 };
+                hit = (0.0, hit_scale, i);
             }
             t_max = f64::min(t_max, t1);
 
@@ -350,16 +351,15 @@ impl Hittable<()> for AABB {
                 return None;
             }
         }
+        println!("Hit @ {t_min} // {t_max}");
+
+        // What's left now is checking whether the end facing the ray or the end after the ray
         Some(HitRecord::new(
             ray,
             ray.at(t_min),
             t_min,
-            Vec3::new(
-                if hit_axis == 0 { hit_scale } else { 0.0 },
-                if hit_axis == 1 { hit_scale } else { 0.0 },
-                if hit_axis == 2 { hit_scale } else { 0.0 },
-            ),
-            (0.0, 0.0),
+            Vec3::new(if hit.2 == 0 { hit.1 } else { 0.0 }, if hit.2 == 1 { hit.1 } else { 0.0 }, if hit.2 == 2 { hit.1 } else { 0.0 }),
+            (0.0, 0.0), // TODO
             &(),
         ))
     }

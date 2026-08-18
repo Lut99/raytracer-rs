@@ -19,6 +19,7 @@
 pub mod dielectric;
 pub mod diffuse;
 pub mod metal;
+pub mod phase_function;
 pub mod simple;
 
 // Imports & Exports
@@ -30,6 +31,7 @@ use std::sync::{Arc, MutexGuard, RwLockReadGuard, RwLockWriteGuard};
 pub use dielectric::{Dielectric, PartialDielectric};
 pub use diffuse::{Diffuse, DiffuseLight, Lambertian, LambertianTexture};
 pub use metal::Metal;
+pub use phase_function::Isotropic;
 use serde::{Deserialize, Serialize};
 pub use simple::{NormalMap, StaticColour};
 use thiserror::Error;
@@ -104,6 +106,19 @@ pub trait Scattering {
     fn scatter(&self, _ray: Ray, _record: &HitData, _env: &Environment) -> (Option<Ray>, Colour) {
         /* Standard impl: no scattering */
         (None, Colour::BLACK)
+    }
+}
+
+// Standard impls
+impl Scattering for () {
+    #[inline]
+    #[track_caller]
+    fn emitted(&self, _uv: (f64, f64), _p: Vec3) -> Colour { panic!("You called <() as Scattering>::emitted() - this is not implemented") }
+
+    #[inline]
+    #[track_caller]
+    fn scatter(&self, _ray: Ray, _record: &HitData, _env: &Environment) -> (Option<Ray>, Colour) {
+        panic!("You called <() as Scattering>::scatter() - this is not implemented")
     }
 }
 
@@ -193,6 +208,8 @@ material_impl!(
     Diffuse,
     /// A meterial emitted light randomly.
     DiffuseLight,
+    /// A material randomly scattering rays not even taking a surface into account. Useful for gasses.
+    Isotropic,
     /// A material randomly scattering rays.
     Lambertian,
     /// A material randomly scattering rays but with a texture.

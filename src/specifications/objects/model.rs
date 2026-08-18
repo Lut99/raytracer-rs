@@ -306,9 +306,9 @@ impl BoundingBoxable for Model {
         }
     }
 }
-impl Hittable<Material> for Model {
+impl Hittable for Model {
     #[inline]
-    fn hit(&self, ray: Ray, t_min: f64, t_max: f64, env: &Environment) -> Option<HitRecord<&'_ Material>> {
+    fn hit(&self, ray: Ray, t_min: f64, t_max: f64, env: &Environment) -> Option<HitRecord<'_>> {
         match self {
             Self::Loaded(m) => m.hit(ray, t_min, t_max, env),
             Self::ToLoad { path, format: _ } => panic!("Cannot check hit of unloaded model {path:?}"),
@@ -335,9 +335,9 @@ impl BoundingBoxable for LoadedGroup {
     #[inline]
     fn aabb(&self, t_us: u64) -> AABB { self.triags.aabb(t_us) }
 }
-impl Hittable<Material> for LoadedGroup {
+impl Hittable for LoadedGroup {
     #[inline]
-    fn hit(&self, ray: Ray, t_min: f64, t_max: f64, env: &Environment) -> Option<HitRecord<&Material>> {
+    fn hit(&self, ray: Ray, t_min: f64, t_max: f64, env: &Environment) -> Option<HitRecord<'_>> {
         self.triags.hit(ray, t_min, t_max, env).map(|rec| HitRecord { mat: &self.mat, data: rec.data })
     }
 }
@@ -358,9 +358,9 @@ impl BoundingBoxable for LoadedModel {
     #[inline]
     fn aabb(&self, _t_us: u64) -> AABB { self.aabb }
 }
-impl Hittable<Material> for LoadedModel {
+impl Hittable for LoadedModel {
     #[inline]
-    fn hit(&self, ray: Ray, t_min: f64, t_max: f64, env: &Environment) -> Option<HitRecord<&'_ Material>> {
+    fn hit(&self, ray: Ray, t_min: f64, t_max: f64, env: &Environment) -> Option<HitRecord<'_>> {
         // Attempt to hit all groups
         let mut hit = None;
         let mut t = t_max;

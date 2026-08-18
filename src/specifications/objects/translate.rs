@@ -120,11 +120,11 @@ impl<T: BoundingBoxable> BoundingBoxable for Translate<T> {
         aabb
     }
 }
-impl<T: Hittable<M>, M> Hittable<M> for Translate<T> {
+impl<T: Hittable> Hittable for Translate<T> {
     #[inline]
-    fn hit(&self, mut ray: Ray, t_min: f64, t_max: f64, env: &Environment) -> Option<HitRecord<&'_ M>> {
+    fn hit(&self, mut ray: Ray, t_min: f64, t_max: f64, env: &Environment) -> Option<HitRecord<'_>> {
         ray.origin -= self.pos;
-        let mut rec: HitRecord<&M> = self.obj.hit(ray, t_min, t_max, env)?;
+        let mut rec: HitRecord = self.obj.hit(ray, t_min, t_max, env)?;
         rec.data.hit += self.pos;
         Some(rec)
     }
@@ -194,9 +194,9 @@ macro_rules! rotate_impl {
                 AABB::from_points(min, max)
             }
         }
-        impl<T: Hittable<M>, M> Hittable<M> for $name<T> {
+        impl<T: Hittable> Hittable for $name<T> {
             #[inline]
-            fn hit(&self, ray: Ray, t_min: f64, t_max: f64, env: &Environment) -> Option<HitRecord<&M>> {
+            fn hit(&self, ray: Ray, t_min: f64, t_max: f64, env: &Environment) -> Option<HitRecord<'_>> {
                 // Compute the sin_theta and cos_theta for this angle
                 let angle_radians: f64 = degrees_to_radians(self.angle);
                 let sin_theta: f64 = angle_radians.sin();
@@ -208,7 +208,7 @@ macro_rules! rotate_impl {
                 let rotated_ray = Ray::with_time(origin, direct, ray.time);
 
                 // Determine the intersection in object space and quit if it doesn't hit
-                let mut rec: HitRecord<&M> = self.obj.hit(rotated_ray, t_min, t_max, env)?;
+                let mut rec: HitRecord = self.obj.hit(rotated_ray, t_min, t_max, env)?;
 
                 // Rotate the answer back to normal space
                 rec.data.hit = $rotate_back(rec.data.hit, sin_theta, cos_theta);

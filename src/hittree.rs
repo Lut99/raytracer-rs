@@ -277,7 +277,7 @@ impl<T> BoundingBoxable for BVHNode<T> {
         }
     }
 }
-impl<T: Hittable<M>, M> Hittable<M> for BVHNode<T> {
+impl<T: Hittable> Hittable for BVHNode<T> {
     /// Computes a hit on an object in the BVHNode.
     ///
     /// Unlike [`Hittable::hit()`](crate::specifications::objects::Hittable::hit()), this version
@@ -296,7 +296,7 @@ impl<T: Hittable<M>, M> Hittable<M> for BVHNode<T> {
     /// A new [`HitRecord`] struct, which collects relevant information of this hit, or else
     /// [`None`] if the ray does not hit.
     #[inline]
-    fn hit(&self, ray: Ray, t_min: f64, t_max: f64, env: &Environment) -> Option<HitRecord<&M>> {
+    fn hit(&self, ray: Ray, t_min: f64, t_max: f64, env: &Environment) -> Option<HitRecord<'_>> {
         // Check if we're hit in the first place
         if !self.aabb(ray.time).hittest(ray, t_min, t_max) {
             return None;
@@ -308,8 +308,8 @@ impl<T: Hittable<M>, M> Hittable<M> for BVHNode<T> {
             Self::Object(_, obj) => obj.hit(ray, t_min, t_max, env),
             // Check which half of the BVH is hit instead
             Self::Next(_, lhs, rhs) => {
-                let lhs: Option<HitRecord<&M>> = lhs.hit(ray, t_min, t_max, env);
-                let rhs: Option<HitRecord<&M>> = rhs.hit(ray, t_min, t_max, env);
+                let lhs: Option<HitRecord> = lhs.hit(ray, t_min, t_max, env);
+                let rhs: Option<HitRecord> = rhs.hit(ray, t_min, t_max, env);
                 match (lhs, rhs) {
                     // Return the closest of the two hits if both
                     (Some(lhs), Some(rhs)) if lhs.data.t <= rhs.data.t => Some(lhs),
@@ -620,10 +620,10 @@ impl<T> BoundingBoxable for HitTree<T> {
         }
     }
 }
-impl<T: Hittable<M>, M> Hittable<M> for HitTree<T> {
+impl<T: Hittable> Hittable for HitTree<T> {
     #[inline]
     #[cfg_attr(debug_assertions, track_caller)]
-    fn hit(&self, ray: Ray, t_min: f64, t_max: f64, env: &Environment) -> Option<HitRecord<&M>> {
+    fn hit(&self, ray: Ray, t_min: f64, t_max: f64, env: &Environment) -> Option<HitRecord<'_>> {
         #[cfg(debug_assertions)]
         if ray.time < self.ts[0] || ray.time > self.ts[1] {
             panic!("HitTree initialized for time range {:?} cannot compute Ray hit at time {}", self.ts, ray.time);

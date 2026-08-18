@@ -10,6 +10,7 @@ use std::path::Path;
 use serde::{Deserialize, Serialize};
 
 use super::super::Loadable;
+use super::super::materials::Scattering;
 use super::{BoundingBoxable, HitRecord, Hittable};
 use crate::math::{AABB, Ray};
 use crate::specifications::scene::Environment;
@@ -37,9 +38,9 @@ impl<M> BoundingBoxable for Box<M> {
     #[inline]
     fn aabb(&self, _t_us: u64) -> AABB { self.aabb }
 }
-impl<M> Hittable<M> for Box<M> {
+impl<M: Scattering> Hittable for Box<M> {
     #[inline]
-    fn hit(&self, ray: Ray, t_min: f64, t_max: f64, env: &Environment) -> Option<HitRecord<&'_ M>> {
+    fn hit(&self, ray: Ray, t_min: f64, t_max: f64, env: &Environment) -> Option<HitRecord<'_>> {
         self.aabb.hit(ray, t_min, t_max, env).map(|rec| HitRecord { mat: &self.material, data: rec.data })
     }
 }

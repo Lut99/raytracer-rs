@@ -53,16 +53,16 @@ impl HitData {
 
 
 /// Defines everything we want to know about a hit.
-#[derive(Clone, Copy, Debug)]
-pub struct HitRecord<M> {
+#[derive(Clone, Copy)]
+pub struct HitRecord<'a> {
     /// The material that we hit.
-    pub mat:  M,
+    pub mat:  &'a dyn Scattering,
     /// The data about where we hit it.
     pub data: HitData,
 }
 
 // Constructors
-impl<M> HitRecord<M> {
+impl<'a> HitRecord<'a> {
     /// Constructor for the HitRecord that compute the internal `hit`, `normal` and `front_face` from the given ray, hit distance on that ray and outward normal.
     ///
     /// # Arguments
@@ -76,13 +76,13 @@ impl<M> HitRecord<M> {
     /// # Returns
     /// A new `HitRecord` with the math taken care of.
     #[inline]
-    pub fn new(ray: Ray, hit: Vec3, t: f64, outward_normal: Vec3, uv: (f64, f64), mat: M) -> Self {
+    pub fn new(ray: Ray, hit: Vec3, t: f64, outward_normal: Vec3, uv: (f64, f64), mat: &'a dyn Scattering) -> Self {
         Self { mat, data: HitData::new(ray, hit, t, outward_normal, uv) }
     }
 }
 
 // Raytracer
-impl<M: Scattering> HitRecord<M> {
+impl<'a> HitRecord<'a> {
     /// Emits from the internal material using the internal [`HitData`].
     ///
     /// # Returns

@@ -19,6 +19,7 @@
 // Define the submodules
 pub mod boxed;
 mod hitrecord;
+pub mod medium;
 #[cfg(feature = "obj")]
 pub mod model;
 pub mod plane;
@@ -33,6 +34,7 @@ use std::sync::{Arc, MutexGuard, RwLockReadGuard, RwLockWriteGuard};
 
 pub use boxed::Box;
 pub use hitrecord::*;
+pub use medium::ConstantDensity;
 pub use model::Model;
 pub use plane::{Quad, Triangle};
 use serde::{Deserialize, Serialize};
@@ -64,18 +66,18 @@ macro_rules! bounding_boxable_ptr_impl {
 
 macro_rules! hittable_ptr_impl {
     ('a, $ty:ty) => {
-        impl<'a, T: Hittable<M>, M> Hittable<M> for $ty {
+        impl<'a, T: Hittable> Hittable for $ty {
             #[inline]
-            fn hit(&self, ray: Ray, t_min: f64, t_max: f64, env: &Environment) -> Option<HitRecord<&'_ M>> {
-                <T as Hittable<M>>::hit(self, ray, t_min, t_max, env)
+            fn hit(&self, ray: Ray, t_min: f64, t_max: f64, env: &Environment) -> Option<HitRecord<'_>> {
+                <T as Hittable>::hit(self, ray, t_min, t_max, env)
             }
         }
     };
     ($ty:ty) => {
-        impl<T: Hittable<M>, M> Hittable<M> for $ty {
+        impl<T: Hittable> Hittable for $ty {
             #[inline]
-            fn hit(&self, ray: Ray, t_min: f64, t_max: f64, env: &Environment) -> Option<HitRecord<&'_ M>> {
-                <T as Hittable<M>>::hit(self, ray, t_min, t_max, env)
+            fn hit(&self, ray: Ray, t_min: f64, t_max: f64, env: &Environment) -> Option<HitRecord<'_>> {
+                <T as Hittable>::hit(self, ray, t_min, t_max, env)
             }
         }
     };
@@ -117,7 +119,7 @@ bounding_boxable_ptr_impl!('a, parking_lot::MutexGuard<'a, T>);
 
 
 /// Defines the functions that hittable objects have in common.
-pub trait Hittable<M>: BoundingBoxable {
+pub trait Hittable: BoundingBoxable {
     /// Computes any hitpoints of the given ray with this object.
     ///
     /// # Arguments
@@ -128,7 +130,7 @@ pub trait Hittable<M>: BoundingBoxable {
     ///
     /// # Returns
     /// A new [`HitRecord`] struct, which collects relevant information of this hit, or else [`None`] if the ray does not hit.
-    fn hit(&self, ray: Ray, t_min: f64, t_max: f64, env: &Environment) -> Option<HitRecord<&'_ M>>;
+    fn hit(&self, ray: Ray, t_min: f64, t_max: f64, env: &Environment) -> Option<HitRecord<'_>>;
 }
 
 // Pointer-like impls
@@ -167,6 +169,7 @@ macro_rules! object_impl {
         #[derive(Debug, Error)]
         pub enum Error {
             $(#[error("{0}")] $obj(#[source] $errty),)*
+            #[error("{0}")] ConstantDensity(#[source] std::boxed::Box<Self>),
             #[error("{0}")] RotateX(#[source] std::boxed::Box<Self>),
             #[error("{0}")] RotateY(#[source] std::boxed::Box<Self>),
             #[error("{0}")] RotateZ(#[source] std::boxed::Box<Self>),
@@ -182,6 +185,8 @@ macro_rules! object_impl {
         #[derive(Clone, Debug, Deserialize, Serialize)]
         pub enum Object {
             $($(#[$($attrs)*])* $obj($obj$(<$($gen)*>)?),)*
+            /// Turns a shape into a smoky shape.
+            ConstantDensity(ConstantDensity<std::boxed::Box<Self>>),
             /// A rotation around the X-axis.
             RotateX(RotateX<std::boxed::Box<Self>>),
             /// A rotation around the Y-axis.
@@ -200,6 +205,7 @@ macro_rules! object_impl {
             fn load(&mut self, dir: &Path) -> Result<(), Self::Error> {
                 match self {
                     $(Self::$obj(o) => o.load(dir).map_err(Error::$obj),)*
+                    Self::ConstantDensity(c) => c.load(dir).map_err(std::boxed::Box::new).map_err(Error::ConstantDensity),
                     Self::RotateX(r) => r.load(dir).map_err(std::boxed::Box::new).map_err(Error::RotateX),
                     Self::RotateY(r) => r.load(dir).map_err(std::boxed::Box::new).map_err(Error::RotateY),
                     Self::RotateZ(r) => r.load(dir).map_err(std::boxed::Box::new).map_err(Error::RotateZ),
@@ -212,6 +218,7 @@ macro_rules! object_impl {
             fn aabb(&self, t_us: u64) -> AABB {
                 match self {
                     $(Self::$obj(o) => o.aabb(t_us),)*
+                    Self::ConstantDensity(c) => c.aabb(t_us),
                     Self::RotateX(r) => r.aabb(t_us),
                     Self::RotateY(r) => r.aabb(t_us),
                     Self::RotateZ(r) => r.aabb(t_us),
@@ -219,11 +226,12 @@ macro_rules! object_impl {
                 }
             }
         }
-        impl Hittable<Material> for Object {
+        impl Hittable for Object {
             #[inline]
-            fn hit(&self, ray: Ray, t_min: f64, t_max: f64, env: &Environment) -> Option<HitRecord<&Material>> {
+            fn hit(&self, ray: Ray, t_min: f64, t_max: f64, env: &Environment) -> Option<HitRecord<'_>> {
                 match self {
                     $(Self::$obj(o) => o.hit(ray, t_min, t_max, env),)*
+                    Self::ConstantDensity(c) => c.hit(ray, t_min, t_max, env),
                     Self::RotateX(r) => r.hit(ray, t_min, t_max, env),
                     Self::RotateY(r) => r.hit(ray, t_min, t_max, env),
                     Self::RotateZ(r) => r.hit(ray, t_min, t_max, env),
