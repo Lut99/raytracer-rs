@@ -15,7 +15,6 @@
 //
 
 use std::fmt::{Formatter, Result as FResult};
-use std::mem;
 
 use serde::de::{self, SeqAccess, Visitor};
 use serde::ser::SerializeSeq;
@@ -273,27 +272,39 @@ impl AABB {
     /// # Returns
     /// Whether the given ray hits this AABB.
     #[inline]
-    pub fn hittest(&self, ray: Ray, mut t_min: f64, mut t_max: f64) -> bool {
-        let int = [self.x, self.y, self.z];
-        for i in 0..3 {
-            // Compute the hit points with the AABB
-            let inv_direction: f64 = 1.0 / ray.direct[i];
-            let mut t0: f64 = (int[i].min() - ray.origin[i]) * inv_direction;
-            let mut t1: f64 = (int[i].max() - ray.origin[i]) * inv_direction;
+    pub fn hittest(&self, ray: Ray, t_min: f64, t_max: f64) -> bool {
+        // let int = [self.x, self.y, self.z];
+        // for i in 0..3 {
+        //     // Compute the hit points with the AABB
+        //     let inv_direction: f64 = 1.0 / ray.direct[i];
+        //     let mut t0: f64 = (int[i].min() - ray.origin[i]) * inv_direction;
+        //     let mut t1: f64 = (int[i].max() - ray.origin[i]) * inv_direction;
 
-            // Ensure we order the values properly, and then bind them by the given min/max
-            if t0 > t1 {
-                mem::swap(&mut t0, &mut t1);
-            }
-            t_min = f64::max(t_min, t0);
-            t_max = f64::min(t_max, t1);
+        //     // Ensure we order the values properly, and then bind them by the given min/max
+        //     if t0 > t1 {
+        //         mem::swap(&mut t0, &mut t1);
+        //     }
+        //     t_min = f64::max(t_min, t0);
+        //     t_max = f64::min(t_max, t1);
 
-            // We don't hit if t_max is now too small
-            if t_max <= t_min {
-                return false;
-            }
-        }
-        true
+        //     // We don't hit if t_max is now too small
+        //     if t_max <= t_min {
+        //         return false;
+        //     }
+        // }
+        // true
+
+        // Compute the hitpoints with the box' intervals
+        // The `Interval` takes care to order  them from small to large anyway
+        let (invdirx, invdiry, invdirz): (f64, f64, f64) = (1.0 / ray.direct.x, 1.0 / ray.direct.y, 1.0 / ray.direct.z);
+        let tx: Interval = Interval::new((self.x.min() - ray.origin.x) * invdirx, (self.x.max() - ray.origin.x) * invdirx);
+        let ty: Interval = Interval::new((self.y.min() - ray.origin.y) * invdiry, (self.y.max() - ray.origin.y) * invdiry);
+        let tz: Interval = Interval::new((self.z.min() - ray.origin.z) * invdirz, (self.z.max() - ray.origin.z) * invdirz);
+
+        // If it overlaps, it's a hit; otherwise it isn't.
+        let hitmin = f64::max(t_min, f64::max(f64::max(tx.min(), ty.min()), tz.min()));
+        let hitmax = f64::min(t_max, f64::min(f64::min(tx.max(), ty.max()), tz.max()));
+        hitmin < hitmax
     }
 
 
@@ -324,41 +335,54 @@ impl BoundingBoxable for AABB {
 }
 impl Hittable for AABB {
     #[inline]
-    fn hit(&self, ray: Ray, mut t_min: f64, mut t_max: f64, _env: &Environment) -> Option<HitRecord<'_>> {
-        println!("To hit: t_min {t_min} // t_max {t_max}");
+    fn hit(&self, ray: Ray, t_min: f64, t_max: f64, _env: &Environment) -> Option<HitRecord<'_>> {
+        // Compute the hitpoints with the box' intervals
+        // The `Interval` takes care to order  them from small to large anyway
+        let (invdirx, invdiry, invdirz): (f64, f64, f64) = (1.0 / ray.direct.x, 1.0 / ray.direct.y, 1.0 / ray.direct.z);
+        let tx: Interval = Interval::new((self.x.min() - ray.origin.x) * invdirx, (self.x.max() - ray.origin.x) * invdirx);
+        let ty: Interval = Interval::new((self.y.min() - ray.origin.y) * invdiry, (self.y.max() - ray.origin.y) * invdiry);
+        let tz: Interval = Interval::new((self.z.min() - ray.origin.z) * invdirz, (self.z.max() - ray.origin.z) * invdirz);
 
-        let mut hit: (f64, f64, usize) = (0.0, 0.0, 0);
-        let int = [self.x, self.y, self.z];
-        for i in 0..3 {
-            // Compute the hit points with the AABB
-            let inv_direction: f64 = 1.0 / ray.direct[i];
-            let hit_scale: f64 = if inv_direction >= 0.0 { 1.0 } else { -1.0 };
-            let mut t0: f64 = (int[i].min() - ray.origin[i]) * inv_direction;
-            let mut t1: f64 = (int[i].max() - ray.origin[i]) * inv_direction;
+        // Compute the overlapping range of the interval. Importantly, remember which sides map to which normal vectors.
+        // Ugly, could also have been a bunch of `f64::max()`'s and such
+        let (hit0, norm0): (f64, Vec3) = if tx.min() >= ty.min() && tx.min() >= tz.min() {
+            (tx.min(), Vec3::new(invdirx / invdirx.abs(), 0.0, 0.0))
+        } else if ty.min() >= tx.min() && ty.min() >= tz.min() {
+            (ty.min(), Vec3::new(0.0, invdiry / invdiry.abs(), 0.0))
+        } else {
+            (tz.min(), Vec3::new(0.0, 0.0, invdirz / invdirz.abs()))
+        };
+        let (hit1, norm1): (f64, Vec3) = if tx.max() <= ty.max() && tx.max() <= tz.max() {
+            (tx.max(), Vec3::new(invdirx / invdirx.abs(), 0.0, 0.0))
+        } else if ty.max() <= tx.max() && ty.max() <= tz.max() {
+            (ty.max(), Vec3::new(0.0, invdiry / invdiry.abs(), 0.0))
+        } else {
+            (tz.max(), Vec3::new(0.0, 0.0, invdirz / invdirz.abs()))
+        };
 
-            // Ensure we order the values properly, and then bind them by the given min/max
-            if t0 > t1 {
-                mem::swap(&mut t0, &mut t1);
-            }
-            if t0 > t_min {
-                t_min = t0;
-                hit = (0.0, hit_scale, i);
-            }
-            t_max = f64::min(t_max, t1);
-
-            // We don't hit if t_max is now too small
-            if t_max <= t_min {
-                return None;
-            }
+        // If they all overlap, then we hit (so we miss if the ranges don't overlap)
+        // NOTE: Technically a redundant check, actually, because we always happen to be precisely
+        // our own AABB and that already gets hitchecked.
+        if hit1 <= hit0 {
+            return None;
         }
-        println!("Hit @ {t_min} // {t_max}");
 
-        // What's left now is checking whether the end facing the ray or the end after the ray
+        // Then comes the question: where did we really hit?
+        let (hit, norm): (f64, Vec3) = if hit0 >= t_min && hit0 <= t_max {
+            (hit0, norm0)
+        } else if hit1 >= t_min && hit1 <= t_max {
+            (hit1, norm1)
+        } else {
+            // Last-minute cancallation due to `t_min` and `t_max`
+            return None;
+        };
+
+        // Create the hitrecord and return
         Some(HitRecord::new(
             ray,
-            ray.at(t_min),
-            t_min,
-            Vec3::new(if hit.2 == 0 { hit.1 } else { 0.0 }, if hit.2 == 1 { hit.1 } else { 0.0 }, if hit.2 == 2 { hit.1 } else { 0.0 }),
+            ray.at(hit),
+            hit,
+            norm,
             (0.0, 0.0), // TODO
             &(),
         ))
