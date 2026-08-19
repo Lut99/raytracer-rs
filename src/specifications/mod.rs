@@ -15,6 +15,7 @@
 
 // Declare the submodules
 pub mod animations;
+pub mod archive;
 pub mod materials;
 pub mod objects;
 pub mod scene;
