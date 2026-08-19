@@ -23,7 +23,6 @@ use super::cpu::ray_colour;
 use crate::hittree::HitTree;
 use crate::math::camera::Camera;
 use crate::math::colour::Colour;
-use crate::specifications::features::Features;
 use crate::specifications::scene::Environment;
 
 
@@ -31,23 +30,26 @@ use crate::specifications::scene::Environment;
 /// The SingleThreadRenderer renders rays straightforwardly on a single thread, no fuss.
 #[derive(Debug)]
 pub struct SingleThreadRenderer {
-    /// The renderer features to enable/disable.
-    features:  Features,
     /// Whether to enable or disable the progress bar.
     show_prgs: bool,
+    /// The maximum bouncing depth.
+    max_depth: usize,
+    /// Whether to apply gamma correction.
+    gamma_correction: bool,
 }
 
 impl SingleThreadRenderer {
     /// Constructor for the SingleThreadRenderer.
     ///
     /// # Arguments
-    /// - `features`: The features to enable in this renderer.
     /// - `show_prgs`: Whether or not to show the progress as we're rendering.
+    /// - `max_depth`: The maximum bounce depth for rays.
+    /// - `gamma_correction`: Whether to apply gamma correction to the final image.
     ///
     /// # Returns
     /// A new SingleThreadRenderer instance.
     #[inline]
-    pub fn new(features: impl Into<Features>, show_prgs: bool) -> Self { Self { features: features.into(), show_prgs } }
+    pub const fn new(show_prgs: bool, max_depth: usize, gamma_correction: bool) -> Self { Self { show_prgs, max_depth, gamma_correction } }
 }
 impl RayRenderer for SingleThreadRenderer {
     type Error = std::convert::Infallible;
@@ -77,7 +79,7 @@ impl RayRenderer for SingleThreadRenderer {
         let start: Instant = Instant::now();
         for (i, (_, x, y, ray)) in cam.rays(0).enumerate() {
             // Compute the colour of the Ray
-            let colour: Colour = ray_colour(ray, world, self.features.max_depth, env);
+            let colour: Colour = ray_colour(ray, world, self.max_depth, env);
 
             // Add the colour to the image.
             image[(x, y)] += colour;
@@ -95,7 +97,7 @@ impl RayRenderer for SingleThreadRenderer {
         let scale: f64 = 1.0 / cam.n_samples() as f64;
         for colour in image.iter_mut() {
             *colour *= scale;
-            if self.features.gamma_correction {
+            if self.gamma_correction {
                 *colour = colour.gamma();
             }
             *colour = colour.opaque().clamp();

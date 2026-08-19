@@ -32,7 +32,6 @@ use crate::common::file::{impl_toml_from_path, impl_toml_from_string, impl_toml_
 use crate::hittree::HitTree;
 use crate::math::camera::Rays;
 use crate::math::{Camera, Colour, Ray};
-use crate::specifications::features::Features;
 use crate::specifications::scene::Environment;
 
 
@@ -93,10 +92,12 @@ impl MultiThreadRendererConfig {
 /// The SingleThreadRenderer renders rays on multiple threads at once.
 #[derive(Debug)]
 pub struct MultiThreadRenderer {
-    /// The renderer features to enable/disable.
-    features:  Features,
     /// Whether to enable or disable the progress bar.
     show_prgs: bool,
+    /// The maximum bouncing depth.
+    max_depth: usize,
+    /// Whether to apply gamma correction.
+    gamma_correction: bool,
 
     /// The number of threads to render with.
     n_threads: usize,
@@ -108,9 +109,9 @@ impl MultiThreadRenderer {
     /// Constructor for the MultiThreadRenderer.
     ///
     /// # Arguments
-    /// - `dims`: The dimensions of the output images of this renderer.
-    /// - `features`: The features to enable in this renderer.
     /// - `show_prgs`: Whether or not to show the progress as we're rendering.
+    /// - `max_depth`: The maximum bounce depth for rays.
+    /// - `gamma_correction`: Whether to apply gamma correction to the final image.
     /// - `config`: Any MultiThreadRenderer-specific config.
     ///
     /// # Returns
@@ -119,7 +120,7 @@ impl MultiThreadRenderer {
     /// # Errors
     /// This function may error if the user left the number of threads unspecified and we failed to query the number ourselves.
     #[inline]
-    pub fn new(features: impl Into<Features>, show_prgs: bool, config: impl Into<MultiThreadRendererConfig>) -> Result<Self, Error> {
+    pub fn new(show_prgs: bool, max_depth: usize, gamma_correction: bool, config: impl Into<MultiThreadRendererConfig>) -> Result<Self, Error> {
         // Resolve the number of threads first
         let config = config.into();
         let n_threads: usize = match config.n_threads {
@@ -133,7 +134,7 @@ impl MultiThreadRenderer {
         };
 
         // Done
-        Ok(Self { features: features.into(), show_prgs, n_threads, work_size: config.work_size })
+        Ok(Self { show_prgs, max_depth, gamma_correction, n_threads, work_size: config.work_size })
     }
 }
 impl RayRenderer for MultiThreadRenderer {
@@ -201,7 +202,7 @@ impl RayRenderer for MultiThreadRenderer {
                             // Iterate over the allocated rays to compute them
                             for (_, x, y, ray) in buf.drain(..) {
                                 // Compute the colour of the Ray
-                                let colour: Colour = ray_colour(ray, world, self.features.max_depth, env);
+                                let colour: Colour = ray_colour(ray, world, self.max_depth, env);
 
                                 // Add the colour to the image.
                                 image[(x, y)] += colour;
@@ -232,7 +233,7 @@ impl RayRenderer for MultiThreadRenderer {
             let scale: f64 = 1.0 / cam.n_samples() as f64;
             for colour in res.iter_mut() {
                 *colour *= scale;
-                if self.features.gamma_correction {
+                if self.gamma_correction {
                     *colour = colour.gamma();
                 }
                 *colour = colour.opaque().clamp();

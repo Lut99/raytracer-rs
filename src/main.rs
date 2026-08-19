@@ -12,6 +12,7 @@
 //!   Entrypoint to the main `raytracer` application.
 //
 
+use std::num::NonZeroU64;
 use std::path::PathBuf;
 use std::process::ExitCode;
 
@@ -29,7 +30,6 @@ use raytracer::render::image::Image;
 use raytracer::render::{RayRenderer as _, RenderBackend};
 use raytracer::specifications::Loadable as _;
 use raytracer::specifications::animations::{Animation, Vertical};
-use raytracer::specifications::features::{Features, FeaturesCli, FeaturesFile};
 use raytracer::specifications::materials::{Dielectric, DiffuseLight, Isotropic, Lambertian, LambertianTexture, Material, Metal};
 use raytracer::specifications::objects::plane::Qd;
 use raytracer::specifications::objects::{AnimatedSphere, Box, ConstantDensity, Object, Quad, RotateY, Sphere, Translate};
@@ -89,11 +89,26 @@ struct RenderArguments {
     #[clap(long, help = "If given, defines a file that defines backend-specific properties.")]
     backend_config: Option<PathBuf>,
 
-    /// The file defining a constant setting of features.
-    #[clap(short = 'F', long, help = "If given, will use the features enabled in the given features file.")]
-    features_file: Option<PathBuf>,
-    #[clap(flatten)]
-    features:      FeaturesCli,
+    /// Whether to enable gamma correction (or rather, to disable it).
+    #[clap(long, help = "If given, disables gamma correction")]
+    disable_gamma_correction: bool,
+    /// Whether to enable anti-aliasing (or rather, to disable it).
+    #[clap(long, help = "If given, disables anti-aliasing (shorthand for '--n-samples 1')")]
+    disable_anti_aliasing: bool,
+    /// Determines the number of rays to cast per pixel.
+    #[clap(
+        long,
+        help = "The number of rays to cast per pixel. Setting to '1' implies disabling anti-aliasing. If omitted, uses the value from the scene \
+                file."
+    )]
+    n_samples: Option<NonZeroU64>,
+    /// Determines the number of times a ray may bounce at most.
+    #[clap(
+        long,
+        help = "The number of times a ray may bounce at most. Setting to '1' implies not bouncing anything ever (i.e., direct illumination), and \
+                setting to '0' not even fires the ray. If omitted, uses the value from the scene file."
+    )]
+    ray_max_depth: Option<usize>,
 
     /// A once-more nested subcommand that defines what type of media to render.
     #[clap(subcommand)]
@@ -190,21 +205,6 @@ fn main() -> ExitCode {
     // Match on the subcommand
     match args.subcommand {
         RaytracerSubcommand::Render(render) => {
-            // Load the given feature file, if any.
-            // NOTE: Not a map because we might want to quit with the exit code
-            let features: Option<FeaturesFile> = match render.features_file {
-                Some(p) => match FeaturesFile::from_path(&p) {
-                    Ok(features) => Some(features),
-                    Err(err) => {
-                        error!("{}", err.trace());
-                        return ExitCode::FAILURE;
-                    },
-                },
-                None => None,
-            };
-            // Override it with other options
-            let features: Features = Features::new(features, render.features);
-
             // Match further on the media type
             match render.media {
                 RenderSubcommand::Image(image) => {
@@ -220,6 +220,13 @@ fn main() -> ExitCode {
                     if let Some(dims) = render.dims {
                         scene.camera.dims = (dims.0, dims.1);
                     }
+                    if let Some(n_samples) = render.n_samples {
+                        scene.camera.n_samples = n_samples;
+                    }
+                    if render.disable_anti_aliasing {
+                        // SAFETY: It's 1
+                        scene.camera.n_samples = unsafe { NonZeroU64::new_unchecked(1) };
+                    }
 
                     // Convert that to a static HitList and load it
                     for (i, obj) in scene.objects.iter_mut().enumerate() {
@@ -234,7 +241,8 @@ fn main() -> ExitCode {
                     let output: Image = match render.backend {
                         RenderBackend::SingleThreaded => {
                             debug!("Rendering with single-threaded backend");
-                            let renderer: SingleThreadRenderer = SingleThreadRenderer::new(features, true);
+                            let renderer: SingleThreadRenderer =
+                                SingleThreadRenderer::new(true, render.ray_max_depth.unwrap_or(50), !render.disable_gamma_correction);
                             renderer.render_frame(&list, &Camera::from(scene.camera), &scene.environment).unwrap()
                         },
 
@@ -257,13 +265,14 @@ fn main() -> ExitCode {
                             };
 
                             // Create the backend
-                            let renderer: MultiThreadRenderer = match MultiThreadRenderer::new(features, true, config) {
-                                Ok(renderer) => renderer,
-                                Err(err) => {
-                                    error!("{}", err.trace());
-                                    return ExitCode::FAILURE;
-                                },
-                            };
+                            let renderer: MultiThreadRenderer =
+                                match MultiThreadRenderer::new(true, render.ray_max_depth.unwrap_or(50), !render.disable_gamma_correction, config) {
+                                    Ok(renderer) => renderer,
+                                    Err(err) => {
+                                        error!("{}", err.trace());
+                                        return ExitCode::FAILURE;
+                                    },
+                                };
 
                             // Now render with this backend
                             renderer.render_frame(&list, &Camera::from(scene.camera), &scene.environment).unwrap()
@@ -504,7 +513,8 @@ fn main() -> ExitCode {
                     let output: Image = match render.backend {
                         RenderBackend::SingleThreaded => {
                             debug!("Rendering with single-threaded backend");
-                            let renderer: SingleThreadRenderer = SingleThreadRenderer::new(features, true);
+                            let renderer: SingleThreadRenderer =
+                                SingleThreadRenderer::new(true, render.ray_max_depth.unwrap_or(50), !render.disable_gamma_correction);
                             renderer.render_frame(&list, &cam, &env).unwrap()
                         },
 
@@ -527,13 +537,14 @@ fn main() -> ExitCode {
                             };
 
                             // Create the backend
-                            let renderer: MultiThreadRenderer = match MultiThreadRenderer::new(features, true, config) {
-                                Ok(renderer) => renderer,
-                                Err(err) => {
-                                    error!("{}", err.trace());
-                                    return ExitCode::FAILURE;
-                                },
-                            };
+                            let renderer: MultiThreadRenderer =
+                                match MultiThreadRenderer::new(true, render.ray_max_depth.unwrap_or(50), !render.disable_gamma_correction, config) {
+                                    Ok(renderer) => renderer,
+                                    Err(err) => {
+                                        error!("{}", err.trace());
+                                        return ExitCode::FAILURE;
+                                    },
+                                };
 
                             // Now render with this backend
                             renderer.render_frame(&list, &cam, &env).unwrap()

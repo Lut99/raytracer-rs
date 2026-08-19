@@ -6,6 +6,15 @@ authors = [ "Lut99" ]
 description = "A new attempt at writing a simple raytracer. This time, no fumbling about with real-time stuff, but instead creating a good-old, offline renderer. Based on <https://raytracing.github.io/books/RayTracingInOneWeekend.html>."
 
 
+[[example]]
+name = "integral"
+path = "examples/learning/integral.rs"
+
+[[example]]
+name = "pdf"
+path = "examples/learning/pdf.rs"
+
+
 [dependencies]
 base64 = "0.22.0"
 clap = { version = "4.6.0", features = ["derive"] }
