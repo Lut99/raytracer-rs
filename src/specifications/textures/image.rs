@@ -68,7 +68,7 @@ impl Textured for Image {
             Self::Loaded(image) => {
                 // Scale the logical pixel coordinates to concrete coordinates
                 // NOTE: Flip the Y-axis
-                let (x, y): (u32, u32) = ((image.dims().0 as f64 * uv.0).round() as u32, (image.dims().1 as f64 * (1.0 - uv.1)).round() as u32);
+                let (x, y): (u32, u32) = ((image.dims().0 as f64 * uv.0).floor() as u32, (image.dims().1 as f64 * (1.0 - uv.1)).floor() as u32);
 
                 // Now sample that coordinate from ourselves
                 image[(x, y)]

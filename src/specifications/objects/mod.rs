@@ -45,6 +45,7 @@ pub use translate::{RotateX, RotateY, RotateZ, Translate};
 use super::Loadable;
 use super::materials::Material;
 use super::scene::Environment;
+use crate::hittree::HitTree;
 use crate::math::{AABB, Ray};
 
 
@@ -174,6 +175,7 @@ macro_rules! object_impl {
             #[error("{0}")] RotateY(#[source] std::boxed::Box<Self>),
             #[error("{0}")] RotateZ(#[source] std::boxed::Box<Self>),
             #[error("{0}")] Translate(#[source] std::boxed::Box<Self>),
+            #[error("{0}")] Group(#[source] std::boxed::Box<Self>),
         }
 
 
@@ -195,6 +197,9 @@ macro_rules! object_impl {
             RotateZ(RotateZ<std::boxed::Box<Self>>),
             /// A translation.
             Translate(Translate<std::boxed::Box<Self>>),
+            /// A nested group of objects.
+            #[serde(skip)]
+            Group(std::boxed::Box<HitTree>),
         }
 
         // Interface
@@ -210,6 +215,7 @@ macro_rules! object_impl {
                     Self::RotateY(r) => r.load(dir).map_err(std::boxed::Box::new).map_err(Error::RotateY),
                     Self::RotateZ(r) => r.load(dir).map_err(std::boxed::Box::new).map_err(Error::RotateZ),
                     Self::Translate(t) => t.load(dir).map_err(std::boxed::Box::new).map_err(Error::Translate),
+                    Self::Group(g) => g.load(dir).map_err(std::boxed::Box::new).map_err(Error::Group),
                 }
             }
         }
@@ -223,6 +229,7 @@ macro_rules! object_impl {
                     Self::RotateY(r) => r.aabb(t_us),
                     Self::RotateZ(r) => r.aabb(t_us),
                     Self::Translate(t) => t.aabb(t_us),
+                    Self::Group(g) => g.aabb(t_us),
                 }
             }
         }
@@ -236,6 +243,7 @@ macro_rules! object_impl {
                     Self::RotateY(r) => r.hit(ray, t_min, t_max, env),
                     Self::RotateZ(r) => r.hit(ray, t_min, t_max, env),
                     Self::Translate(t) => t.hit(ray, t_min, t_max, env),
+                    Self::Group(g) => g.hit(ray, t_min, t_max, env),
                 }
             }
         }
@@ -263,6 +271,8 @@ object_impl!(
     // RotateZ{Box<Object>}(Box<Error>),
     /// A translation.
     // Translate{Box<Object>}(Box<Error>),
+    /// A group of objects.
+    // HitTree{Box<Object>}(Box<Error>),
     /// A three-point shape on a 2D-plane.
     Triangle{Material}(super::materials::Error),
     /// A complex, triangle-based model.

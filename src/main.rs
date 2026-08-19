@@ -15,14 +15,14 @@
 use std::path::PathBuf;
 use std::process::ExitCode;
 
-use clap::{Parser, Subcommand};
+use clap::{Parser, Subcommand, ValueEnum};
 use error_trace::{ErrorTrace as _, toplevel};
 use humanlog::{DebugMode, HumanLogger};
 use log::{debug, error, info};
 use raytracer::common::input::Dimensions;
 use raytracer::generate;
 use raytracer::hittree::HitTree;
-use raytracer::math::{Camera, Colour, Vec3};
+use raytracer::math::{AABB, Camera, Colour, Vec3};
 use raytracer::render::backends::multi::{MultiThreadRenderer, MultiThreadRendererConfig};
 use raytracer::render::backends::single::SingleThreadRenderer;
 use raytracer::render::image::Image;
@@ -30,9 +30,11 @@ use raytracer::render::{RayRenderer as _, RenderBackend};
 use raytracer::specifications::Loadable as _;
 use raytracer::specifications::animations::{Animation, Vertical};
 use raytracer::specifications::features::{Features, FeaturesCli, FeaturesFile};
-use raytracer::specifications::materials::{Dielectric, Lambertian, LambertianTexture, Material, Metal};
-use raytracer::specifications::objects::{AnimatedSphere, Object, Sphere};
-use raytracer::specifications::scene::{Environment, SceneFile};
+use raytracer::specifications::materials::{Dielectric, DiffuseLight, Isotropic, Lambertian, LambertianTexture, Material, Metal};
+use raytracer::specifications::objects::plane::Qd;
+use raytracer::specifications::objects::{AnimatedSphere, Box, ConstantDensity, Object, Quad, RotateY, Sphere, Translate};
+use raytracer::specifications::scene::{Background, Environment, SceneFile};
+use raytracer::specifications::textures::image::Image as TexImage;
 use raytracer::specifications::textures::{SpatialChecker, Texture};
 
 
@@ -120,12 +122,24 @@ struct RenderImageArguments {
 /// Defines the arguments for the `render image` subcommand.
 #[derive(Debug, Parser)]
 struct RenderCoverArguments {
+    /// Which book cover to render
+    #[clap(name = "BOOK", help = "The book of who we render the cover.")]
+    book: Book,
     /// Any shutter time (in microseconds) to set. Since the cover is secretly animated, setting this will reveal motion blur.
     #[clap(short, long, default_value = "1000")]
     shutter_time: u64,
     /// The path to the image file to output.
     #[clap(name = "OUTPUT_PATH", default_value = "./image.png", help = "The path to write the rendered image to.")]
-    output_path:  PathBuf,
+    output_path: PathBuf,
+}
+/// Defines possible book covers.
+#[derive(Clone, Copy, Debug, ValueEnum)]
+#[clap(rename_all = "snake_case")]
+enum Book {
+    #[clap(alias = "book1")]
+    OneWeekend,
+    #[clap(alias = "book2")]
+    NextWeek,
 }
 
 /// Defines the arguments for the `generate` subcommand.
@@ -265,90 +279,233 @@ fn main() -> ExitCode {
                 },
 
                 RenderSubcommand::Cover(cover) => {
-                    // Generate the list of objects
-                    let mut objects: Vec<Object> = Vec::with_capacity(1 + 21 * 21 + 3);
-                    objects.push(Object::Sphere(Sphere {
-                        center:   Vec3::new(0.0, -1000.0, 0.0),
-                        radius:   1000.0,
-                        material: Material::LambertianTexture(LambertianTexture {
-                            texture: Texture::SpatialChecker(SpatialChecker {
-                                scale: 0.32,
-                                black: Colour::new(0.2, 0.3, 0.1, 1.0),
-                                white: Colour::new(0.9, 0.9, 0.9, 1.0),
-                            }),
-                        }),
-                    }));
-                    for a in -11..11 {
-                        for b in -11..11 {
-                            let mat = fastrand::f64();
-                            let center = Vec3::new(a as f64 + 0.9 * fastrand::f64(), 0.2, b as f64 + 0.9 * fastrand::f64());
-                            if (center - Vec3::new(4.0, 0.2, 0.0)).length() > 0.9 {
-                                if mat < 0.8 {
-                                    // It'll be a tiny diffuse sphere
-                                    let colour = Colour::new(fastrand::f64(), fastrand::f64(), fastrand::f64(), 1.0);
-                                    let sphere = Sphere { center, radius: 0.2, material: Material::Lambertian(Lambertian { colour }) };
-                                    objects.push(if fastrand::f64() < 0.1 {
-                                        Object::AnimatedSphere(AnimatedSphere {
-                                            sphere,
-                                            animation: Animation::Vertical(Vertical { len: 0.5 * fastrand::f64(), at: 0, duration: 1000 }),
-                                        })
-                                    } else {
-                                        Object::Sphere(sphere)
-                                    });
-                                } else if mat < 0.95 {
-                                    // Metal, with random fuzziness
-                                    let colour =
-                                        Colour::new(fastrand::f64() / 2.0 + 0.5, fastrand::f64() / 2.0 + 0.5, fastrand::f64() / 2.0 + 0.5, 1.0);
-                                    let fuzz = fastrand::f64() / 2.0;
-                                    objects.push(Object::Sphere(Sphere { center, radius: 0.2, material: Material::Metal(Metal { colour, fuzz }) }));
-                                } else {
-                                    // Glass
-                                    objects.push(Object::Sphere(Sphere {
-                                        center,
-                                        radius: 0.2,
-                                        material: Material::Dielectric(Dielectric { refraction_index: 1.5, colour: Colour::new(1.0, 1.0, 1.0, 1.0) }),
+                    // Generate the list of objects for the correct book
+                    let mut objects: Vec<Object> = match cover.book {
+                        Book::OneWeekend => {
+                            let mut objects: Vec<Object> = Vec::with_capacity(1 + 21 * 21 + 3);
+                            objects.push(Object::Sphere(Sphere {
+                                center:   Vec3::new(0.0, -1000.0, 0.0),
+                                radius:   1000.0,
+                                material: Material::LambertianTexture(LambertianTexture {
+                                    texture: Texture::SpatialChecker(SpatialChecker {
+                                        scale: 0.32,
+                                        black: Colour::new(0.2, 0.3, 0.1, 1.0),
+                                        white: Colour::new(0.9, 0.9, 0.9, 1.0),
+                                    }),
+                                }),
+                            }));
+                            for a in -11..11 {
+                                for b in -11..11 {
+                                    let mat = fastrand::f64();
+                                    let center = Vec3::new(a as f64 + 0.9 * fastrand::f64(), 0.2, b as f64 + 0.9 * fastrand::f64());
+                                    if (center - Vec3::new(4.0, 0.2, 0.0)).length() > 0.9 {
+                                        if mat < 0.8 {
+                                            // It'll be a tiny diffuse sphere
+                                            let colour = Colour::new(fastrand::f64(), fastrand::f64(), fastrand::f64(), 1.0);
+                                            let sphere = Sphere { center, radius: 0.2, material: Material::Lambertian(Lambertian { colour }) };
+                                            objects.push(if fastrand::f64() < 0.1 {
+                                                Object::AnimatedSphere(AnimatedSphere {
+                                                    sphere,
+                                                    animation: Animation::Vertical(Vertical { len: 0.5 * fastrand::f64(), at: 0, duration: 1000 }),
+                                                })
+                                            } else {
+                                                Object::Sphere(sphere)
+                                            });
+                                        } else if mat < 0.95 {
+                                            // Metal, with random fuzziness
+                                            let colour = Colour::new(
+                                                fastrand::f64() / 2.0 + 0.5,
+                                                fastrand::f64() / 2.0 + 0.5,
+                                                fastrand::f64() / 2.0 + 0.5,
+                                                1.0,
+                                            );
+                                            let fuzz = fastrand::f64() / 2.0;
+                                            objects.push(Object::Sphere(Sphere {
+                                                center,
+                                                radius: 0.2,
+                                                material: Material::Metal(Metal { colour, fuzz }),
+                                            }));
+                                        } else {
+                                            // Glass
+                                            objects.push(Object::Sphere(Sphere {
+                                                center,
+                                                radius: 0.2,
+                                                material: Material::Dielectric(Dielectric {
+                                                    refraction_index: 1.5,
+                                                    colour: Colour::new(1.0, 1.0, 1.0, 1.0),
+                                                }),
+                                            }));
+                                        }
+                                    }
+                                }
+                            }
+                            objects.push(Object::Sphere(Sphere {
+                                center:   Vec3::new(0.0, 1.0, 0.0),
+                                radius:   1.0,
+                                material: Material::Dielectric(Dielectric { refraction_index: 1.5, colour: Colour::new(1.0, 1.0, 1.0, 1.0) }),
+                            }));
+                            objects.push(Object::Sphere(Sphere {
+                                center:   Vec3::new(-4.0, 1.0, 0.0),
+                                radius:   1.0,
+                                material: Material::Lambertian(Lambertian { colour: Colour::new(0.4, 0.2, 0.1, 1.0) }),
+                            }));
+                            objects.push(Object::Sphere(Sphere {
+                                center:   Vec3::new(4.0, 1.0, 0.0),
+                                radius:   1.0,
+                                material: Material::Metal(Metal { colour: Colour::new(0.7, 0.6, 0.5, 1.0), fuzz: 0.0 }),
+                            }));
+                            objects
+                        },
+
+                        Book::NextWeek => {
+                            // Define materials
+                            let ground = Material::Lambertian(Lambertian { colour: Colour::new(0.48, 0.83, 0.53, 1.0) });
+                            let light = Material::DiffuseLight(DiffuseLight { colour: Colour::new(7.0, 7.0, 7.0, 1.0) });
+                            let brown = Material::Lambertian(Lambertian { colour: Colour::new(0.7, 0.3, 0.1, 1.0) });
+                            let glass = Material::Dielectric(Dielectric { colour: Colour::new(1.0, 1.0, 1.0, 1.0), refraction_index: 1.5 });
+                            let grey_metal = Material::Metal(Metal { colour: Colour::new(0.8, 0.8, 0.9, 1.0), fuzz: 1.0 });
+                            let earth = Material::LambertianTexture(LambertianTexture {
+                                texture: Texture::Image(TexImage::ToLoad {
+                                    path:   PathBuf::from("tests/scenes/earthmap.jpg"),
+                                    format: Some(image::ImageFormat::Jpeg),
+                                }),
+                            });
+                            let perlin_wink = Material::Lambertian(Lambertian { colour: Colour::new(0.5, 0.5, 0.5, 1.0) });
+                            let white = Material::Lambertian(Lambertian { colour: Colour::new(0.73, 0.73, 0.73, 1.0) });
+
+                            // Define the ground
+                            let mut objects: Vec<Object> = Vec::with_capacity(1000);
+                            const BOXES_PER_SIDE: u32 = 20;
+                            for i in 0..BOXES_PER_SIDE {
+                                for j in 0..BOXES_PER_SIDE {
+                                    // Compute the dimensions of each box
+                                    let w = 100.0;
+                                    let x0 = -1000.0 + i as f64 * w;
+                                    let z0 = -1000.0 + j as f64 * w;
+                                    let y0 = 0.0;
+                                    let x1 = x0 + w;
+                                    let y1 = fastrand::f64() * 100.0 + 1.0;
+                                    let z1 = z0 + w;
+                                    objects.push(Object::Box(Box {
+                                        aabb:     AABB::from_points(Vec3::new(x0, y0, z0), Vec3::new(x1, y1, z1)),
+                                        material: ground.clone(),
                                     }));
                                 }
                             }
+
+                            // Define the ceiling light
+                            objects.push(Object::Quad(Quad {
+                                qd: Qd { pos: Vec3::new(123.0, 554.0, 147.0), u: Vec3::new(300.0, 0.0, 0.0), v: Vec3::new(0.0, 0.0, 265.0) },
+                                material: light,
+                            }));
+
+                            // Define the blurry sphere
+                            objects.push(Object::AnimatedSphere(AnimatedSphere {
+                                sphere:    Sphere { center: Vec3::new(400.0, 400.0, 200.0), radius: 50.0, material: brown },
+                                animation: Animation::Vertical(Vertical { len: 30.0, at: 0, duration: cover.shutter_time }),
+                            }));
+
+                            // Define the loose glass & metal spheres
+                            objects.push(Object::Sphere(Sphere { center: Vec3::new(260.0, 150.0, 45.0), radius: 50.0, material: glass.clone() }));
+                            objects.push(Object::Sphere(Sphere { center: Vec3::new(0.0, 150.0, 145.0), radius: 50.0, material: grey_metal }));
+
+                            // Define glossy sphere (a dense fog in a glass sphere)
+                            let boundary =
+                                Object::Sphere(Sphere { center: Vec3::new(360.0, 150.0, 145.0), radius: 70.0, material: glass.clone() });
+                            objects.push(boundary.clone());
+                            objects.push(Object::ConstantDensity(ConstantDensity {
+                                boundary: std::boxed::Box::new(boundary),
+                                density: 0.2,
+                                phase_function: Isotropic { colour: Colour::new(0.2, 0.4, 0.9, 1.0) },
+                            }));
+
+                            // Define the overall haze over the scene
+                            objects.push(Object::ConstantDensity(ConstantDensity {
+                                boundary: std::boxed::Box::new(Object::Sphere(Sphere {
+                                    center:   Vec3::new(0.0, 0.0, 0.0),
+                                    radius:   5000.0,
+                                    material: glass,
+                                })),
+                                density: 0.0001,
+                                phase_function: Isotropic { colour: Colour::new(1.0, 1.0, 1.0, 1.0) },
+                            }));
+
+                            // Define the earthy sphere and perlin noise sphere (although we just use a blank lambertian sphere)
+                            objects.push(Object::Sphere(Sphere { center: Vec3::new(400.0, 200.0, 400.0), radius: 100.0, material: earth }));
+                            objects.push(Object::Sphere(Sphere { center: Vec3::new(220.0, 280.0, 300.0), radius: 80.0, material: perlin_wink }));
+
+                            // Define the box made out of spheres
+                            const NUMBER_OF_SPHERES: usize = 1000;
+                            let mut orbs = Vec::with_capacity(NUMBER_OF_SPHERES);
+                            for _ in 0..NUMBER_OF_SPHERES {
+                                orbs.push(Object::Sphere(Sphere {
+                                    center:   Vec3::new(fastrand::f64() * 165.0, fastrand::f64() * 165.0, fastrand::f64() * 165.0),
+                                    radius:   10.0,
+                                    material: white.clone(),
+                                }));
+                            }
+                            objects.push(Object::Translate(Translate {
+                                pos: Vec3::new(-100.0, 270.0, 395.0),
+                                obj: std::boxed::Box::new(Object::RotateY(RotateY {
+                                    angle: 15.0,
+                                    obj:   std::boxed::Box::new(Object::Group(std::boxed::Box::new(HitTree::with_objs(
+                                        orbs,
+                                        (0..=cover.shutter_time).into(),
+                                    )))),
+                                })),
+                            }));
+
+                            // Done
+                            objects
+                        },
+                    };
+
+                    // Ensure to load all
+                    for (i, obj) in objects.iter_mut().enumerate() {
+                        if let Err(err) = obj.load(&PathBuf::from(env!("CARGO_MANIFEST_DIR"))) {
+                            error!("{}", toplevel!(("Failed to load external references in object {i}"), err));
+                            return ExitCode::FAILURE;
                         }
                     }
-                    objects.push(Object::Sphere(Sphere {
-                        center:   Vec3::new(0.0, 1.0, 0.0),
-                        radius:   1.0,
-                        material: Material::Dielectric(Dielectric { refraction_index: 1.5, colour: Colour::new(1.0, 1.0, 1.0, 1.0) }),
-                    }));
-                    objects.push(Object::Sphere(Sphere {
-                        center:   Vec3::new(-4.0, 1.0, 0.0),
-                        radius:   1.0,
-                        material: Material::Lambertian(Lambertian { colour: Colour::new(0.4, 0.2, 0.1, 1.0) }),
-                    }));
-                    objects.push(Object::Sphere(Sphere {
-                        center:   Vec3::new(4.0, 1.0, 0.0),
-                        radius:   1.0,
-                        material: Material::Metal(Metal { colour: Colour::new(0.7, 0.6, 0.5, 1.0), fuzz: 0.0 }),
-                    }));
 
                     // Convert that to a static HitList
                     let list: HitTree = HitTree::with_objs(objects, (0..=cover.shutter_time).into());
                     let dims: (u32, u32) = if let Some(dims) = render.dims { (dims.0.into(), dims.1.into()) } else { (800, 600) };
-                    let cam = Camera::new(
-                        dims,
-                        100,
-                        20.0,
-                        0.6,
-                        10.0,
-                        cover.shutter_time,
-                        Vec3::new(13.0, 2.0, 3.0),
-                        Vec3::new(0.0, 0.0, 0.0),
-                        Vec3::new(0.0, 1.0, 0.0),
-                    );
+                    let cam = match cover.book {
+                        Book::OneWeekend => Camera::new(
+                            dims,
+                            100,
+                            20.0,
+                            0.6,
+                            10.0,
+                            cover.shutter_time,
+                            Vec3::new(13.0, 2.0, 3.0),
+                            Vec3::new(0.0, 0.0, 0.0),
+                            Vec3::new(0.0, 1.0, 0.0),
+                        ),
+                        Book::NextWeek => Camera::new(
+                            dims,
+                            5000,
+                            40.0,
+                            0.0,
+                            0.0,
+                            cover.shutter_time,
+                            Vec3::new(478.0, 278.0, -600.0),
+                            Vec3::new(278.0, 278.0, 0.0),
+                            Vec3::new(0.0, 1.0, 0.0),
+                        ),
+                    };
+                    let env = match cover.book {
+                        Book::OneWeekend => Environment::default(),
+                        Book::NextWeek => Environment { background: Background::None, ..Default::default() },
+                    };
 
                     // Now render based on the backend
                     let output: Image = match render.backend {
                         RenderBackend::SingleThreaded => {
                             debug!("Rendering with single-threaded backend");
                             let renderer: SingleThreadRenderer = SingleThreadRenderer::new(features, true);
-                            renderer.render_frame(&list, &cam, &Environment::default()).unwrap()
+                            renderer.render_frame(&list, &cam, &env).unwrap()
                         },
 
                         RenderBackend::MultiThreaded => {
@@ -379,7 +536,7 @@ fn main() -> ExitCode {
                             };
 
                             // Now render with this backend
-                            renderer.render_frame(&list, &cam, &Environment::default()).unwrap()
+                            renderer.render_frame(&list, &cam, &env).unwrap()
                         },
                     };
 
