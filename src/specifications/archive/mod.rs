@@ -9,8 +9,8 @@
 //
 
 use std::collections::HashMap;
-use std::fs::File;
-use std::io::{Read, Seek, SeekFrom};
+use std::fs;
+use std::io::{Read, Result as IResult, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 
 use log::debug;
@@ -87,41 +87,37 @@ pub enum Error {
 
 
 
-/***** ITERATORS *****/
-/// Yielded by the iterators.
+/***** HELPERS *****/
+/// Internally used struct for combining addresses and lengths in the filetable.
+#[doc(hidden)]
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub struct FileInfo<'a> {
-    /// The name of the file.
-    pub name: &'a str,
-    /// The address of the file in the archive.
+pub struct FileLoc {
     pub addr: u64,
-    /// The length of the file.
     pub len:  u64,
 }
 
 
 
-/// Iterate-by-reference iterator for the [`Archive`].
-#[derive(Clone, Debug)]
-pub struct Iter<'a>(std::collections::hash_map::Iter<'a, String, FileLoc>);
-impl<'a> Iterator for Iter<'a> {
-    type Item = FileInfo<'a>;
 
-    #[inline]
-    fn next(&mut self) -> Option<Self::Item> { self.0.next().map(|(name, loc)| FileInfo { name, addr: loc.addr, len: loc.len }) }
-}
-
-
-
-
-
-/***** HELPERS *****/
-/// Defines info we need to know about a file's location in the archive.
+/***** ITERATORS *****/
+/// Helper type that combines the name of a file with its location.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-struct FileLoc {
-    addr: u64,
-    len:  u64,
+pub struct FileInfo<'a> {
+    /// The name of the file, as a 'str' reference.
+    pub name: &'a str,
+    /// The address of the file in the archive.
+    pub addr: u64,
+    /// The length of the file in the archive.
+    pub len:  u64,
 }
+
+
+
+/// Iterator returned by [`Archive::names()`].
+pub type Names<'a> = std::collections::hash_map::Keys<'a, String, FileLoc>;
+
+/// Iterator returned by [`Archive::infos()`].
+pub type Infos<'a> = std::iter::Map<std::collections::hash_map::Iter<'a, String, FileLoc>, fn((&'a String, &'a FileLoc)) -> FileInfo<'a>>;
 
 
 
@@ -163,6 +159,57 @@ impl From<FileTableEntryType> for u8 {
 
 
 /***** LIBRARY *****/
+/// Defines a handle to a single file in the archive.
+pub struct File<'a, R> {
+    /// The parent archive's handle.
+    handle: &'a mut R,
+    /// The offset of the file we represent.
+    addr:   u64,
+    /// The length of the file we represent.
+    len:    u64,
+    /// Shadows the handle's current stream position for efficiency and simplicity.
+    pos:    u64,
+}
+
+// IO
+impl<'a, R: Read> Read for File<'a, R> {
+    #[inline]
+    fn read(&mut self, buf: &mut [u8]) -> IResult<usize> { todo!() }
+}
+impl<'a, R: Seek> Seek for File<'a, R> {
+    #[inline]
+    fn seek(&mut self, pos: SeekFrom) -> IResult<u64> {
+        // Quick-release clause; stop if we're just checking
+        if let SeekFrom::Current(0) = pos {
+            return Ok(self.pos);
+        }
+
+        // Compute the new position as absolute
+        self.pos = match pos {
+            SeekFrom::Start(s) => self.addr + s,
+            SeekFrom::Current(c) => {
+                let pos: i64 = self.pos as i64 + c;
+                if pos < self.addr as i64 {
+                    return Err(std::io::Error::from(std::io::ErrorKind::InvalidInput));
+                }
+                pos as u64
+            },
+            SeekFrom::End(e) => {
+                let pos: i64 = (self.addr + self.len) as i64 + e;
+                if pos < self.addr as i64 {
+                    return Err(std::io::Error::from(std::io::ErrorKind::InvalidInput));
+                }
+                pos as u64
+            },
+        };
+
+        // Then apply it absolutely
+        self.handle.seek(SeekFrom::Start(self.pos))
+    }
+}
+
+
+
 /// Defines a reader for the archive.
 pub struct Archive<R> {
     // Source
@@ -285,7 +332,7 @@ impl<R: Read + Seek> Archive<R> {
         Ok(Self { reader, what, filetable })
     }
 }
-impl Archive<File> {
+impl Archive<fs::File> {
     /// Constructor for the Archive that opens it from a path.
     ///
     /// The source is automatically set to the file's path.
@@ -300,10 +347,10 @@ impl Archive<File> {
     /// This function errors if it failed to find the file or if [`Archive::new()`] would fail.
     #[inline]
     pub fn from_path(path: impl AsRef<Path>) -> Result<Self, Error> {
-        fn _from_path(path: &Path) -> Result<Archive<File>, Error> {
+        fn _from_path(path: &Path) -> Result<Archive<fs::File>, Error> {
             // Open the file normally
             debug!("Opening file {path:?} as an Archive file");
-            let handle = File::open(path).map_err(|err| Error::FileOpen { path: path.into(), err })?;
+            let handle = fs::File::open(path).map_err(|err| Error::FileOpen { path: path.into(), err })?;
 
             // Open as a reader
             Archive::open(handle, path.to_string_lossy().into())
@@ -312,17 +359,24 @@ impl Archive<File> {
     }
 }
 
-// Properties
-impl<R> Archive<R> {
-    /// Returns an iterator over file metadata.
+// Files
+impl<R: Seek> Archive<R> {
+    /// Returns a [`File`]-handle to a file internal to the Archive.
+    ///
+    /// # Arguments
+    /// - `name`: The name of the file to return a handle to.
     ///
     /// # Returns
-    /// An [`Iter`]ator yielding [`FileInfo`] structs describing the file.
+    /// A [`File`] object representing the handle.
     #[inline]
-    pub fn iter(&self) -> <&Self as IntoIterator>::IntoIter { self.into_iter() }
+    pub fn handle(&mut self, name: impl AsRef<str>) -> Result<File<'_, R>, Error> {
+        fn _handle<'a, R: Seek>(archive: &'a mut Archive<R>, name: &'_ str) -> Result<File<'a, R>, Error> { todo!() }
+        _handle(self, name.as_ref())
+    }
+}
 
-
-
+// Properties
+impl<R> Archive<R> {
     /// Returns the number of files in this archive.
     #[inline]
     pub fn filecount(&self) -> usize { self.filetable.len() }
@@ -333,13 +387,28 @@ impl<R> Archive<R> {
 }
 
 // Iterators
-impl<'a, R> IntoIterator for &'a Archive<R> {
-    type Item = FileInfo<'a>;
-    type IntoIter = Iter<'a>;
-
+impl<R> Archive<R> {
+    /// Returns an iterator over all the names in the Archive.
+    ///
+    /// # Returns
+    /// A [`Names`]-iterator yielding strings naming each file.
     #[inline]
-    fn into_iter(self) -> Self::IntoIter { Iter(self.filetable.iter()) }
+    pub fn names(&self) -> Names<'_> { self.filetable.keys() }
+
+    /// Returns an iterator over file metadata.
+    ///
+    /// # Returns
+    /// An [`Iter`]ator yielding [`FileInfo`] structs describing the file.
+    #[inline]
+    pub fn infos(&self) -> Infos<'_> { self.filetable.iter().map(|(name, loc)| FileInfo { name, addr: loc.addr, len: loc.len }) }
 }
+// impl<'a, R> IntoIterator for &'a Archive<R> {
+//     type Item = FileInfo<'a>;
+//     type IntoIter = Iter<'a>;
+
+//     #[inline]
+//     fn into_iter(self) -> Self::IntoIter { Iter(self.filetable.iter()) }
+// }
 
 
 
@@ -361,19 +430,19 @@ mod tests {
         let one = b"\x15\x11\x19\x99\x01\x00\x00\x00\x00\x00\x00\x00\x00\x0d\x00\x00\x00Hello, world!\x2e\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00";
         let archive = Archive::open(Cursor::new(one.as_slice()), "test2".into()).unwrap();
         assert_eq!(archive.filecount(), 1);
-        assert_eq!(archive.iter().collect::<Vec<FileInfo>>(), vec![FileInfo { name: "Hello, world!", addr: 46, len: 0 }]);
+        assert_eq!(archive.infos().collect::<Vec<FileInfo>>(), vec![FileInfo { name: "Hello, world!", addr: 46, len: 0 }]);
 
         let two = b"\x15\x11\x19\x99\x02\x00\x00\x00\x00\x00\x00\x00\x00\x0d\x00\x00\x00Hello, world!\x2e\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x0b\x00\x00\x00Ciao, world\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00";
         let archive = Archive::open(Cursor::new(two.as_slice()), "test3".into()).unwrap();
         assert_eq!(archive.filecount(), 2);
-        let mut files = archive.iter().collect::<Vec<FileInfo>>();
+        let mut files = archive.infos().collect::<Vec<FileInfo>>();
         files.sort_by(|i1, i2| i1.name.cmp(&i2.name));
         assert_eq!(files, vec![FileInfo { name: "Ciao, world", addr: 0, len: 0 }, FileInfo { name: "Hello, world!", addr: 46, len: 0 },]);
 
         let two_split = b"\x15\x11\x19\x99\x02\x00\x00\x00\x00\x00\x00\x00\x00\x0d\x00\x00\x00Hello, world!\x2e\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x01\x3e\x00\x00\x00\x00\x00\x00\x00GARBAGE\x00\x0b\x00\x00\x00Ciao, world\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00";
         let archive = Archive::open(Cursor::new(two_split.as_slice()), "test4".into()).unwrap();
         assert_eq!(archive.filecount(), 2);
-        let mut files = archive.iter().collect::<Vec<FileInfo>>();
+        let mut files = archive.infos().collect::<Vec<FileInfo>>();
         files.sort_by(|i1, i2| i1.name.cmp(&i2.name));
         assert_eq!(files, vec![FileInfo { name: "Ciao, world", addr: 0, len: 0 }, FileInfo { name: "Hello, world!", addr: 46, len: 0 },]);
     }
