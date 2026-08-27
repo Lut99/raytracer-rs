@@ -38,6 +38,10 @@ obj = { git = "https://github.com/Lut99/obj-rs", rev = "c8a1f4dfd9866b6c9201712e
 [features]
 default = ["models"]
 
+## File formats
+# Archive
+archive = []
+
 # Models
 models = ["obj"]
 obj = ["dep:mtllib", "dep:obj"]
