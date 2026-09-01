@@ -17,6 +17,7 @@ use super::super::materials::Isotropic;
 use super::super::objects::{HitData, HitRecord};
 use super::{BoundingBoxable, Hittable};
 use crate::math::{Ray, Vec3};
+use crate::random;
 use crate::specifications::scene::Environment;
 
 
@@ -62,7 +63,7 @@ impl<T: Hittable> Hittable for ConstantDensity<T> {
         // Compute a random hitpoint in the gas (or outside of it)
         let ray_len: f64 = ray.direct.length();
         let dist_in_boundary: f64 = (rec2.t - rec1.t) * ray_len;
-        let hit_dist: f64 = (-1.0 / self.density) * fastrand::f64().ln();
+        let hit_dist: f64 = (-1.0 / self.density) * random::f64().ln();
         if hit_dist > dist_in_boundary {
             // No hit, the ray passes through.
             // Unless...? - if the shape is not convex, it may re-enter the material here!

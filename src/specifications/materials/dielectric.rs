@@ -16,6 +16,7 @@ use super::super::scene::Environment;
 use super::Scattering;
 use super::metal::reflect;
 use crate::math::{Colour, Ray, Vec3};
+use crate::random;
 use crate::specifications::objects::HitData;
 
 
@@ -148,7 +149,7 @@ impl Scattering for Dielectric {
         let cannot_refract: bool = eta_over_eta_prime * sin_theta > 1.0;
 
         // Compute the refraction
-        let out: Vec3 = if cannot_refract || reflectance(cos_theta, eta_over_eta_prime) > fastrand::f64() {
+        let out: Vec3 = if cannot_refract || reflectance(cos_theta, eta_over_eta_prime) > random::f64() {
             reflect(unit_direction, record.normal)
         } else {
             refract(unit_direction, record.normal, cos_theta, eta_over_eta_prime)

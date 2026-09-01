@@ -198,7 +198,6 @@ macro_rules! object_impl {
             /// A translation.
             Translate(Translate<std::boxed::Box<Self>>),
             /// A nested group of objects.
-            #[serde(skip)]
             Group(std::boxed::Box<HitTree>),
         }
 

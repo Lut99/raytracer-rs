@@ -17,6 +17,7 @@ use std::f64::consts::PI;
 
 use super::ray::Ray;
 use super::vec3::Vec3;
+use crate::random;
 
 
 /***** HELPER FUNCTION *****/
@@ -29,7 +30,7 @@ pub const fn degrees_to_radians(degrees: f64) -> f64 { degrees * PI / 180.0 }
 pub fn random_in_unit_disk() -> Vec3 {
     // NOTE: Terrible, but hard to do better?
     loop {
-        let vec = Vec3::new(2.0 * fastrand::f64_inclusive() - 1.0, 2.0 * fastrand::f64_inclusive() - 1.0, 0.0);
+        let vec = Vec3::new(2.0 * random::f64inc() - 1.0, 2.0 * random::f64inc() - 1.0, 0.0);
         if vec.length2() < 1.0 {
             return vec;
         }
@@ -81,7 +82,7 @@ impl<'c> Iterator for Rays<'c> {
         let y: u64 = r / self.cam.dims.0 as u64;
 
         // Randomly mod the XY-pair if we're sampling
-        let (x, y): (f64, f64) = if self.cam.n_samples > 1 { (x as f64 + fastrand::f64(), y as f64 + fastrand::f64()) } else { (x as f64, y as f64) };
+        let (x, y): (f64, f64) = if self.cam.n_samples > 1 { (x as f64 + random::f64(), y as f64 + random::f64()) } else { (x as f64, y as f64) };
 
         // Convert the pixel values to logical values
         let u: f64 = x / (self.cam.dims.0 as f64 - 1.0);

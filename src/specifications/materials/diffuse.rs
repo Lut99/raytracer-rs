@@ -40,9 +40,9 @@ pub fn random3_uniform() -> Vec3 {
 
     // We'll use a loop - sadly
     loop {
-        let p = Vec3::new(1.0 - 2.0 * fastrand::f64(), 1.0 - 2.0 * fastrand::f64(), 1.0 - 2.0 * fastrand::f64());
+        let p = Vec3::randint(-1.0, 1.0);
         let lensq = p.length2();
-        if lensq < 1.0 {
+        if lensq > 1e-160 && lensq <= 1.0 {
             return p / lensq.sqrt();
         }
     }

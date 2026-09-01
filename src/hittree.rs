@@ -10,8 +10,14 @@
 //!   fast-access the objects within.
 //
 
+use std::fmt::{Formatter, Result as FResult};
+use std::marker::PhantomData;
 use std::path::Path;
 use std::range::RangeInclusive;
+
+use serde::de::{self, Deserializer, MapAccess, SeqAccess, Visitor};
+use serde::ser::{SerializeMap, SerializeSeq, Serializer};
+use serde::{Deserialize, Serialize};
 
 use crate::math::{AABB, Ray};
 use crate::specifications::Loadable;
@@ -111,6 +117,54 @@ impl Drop for Safetynet {
     fn drop(&mut self) {
         eprintln!("ERROR: Encountered a panic while the BVHNode is in an unsafe state; aborting instead");
         std::process::exit(1);
+    }
+}
+
+
+
+/// Little helper deserializer for a RangeInclusive
+struct Ts(RangeInclusive<u64>);
+impl<'de> Deserialize<'de> for Ts {
+    #[inline]
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        struct TsVisitor;
+        impl<'de> Visitor<'de> for TsVisitor {
+            type Value = Ts;
+
+            #[inline]
+            fn expecting(&self, f: &mut Formatter) -> FResult { write!(f, "a range of timestamps in us since the start of the scene") }
+
+            #[inline]
+            fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+            where
+                A: SeqAccess<'de>,
+            {
+                let mut range = [0u64; 2];
+                range[0] = seq.next_element()?.ok_or_else(|| de::Error::custom("Expected two values for timestamp range"))?;
+                range[1] = seq.next_element()?.ok_or_else(|| de::Error::custom("Expected two values for timestamp range"))?;
+                if seq.next_element::<u64>()?.is_some() {
+                    return Err(de::Error::custom("Expected two values for timestamp range"));
+                }
+
+                Ok(Ts((range[0]..=range[1]).into()))
+            }
+        }
+        deserializer.deserialize_seq(TsVisitor)
+    }
+}
+impl Serialize for Ts {
+    #[inline]
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut access = serializer.serialize_seq(Some(2))?;
+        access.serialize_element(&self.0.start)?;
+        access.serialize_element(&self.0.last)?;
+        access.end()
     }
 }
 
@@ -423,6 +477,35 @@ impl<T: Loadable> Loadable for HitTree<T> {
         }
     }
 }
+impl<T> BoundingBoxable for HitTree<T> {
+    #[inline]
+    #[cfg_attr(debug_assertions, track_caller)]
+    fn aabb(&self, t_us: u64) -> AABB {
+        #[cfg(debug_assertions)]
+        if t_us < self.ts[0] || t_us > self.ts[1] {
+            panic!("HitTree initialized for time range {:?} cannot compute AABB at time {}", self.ts, t_us);
+        }
+
+        // Return the AABB
+        match &self.elems {
+            Some(node) => node.aabb(t_us),
+            None => AABB::zeroes(),
+        }
+    }
+}
+impl<T: Hittable> Hittable for HitTree<T> {
+    #[inline]
+    #[cfg_attr(debug_assertions, track_caller)]
+    fn hit(&self, ray: Ray, t_min: f64, t_max: f64, env: &Environment) -> Option<HitRecord<'_>> {
+        #[cfg(debug_assertions)]
+        if ray.time < self.ts[0] || ray.time > self.ts[1] {
+            panic!("HitTree initialized for time range {:?} cannot compute Ray hit at time {}", self.ts, ray.time);
+        }
+
+        // Run the hit
+        self.elems.as_ref().and_then(|elems| elems.hit(ray, t_min, t_max, env))
+    }
+}
 
 // Collection
 impl<T: BoundingBoxable> HitTree<T> {
@@ -603,33 +686,73 @@ impl<T> IntoIterator for HitTree<T> {
     fn into_iter(self) -> Self::IntoIter { self.elems.map(IntoIterator::into_iter).into_iter().flatten() }
 }
 
-// Hittable
-impl<T> BoundingBoxable for HitTree<T> {
+// Serde
+impl<'de, T: BoundingBoxable + Deserialize<'de>> Deserialize<'de> for HitTree<T> {
     #[inline]
-    #[cfg_attr(debug_assertions, track_caller)]
-    fn aabb(&self, t_us: u64) -> AABB {
-        #[cfg(debug_assertions)]
-        if t_us < self.ts[0] || t_us > self.ts[1] {
-            panic!("HitTree initialized for time range {:?} cannot compute AABB at time {}", self.ts, t_us);
-        }
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        struct HitTreeVisitor<T>(PhantomData<T>);
+        impl<'de, T: BoundingBoxable + Deserialize<'de>> Visitor<'de> for HitTreeVisitor<T> {
+            type Value = HitTree<T>;
 
-        // Return the AABB
-        match &self.elems {
-            Some(node) => node.aabb(t_us),
-            None => AABB::zeroes(),
+            #[inline]
+            fn expecting(&self, f: &mut Formatter) -> FResult { write!(f, "a list of objects") }
+
+            #[inline]
+            fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+            where
+                A: SeqAccess<'de>,
+            {
+                /* Plain list of objects */
+                // Deserialize a list of the things
+                let mut objs = Vec::with_capacity(seq.size_hint().unwrap_or(0));
+                while let Some(obj) = seq.next_element::<T>()? {
+                    objs.push(obj);
+                }
+                Ok(HitTree::with_objs(objs, (0..=1).into()))
+            }
+
+            #[inline]
+            fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
+            where
+                A: MapAccess<'de>,
+            {
+                // Read precisely two keys
+                let mut objs = None;
+                let mut ts = None;
+                loop {
+                    let key: Option<String> = map.next_key::<String>()?;
+                    match key.as_ref().map(String::as_str) {
+                        Some("objs" | "objects") => objs = Some(map.next_value::<Vec<T>>()?),
+                        Some("ts") => ts = Some(map.next_value::<Ts>()?),
+                        Some(key) => return Err(de::Error::custom(&format!("Invalid key {key:?} for object group"))),
+                        None if objs.is_none() || ts.is_none() => return Err(de::Error::custom("Expected two keys for object group")),
+                        None => break,
+                    }
+                }
+
+                // Assert they are both given
+                let objs = objs.ok_or_else(|| de::Error::custom("Missing key \"objs\" for object group"))?;
+                let ts = ts.ok_or_else(|| de::Error::custom("Missing key \"ts\" for object group"))?.0;
+
+                // Done, build the three
+                Ok(HitTree::with_objs(objs, ts))
+            }
         }
+        deserializer.deserialize_any(HitTreeVisitor::<T>(PhantomData))
     }
 }
-impl<T: Hittable> Hittable for HitTree<T> {
+impl<T: Serialize> Serialize for HitTree<T> {
     #[inline]
-    #[cfg_attr(debug_assertions, track_caller)]
-    fn hit(&self, ray: Ray, t_min: f64, t_max: f64, env: &Environment) -> Option<HitRecord<'_>> {
-        #[cfg(debug_assertions)]
-        if ray.time < self.ts[0] || ray.time > self.ts[1] {
-            panic!("HitTree initialized for time range {:?} cannot compute Ray hit at time {}", self.ts, ray.time);
-        }
-
-        // Run the hit
-        self.elems.as_ref().and_then(|elems| elems.hit(ray, t_min, t_max, env))
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut map = serializer.serialize_map(Some(2))?;
+        map.serialize_entry(&"objs", &self.iter().collect::<Vec<&T>>())?;
+        map.serialize_entry(&"ts", &self.ts)?;
+        map.end()
     }
 }
