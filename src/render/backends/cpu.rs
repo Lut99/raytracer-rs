@@ -37,14 +37,15 @@ pub fn ray_colour(ray: Ray, world: &HitTree<Object>, depth: usize, env: &Environ
             // Scatter the ray now we've found it
             match record.scatter(ray, env) {
                 // Return the recursive bounce of the returned ray + whatever we ourselves emit
-                (Some(scatter), attenuation) => {
-                    let scattering_pdf = record.mat.pdf(ray, &record.data, env, scatter);
-                    let pdf_value = scattering_pdf;
-                    colour_from_emission + ((scattering_pdf * attenuation * ray_colour(scatter, world, depth - 1, env)) / pdf_value)
+                (Some(scatter), attenuation, pdf_value) => {
+                    // Update: _if_ we hit, then compensate the found colour value for the bias
+                    // introduced by the scattering PDF
+                    let scattering_pdf = record.pdf(ray, env, scatter);
+                    colour_from_emission + ((attenuation * scattering_pdf * ray_colour(scatter, world, depth - 1, env)) / pdf_value)
                 },
 
                 // We can simply return the emitted colour
-                (None, colour) => colour_from_emission + colour,
+                (None, colour, _) => colour_from_emission + colour,
             }
         },
 

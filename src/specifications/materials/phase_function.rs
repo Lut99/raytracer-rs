@@ -6,6 +6,7 @@
 //
 
 use std::convert::Infallible;
+use std::f64::consts::PI;
 use std::path::Path;
 
 use serde::{Deserialize, Serialize};
@@ -37,8 +38,8 @@ impl Loadable for Isotropic {
 }
 impl Scattering for Isotropic {
     #[inline]
-    fn scatter(&self, ray: Ray, rec: &HitData, _env: &Environment) -> (Option<Ray>, Colour) {
+    fn scatter(&self, ray: Ray, rec: &HitData, _env: &Environment) -> (Option<Ray>, Colour, f64) {
         // Create a new ray bouncing randomly in any direction
-        (Some(Ray::with_time(rec.hit, random3_uniform(), ray.time)), self.colour)
+        (Some(Ray::with_time(rec.hit, random3_uniform(), ray.time)), self.colour, 1.0 / (4.0 * PI))
     }
 }

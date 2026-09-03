@@ -22,7 +22,8 @@ use serde::{Deserialize, Serialize};
 use super::super::Loadable;
 use super::super::scene::Environment;
 use super::Scattering;
-use crate::math::{Colour, Ray, Vec3};
+use crate::math::{Colour, ONB, Ray, Vec3};
+use crate::random;
 use crate::specifications::objects::HitData;
 use crate::specifications::textures::{Texture, Textured};
 
@@ -50,9 +51,27 @@ pub fn random3_uniform() -> Vec3 {
 }
 
 /// Generates a random, uniformly sampled vector on a hemisphere w.r.t. the normal.
+#[inline]
 pub fn random3_on_hemisphere(normal: Vec3) -> Vec3 {
     let on_unit_sphere: Vec3 = random3_uniform();
     if on_unit_sphere.dot(normal) > 0.0 { on_unit_sphere } else { -on_unit_sphere }
+}
+
+/// Generates a random, uniformly sampled vector in a unit sphere around the origin.
+///
+/// Except that this math is much more complex yet robust.
+///
+/// # Returns
+/// A new [`Vec3`] that represents the random vector.
+pub fn random3_cosine_direction() -> Vec3 {
+    let r1 = random::f64();
+    let r2 = random::f64();
+    let r2_sqrt = r2.sqrt();
+    let phi = 2.0 * PI * r1;
+    let x = phi.cos() * r2_sqrt;
+    let y = phi.sin() * r2_sqrt;
+    let z = (1.0 - r2).sqrt();
+    Vec3::new(x, y, z)
 }
 
 
@@ -62,6 +81,20 @@ pub fn random3_on_hemisphere(normal: Vec3) -> Vec3 {
 pub fn lambertian_pdf(record: &HitData, scattered: Ray) -> f64 {
     let cos_theta = record.normal.dot(scattered.direct.unit());
     f64::max(0.0, cos_theta / PI)
+}
+
+/// Implements Lambertian scattering logic.
+#[inline]
+pub fn lambertian_scatter(ray: Ray, record: &HitData, colour: Colour) -> (Option<Ray>, Colour, f64) {
+    // Get a coordinate base around the hit normal, then get a random direction in that unit sphere
+    // to find a random scatter direction.
+    let uvw = ONB::from_single_axis(record.normal);
+    let scattered = uvw.transform(random3_cosine_direction()).unit();
+    let scattered = Ray::with_time(record.hit, scattered, ray.time);
+
+    // Now we can simply return the new ray to bounce and the colour
+    // NOTE: By construction, `uvw.w` == `record.normal` but unit)
+    (Some(scattered), colour, uvw.w.dot(scattered.direct) / PI)
 }
 
 
@@ -83,10 +116,10 @@ impl Loadable for Diffuse {
 }
 impl Scattering for Diffuse {
     #[inline]
-    fn scatter(&self, _ray: Ray, record: &HitData, _env: &Environment) -> (Option<Ray>, Colour) {
+    fn scatter(&self, _ray: Ray, record: &HitData, _env: &Environment) -> (Option<Ray>, Colour, f64) {
         // Return a ray scattered in a random direction
         let direction: Vec3 = random3_on_hemisphere(record.normal);
-        (Some(Ray::new(record.hit, direction)), self.colour)
+        (Some(Ray::new(record.hit, direction)), self.colour, 1.0 / (2.0 * PI))
     }
 }
 
@@ -128,16 +161,7 @@ impl Scattering for Lambertian {
     fn pdf(&self, _ray: Ray, record: &HitData, _env: &Environment, scattered: Ray) -> f64 { lambertian_pdf(record, scattered) }
 
     #[inline]
-    fn scatter(&self, _ray: Ray, record: &HitData, _env: &Environment) -> (Option<Ray>, Colour) {
-        // Compute the scattered ray, making sure the scattered one is not zero
-        let mut scattered: Vec3 = record.normal + random3_uniform();
-        if scattered.is_nearly_zero() {
-            scattered = record.normal;
-        }
-
-        // Now we can simply return the new ray to bounce and the colour
-        (Some(Ray::new(record.hit, scattered)), self.colour)
-    }
+    fn scatter(&self, ray: Ray, record: &HitData, _env: &Environment) -> (Option<Ray>, Colour, f64) { lambertian_scatter(ray, record, self.colour) }
 }
 
 
@@ -159,14 +183,7 @@ impl<T: Textured> Scattering for LambertianTexture<T> {
     fn pdf(&self, _ray: Ray, record: &HitData, _env: &Environment, scattered: Ray) -> f64 { lambertian_pdf(record, scattered) }
 
     #[inline]
-    fn scatter(&self, _ray: Ray, record: &HitData, _env: &Environment) -> (Option<Ray>, Colour) {
-        // Compute the scattered ray, making sure the scattered one is not zero
-        let mut scattered: Vec3 = record.normal + random3_uniform();
-        if scattered.is_nearly_zero() {
-            scattered = record.normal;
-        }
-
-        // Now we can simply return the new ray to bounce and the colour
-        (Some(Ray::new(record.hit, scattered)), self.texture.value(record.uv, record.hit))
+    fn scatter(&self, ray: Ray, record: &HitData, _env: &Environment) -> (Option<Ray>, Colour, f64) {
+        lambertian_scatter(ray, record, self.texture.value(record.uv, record.hit))
     }
 }

@@ -91,7 +91,7 @@ impl Loadable for PartialDielectric {
 }
 impl Scattering for PartialDielectric {
     #[inline]
-    fn scatter(&self, ray: Ray, record: &HitData, env: &Environment) -> (Option<Ray>, Colour) {
+    fn scatter(&self, ray: Ray, record: &HitData, env: &Environment) -> (Option<Ray>, Colour, f64) {
         // NOTE: We are always assuming we are refracting against air here
         let eta_over_eta_prime: f64 =
             if record.front_face { env.air_refraction_index / self.refraction_index } else { self.refraction_index / env.air_refraction_index };
@@ -105,7 +105,7 @@ impl Scattering for PartialDielectric {
         let refracted: Vec3 = refract(unit_direction, record.normal, cos_theta, eta_over_eta_prime);
 
         // Then bounce the ray
-        (Some(Ray::new(record.hit, refracted)), self.colour)
+        (Some(Ray::new(record.hit, refracted)), self.colour, 1.0)
     }
 }
 
@@ -134,7 +134,7 @@ impl Loadable for Dielectric {
 }
 impl Scattering for Dielectric {
     #[inline]
-    fn scatter(&self, ray: Ray, record: &HitData, env: &Environment) -> (Option<Ray>, Colour) {
+    fn scatter(&self, ray: Ray, record: &HitData, env: &Environment) -> (Option<Ray>, Colour, f64) {
         // NOTE: We are always assuming we are refracting against air here
         let eta_over_eta_prime: f64 =
             if record.front_face { env.air_refraction_index / self.refraction_index } else { self.refraction_index / env.air_refraction_index };
@@ -156,6 +156,6 @@ impl Scattering for Dielectric {
         };
 
         // Then bounce the ray
-        (Some(Ray::new(record.hit, out)), self.colour)
+        (Some(Ray::new(record.hit, out)), self.colour, 1.0)
     }
 }

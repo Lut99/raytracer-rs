@@ -16,6 +16,7 @@
 pub mod aabb;
 pub mod camera;
 pub mod colour;
+pub mod onb;
 pub mod ray;
 pub mod utils;
 pub mod vec3;
@@ -24,5 +25,6 @@ pub mod vec3;
 pub use aabb::AABB;
 pub use camera::Camera;
 pub use colour::Colour;
+pub use onb::ONB;
 pub use ray::Ray;
 pub use vec3::Vec3;

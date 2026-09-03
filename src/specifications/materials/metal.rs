@@ -47,7 +47,7 @@ impl Loadable for Metal {
 }
 impl Scattering for Metal {
     #[inline]
-    fn scatter(&self, ray: Ray, record: &HitData, _env: &Environment) -> (Option<Ray>, Colour) {
+    fn scatter(&self, ray: Ray, record: &HitData, _env: &Environment) -> (Option<Ray>, Colour, f64) {
         // Compute the scattered ray, making sure the scattered one is not zero
         let reflected: Vec3 = reflect(ray.direct, record.normal);
         // Add some fuzz by offsetting the endpoint of the reflected vector by a small amount.
@@ -56,6 +56,6 @@ impl Scattering for Metal {
         let reflected: Vec3 = reflected.unit() + self.fuzz * random3_uniform();
 
         // Now we can simply return the new ray to bounce and the colour
-        (Some(Ray::new(record.hit, reflected)), self.colour)
+        (Some(Ray::with_time(record.hit, reflected, ray.time)), self.colour, 1.0)
     }
 }

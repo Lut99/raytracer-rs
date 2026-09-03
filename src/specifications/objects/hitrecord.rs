@@ -83,6 +83,18 @@ impl<'a> HitRecord<'a> {
 
 // Raytracer
 impl<'a> HitRecord<'a> {
+    /// Scatters using the internal [`HitData`]'s material's PDF.
+    ///
+    /// # Arguments
+    /// - `ray`: The [`Ray`] that we hit the object with.
+    /// - `env`: Some [`Environment`] describing global properties of the scene.
+    /// - `scattered`: The [`Ray`] that we scatter away from this object.
+    ///
+    /// # Returns
+    /// A [`Colour`] of the light being emitted. Is black if this emits nothing.
+    #[inline]
+    pub fn pdf(&self, ray: Ray, env: &Environment, scattered: Ray) -> f64 { self.mat.pdf(ray, &self.data, env, scattered) }
+
     /// Emits from the internal material using the internal [`HitData`].
     ///
     /// # Returns
@@ -97,8 +109,8 @@ impl<'a> HitRecord<'a> {
     /// - `env`: Some [`Environment`] describing global properties of the scene.
     ///
     /// # Returns
-    /// A next [`Ray`] after the object's bounce, if any, and an attenuated [`Colour`] for this
-    /// material.
+    /// A next [`Ray`] after the object's bounce, if any; an attenuated [`Colour`] for this
+    /// material and the scattering PDF's correction weight.
     #[inline]
-    pub fn scatter(&self, ray: Ray, env: &Environment) -> (Option<Ray>, Colour) { self.mat.scatter(ray, &self.data, env) }
+    pub fn scatter(&self, ray: Ray, env: &Environment) -> (Option<Ray>, Colour, f64) { self.mat.scatter(ray, &self.data, env) }
 }

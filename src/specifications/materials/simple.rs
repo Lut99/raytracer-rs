@@ -40,9 +40,9 @@ impl Loadable for StaticColour {
 }
 impl Scattering for StaticColour {
     #[inline]
-    fn scatter(&self, _ray: Ray, _record: &HitData, _env: &Environment) -> (Option<Ray>, Colour) {
+    fn scatter(&self, _ray: Ray, _record: &HitData, _env: &Environment) -> (Option<Ray>, Colour, f64) {
         // Compute the normal map colour based on the normal
-        (None, self.colour)
+        (None, self.colour, 1.0)
     }
 }
 
@@ -59,8 +59,8 @@ impl Loadable for NormalMap {
 }
 impl Scattering for NormalMap {
     #[inline]
-    fn scatter(&self, _ray: Ray, record: &HitData, _env: &Environment) -> (Option<Ray>, Colour) {
+    fn scatter(&self, _ray: Ray, record: &HitData, _env: &Environment) -> (Option<Ray>, Colour, f64) {
         // Compute the normal map colour based on the normal
-        (None, 0.5 * Colour::new(record.normal.x + 1.0, record.normal.y + 1.0, record.normal.z + 1.0, 2.0))
+        (None, 0.5 * Colour::new(record.normal.x + 1.0, record.normal.y + 1.0, record.normal.z + 1.0, 2.0), 1.0)
     }
 }

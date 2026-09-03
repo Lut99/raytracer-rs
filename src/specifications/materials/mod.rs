@@ -48,10 +48,15 @@ macro_rules! scattering_ptr_impl {
     ('a, $ty:ty) => {
         impl<'a, T: Scattering> Scattering for $ty {
             #[inline]
+            fn pdf(&self, ray: Ray, record: &HitData, env: &Environment, scattered: Ray) -> f64 {
+                <T as Scattering>::pdf(self, ray, record, env, scattered)
+            }
+
+            #[inline]
             fn emitted(&self, uv: (f64, f64), p: Vec3) -> Colour { <T as Scattering>::emitted(self, uv, p) }
 
             #[inline]
-            fn scatter(&self, ray: Ray, record: &HitData, env: &Environment) -> (Option<Ray>, Colour) {
+            fn scatter(&self, ray: Ray, record: &HitData, env: &Environment) -> (Option<Ray>, Colour, f64) {
                 <T as Scattering>::scatter(self, ray, record, env)
             }
         }
@@ -59,10 +64,15 @@ macro_rules! scattering_ptr_impl {
     ($ty:ty) => {
         impl<T: Scattering> Scattering for $ty {
             #[inline]
+            fn pdf(&self, ray: Ray, record: &HitData, env: &Environment, scattered: Ray) -> f64 {
+                <T as Scattering>::pdf(self, ray, record, env, scattered)
+            }
+
+            #[inline]
             fn emitted(&self, uv: (f64, f64), p: Vec3) -> Colour { <T as Scattering>::emitted(self, uv, p) }
 
             #[inline]
-            fn scatter(&self, ray: Ray, record: &HitData, env: &Environment) -> (Option<Ray>, Colour) {
+            fn scatter(&self, ray: Ray, record: &HitData, env: &Environment) -> (Option<Ray>, Colour, f64) {
                 <T as Scattering>::scatter(self, ray, record, env)
             }
         }
@@ -84,7 +94,7 @@ pub trait Scattering {
     #[inline]
     fn pdf(&self, _ray: Ray, _record: &HitData, _env: &Environment, _scattered: Ray) -> f64 {
         /* Standard impl: no weights */
-        0.0
+        1.0
     }
 
     /// Returns the colour of any light emitted by this material.
@@ -112,11 +122,13 @@ pub trait Scattering {
     ///   environment.
     ///
     /// # Returns
-    /// A tuple that represents the bounced [`Ray`] and the attenuated colour from this bounce. If
-    /// [`None`] is returned for the [`Ray`], then no more bounce is necessary.
-    fn scatter(&self, _ray: Ray, _record: &HitData, _env: &Environment) -> (Option<Ray>, Colour) {
+    /// A tuple that represents the bounced [`Ray`], the attenuated colour from this bounce and the
+    /// PDF weight based on the scattered ray.
+    ///
+    /// If [`None`] is returned for the [`Ray`], then no more bounce is necessary.
+    fn scatter(&self, _ray: Ray, _record: &HitData, _env: &Environment) -> (Option<Ray>, Colour, f64) {
         /* Standard impl: no scattering */
-        (None, Colour::BLACK)
+        (None, Colour::BLACK, 1.0)
     }
 }
 
@@ -124,11 +136,17 @@ pub trait Scattering {
 impl Scattering for () {
     #[inline]
     #[track_caller]
+    fn pdf(&self, _ray: Ray, _record: &HitData, _env: &Environment, _scattered: Ray) -> f64 {
+        panic!("You called <() as Scattering>::pdf() - this is not implemented")
+    }
+
+    #[inline]
+    #[track_caller]
     fn emitted(&self, _uv: (f64, f64), _p: Vec3) -> Colour { panic!("You called <() as Scattering>::emitted() - this is not implemented") }
 
     #[inline]
     #[track_caller]
-    fn scatter(&self, _ray: Ray, _record: &HitData, _env: &Environment) -> (Option<Ray>, Colour) {
+    fn scatter(&self, _ray: Ray, _record: &HitData, _env: &Environment) -> (Option<Ray>, Colour, f64) {
         panic!("You called <() as Scattering>::scatter() - this is not implemented")
     }
 }
@@ -192,6 +210,13 @@ macro_rules! material_impl {
         }
         impl Scattering for Material {
             #[inline]
+            fn pdf(&self, ray: Ray, record: &HitData, env: &Environment, scattered: Ray) -> f64 {
+                match self {
+                    $(Self::$mat(m) => m.pdf(ray, record, env, scattered),)*
+                }
+            }
+
+            #[inline]
             fn emitted(&self, uv: (f64, f64), p: Vec3) -> Colour {
                 match self {
                     $(Self::$mat(m) => m.emitted(uv, p),)*
@@ -199,7 +224,7 @@ macro_rules! material_impl {
             }
 
             #[inline]
-            fn scatter(&self, ray: Ray, record: &HitData, env: &Environment) -> (Option<Ray>, Colour) {
+            fn scatter(&self, ray: Ray, record: &HitData, env: &Environment) -> (Option<Ray>, Colour, f64) {
                 match self {
                     $(Self::$mat(m) => m.scatter(ray, record, env),)*
                 }

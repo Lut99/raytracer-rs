@@ -107,7 +107,7 @@ impl Vec3 {
     /// # Returns
     /// A new Vec3 of floats that has the same direction but [length](Vec3::length()) `1`.
     #[inline]
-    pub fn unit(&self) -> Vec3 {
+    pub fn unit(self) -> Vec3 {
         let len: f64 = self.length();
         Vec3 { x: self.x / len, y: self.y / len, z: self.z / len }
     }
