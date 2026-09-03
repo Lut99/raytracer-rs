@@ -120,7 +120,7 @@ impl Vec3 {
     /// # Returns
     /// A new Vec3 with the value of `self dot other`.
     #[inline]
-    pub fn dot(self, other: Self) -> fty { self.x * other.x + self.y * other.y + self.z * other.z }
+    pub const fn dot(self, other: Self) -> fty { self.x * other.x + self.y * other.y + self.z * other.z }
 
     /// Computes the cross product of this with another Vec3.
     ///
@@ -130,7 +130,7 @@ impl Vec3 {
     /// # Returns
     /// A new Vec3 with the value of`self cross other`.
     #[inline]
-    pub fn cross(self, other: Self) -> Self {
+    pub const fn cross(self, other: Self) -> Self {
         Vec3 { x: self.y * other.z - self.z * other.y, y: self.z * other.x - self.x * other.z, z: self.x * other.y - self.y * other.x }
     }
 }

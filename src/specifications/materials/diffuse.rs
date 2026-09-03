@@ -14,6 +14,7 @@
 //
 
 use std::convert::Infallible;
+use std::f64::consts::PI;
 use std::path::Path;
 
 use serde::{Deserialize, Serialize};
@@ -52,6 +53,15 @@ pub fn random3_uniform() -> Vec3 {
 pub fn random3_on_hemisphere(normal: Vec3) -> Vec3 {
     let on_unit_sphere: Vec3 = random3_uniform();
     if on_unit_sphere.dot(normal) > 0.0 { on_unit_sphere } else { -on_unit_sphere }
+}
+
+
+
+/// Implements the PDF used by Lambertian scattering.
+#[inline]
+pub fn lambertian_pdf(record: &HitData, scattered: Ray) -> f64 {
+    let cos_theta = record.normal.dot(scattered.direct.unit());
+    f64::max(0.0, cos_theta / PI)
 }
 
 
@@ -115,6 +125,9 @@ impl Loadable for Lambertian {
 }
 impl Scattering for Lambertian {
     #[inline]
+    fn pdf(&self, _ray: Ray, record: &HitData, _env: &Environment, scattered: Ray) -> f64 { lambertian_pdf(record, scattered) }
+
+    #[inline]
     fn scatter(&self, _ray: Ray, record: &HitData, _env: &Environment) -> (Option<Ray>, Colour) {
         // Compute the scattered ray, making sure the scattered one is not zero
         let mut scattered: Vec3 = record.normal + random3_uniform();
@@ -142,6 +155,9 @@ impl<T: Loadable> Loadable for LambertianTexture<T> {
     fn load(&mut self, dir: &Path) -> Result<(), Self::Error> { self.texture.load(dir) }
 }
 impl<T: Textured> Scattering for LambertianTexture<T> {
+    #[inline]
+    fn pdf(&self, _ray: Ray, record: &HitData, _env: &Environment, scattered: Ray) -> f64 { lambertian_pdf(record, scattered) }
+
     #[inline]
     fn scatter(&self, _ray: Ray, record: &HitData, _env: &Environment) -> (Option<Ray>, Colour) {
         // Compute the scattered ray, making sure the scattered one is not zero

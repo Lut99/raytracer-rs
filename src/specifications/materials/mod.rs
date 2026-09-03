@@ -76,6 +76,17 @@ macro_rules! scattering_ptr_impl {
 /***** INTERFACES *****/
 /// The Scattering trait implements any material that we can use to cover an object.
 pub trait Scattering {
+    /// Samples the probability of this material scattering a ray in the given direction.
+    ///
+    /// # Returns
+    /// A weight that correctly weights the result from this ray based on how likely it is that
+    /// this ray hits a light.
+    #[inline]
+    fn pdf(&self, _ray: Ray, _record: &HitData, _env: &Environment, _scattered: Ray) -> f64 {
+        /* Standard impl: no weights */
+        0.0
+    }
+
     /// Returns the colour of any light emitted by this material.
     ///
     /// # Arguments
