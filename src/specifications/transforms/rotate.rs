@@ -1,18 +1,14 @@
-//  TRANSLATE.rs
+//  ROTATE.rs
 //    by Lut99
 //
 //  Description:
-//!   Implements "objects" that take other objects and shows translations or
-//!   transforms.
+//!   Defines rotational translations.
 //
-
-use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
-use super::super::Loadable;
-use super::super::scene::Environment;
-use super::{BoundingBoxable, HitRecord, Hittable};
+use super::super::objects::HitData;
+use super::Transforming;
 use crate::math::camera::degrees_to_radians;
 use crate::math::{AABB, Ray, Vec3};
 
@@ -56,82 +52,6 @@ fn rotate_z_back(vec: Vec3, sin_theta: f64, cos_theta: f64) -> Vec3 {
 
 
 /***** LIBRARY *****/
-// /// Changes the rendered size of an object.
-// #[derive(Clone, Copy, Debug, Deserialize, Serialize)]
-// pub struct Scale<T> {
-//     /// The nested object.
-//     pub obj:   T,
-//     /// The offset vector.
-//     pub scale: f64,
-// }
-
-// // Interfaces
-// impl<T: Loadable> Loadable for Scale<T> {
-//     type Error = T::Error;
-
-//     #[inline]
-//     fn load(&mut self) -> Result<(), Self::Error> { self.obj.load() }
-// }
-// impl<T: BoundingBoxable> BoundingBoxable for Scale<T> {
-//     #[inline]
-//     fn aabb(&self, t_us: u64) -> AABB {
-//         let mut aabb: AABB = self.obj.aabb(t_us);
-//         aabb.dims[0] *= self.scale;
-//         aabb.dims[1] *= self.scale;
-//         aabb.dims[2] *= self.scale;
-//         aabb
-//     }
-// }
-// impl<T: Hittable<M>, M> Hittable<M> for Scale<T> {
-//     #[inline]
-//     fn hit(&self, mut ray: Ray, t_min: f64, t_max: f64, env: &Environment) -> Option<HitRecord<&'_ M>> {
-//         ray.origin
-//         let mut rec: HitRecord<&M> = self.obj.hit(ray, t_min, t_max, env)?;
-//         rec.data.hit += self.pos;
-//         Some(rec)
-//     }
-// }
-
-
-
-/// Defines a positional translation on an object.
-#[derive(Clone, Copy, Debug, Deserialize, Serialize)]
-pub struct Translate<T> {
-    /// The nested object.
-    pub obj: T,
-    /// The offset vector.
-    pub pos: Vec3,
-}
-
-// Interfaces
-impl<T: Loadable> Loadable for Translate<T> {
-    type Error = T::Error;
-
-    #[inline]
-    fn load(&mut self, dir: &Path) -> Result<(), Self::Error> { self.obj.load(dir) }
-}
-impl<T: BoundingBoxable> BoundingBoxable for Translate<T> {
-    #[inline]
-    fn aabb(&self, t_us: u64) -> AABB {
-        let mut aabb: AABB = self.obj.aabb(t_us);
-        aabb.x = aabb.x.translate(self.pos.x);
-        aabb.y = aabb.y.translate(self.pos.y);
-        aabb.z = aabb.z.translate(self.pos.z);
-        aabb
-    }
-}
-impl<T: Hittable> Hittable for Translate<T> {
-    #[inline]
-    fn hit(&self, mut ray: Ray, t_min: f64, t_max: f64, env: &Environment) -> Option<HitRecord<'_>> {
-        ray.origin -= self.pos;
-        let mut rec: HitRecord = self.obj.hit(ray, t_min, t_max, env)?;
-        rec.data.hit += self.pos;
-        Some(rec)
-    }
-}
-
-
-
 macro_rules! rotate_impl {
     () => {
         rotate_impl!(RotateX, rotate_x, rotate_x_back);
@@ -142,28 +62,19 @@ macro_rules! rotate_impl {
     ($name:ident, $rotate:ident, $rotate_back:ident) => {
         /// Implements rotation around one of the axis.
         #[derive(Clone, Copy, Debug, Deserialize, Serialize)]
-        pub struct $name<T> {
-            /// The nested object.
-            pub obj:   T,
+        pub struct $name {
             /// The angle, in degrees.
             pub angle: f64,
         }
 
         // Interfaces
-        impl<T: Loadable> Loadable for $name<T> {
-            type Error = T::Error;
-
+        impl Transforming for $name {
             #[inline]
-            fn load(&mut self, dir: &Path) -> Result<(), Self::Error> { self.obj.load(dir) }
-        }
-        impl<T: BoundingBoxable> BoundingBoxable for $name<T> {
-            #[inline]
-            fn aabb(&self, t_us: u64) -> AABB {
+            fn transform_aabb(&self, aabb: AABB) -> AABB {
                 // Compute the sin_theta and cos_theta for this angle
                 let angle_radians: f64 = degrees_to_radians(self.angle);
                 let sin_theta: f64 = angle_radians.sin();
                 let cos_theta: f64 = angle_radians.cos();
-                let aabb: AABB = self.obj.aabb(t_us);
 
                 // Compute the translated points of the box and find min & max of those
                 let mut min = Vec3::new(f64::INFINITY, f64::INFINITY, f64::INFINITY);
@@ -193,10 +104,9 @@ macro_rules! rotate_impl {
                 // Done, return the surrounding AABB
                 AABB::from_points(min, max)
             }
-        }
-        impl<T: Hittable> Hittable for $name<T> {
+
             #[inline]
-            fn hit(&self, ray: Ray, t_min: f64, t_max: f64, env: &Environment) -> Option<HitRecord<'_>> {
+            fn transform(&self, ray: Ray) -> Ray {
                 // Compute the sin_theta and cos_theta for this angle
                 let angle_radians: f64 = degrees_to_radians(self.angle);
                 let sin_theta: f64 = angle_radians.sin();
@@ -205,17 +115,20 @@ macro_rules! rotate_impl {
                 // Transform the ray from world space to object space
                 let origin = $rotate(ray.origin, sin_theta, cos_theta);
                 let direct = $rotate(ray.direct, sin_theta, cos_theta);
-                let rotated_ray = Ray::with_time(origin, direct, ray.time);
+                Ray::with_time(origin, direct, ray.time)
+            }
 
-                // Determine the intersection in object space and quit if it doesn't hit
-                let mut rec: HitRecord = self.obj.hit(rotated_ray, t_min, t_max, env)?;
+            #[inline]
+            fn transform_back(&self, mut rec: HitData) -> HitData {
+                // Compute the sin_theta and cos_theta for this angle
+                let angle_radians: f64 = degrees_to_radians(self.angle);
+                let sin_theta: f64 = angle_radians.sin();
+                let cos_theta: f64 = angle_radians.cos();
 
-                // Rotate the answer back to normal space
-                rec.data.hit = $rotate_back(rec.data.hit, sin_theta, cos_theta);
-                rec.data.normal = $rotate_back(rec.data.normal, sin_theta, cos_theta);
-
-                // And that's it!
-                Some(rec)
+                // Transform the ray from object space to world space
+                rec.hit = $rotate_back(rec.hit, sin_theta, cos_theta);
+                rec.normal = $rotate_back(rec.normal, sin_theta, cos_theta);
+                rec
             }
         }
     };

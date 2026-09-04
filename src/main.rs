@@ -22,7 +22,7 @@ use humanlog::{DebugMode, HumanLogger};
 use log::{debug, error, info};
 use raytracer::common::input::Dimensions;
 use raytracer::generate;
-use raytracer::hittree::HitTree;
+use raytracer::hitlist::HitList;
 use raytracer::math::{AABB, Camera, Colour, Vec3};
 use raytracer::render::backends::multi::{MultiThreadRenderer, MultiThreadRendererConfig};
 use raytracer::render::backends::single::SingleThreadRenderer;
@@ -31,11 +31,12 @@ use raytracer::render::{RayRenderer as _, RenderBackend};
 use raytracer::specifications::Loadable as _;
 use raytracer::specifications::animations::{Animation, Vertical};
 use raytracer::specifications::materials::{Dielectric, DiffuseLight, Isotropic, Lambertian, LambertianTexture, Material, Metal};
-use raytracer::specifications::objects::plane::Qd;
-use raytracer::specifications::objects::{AnimatedSphere, Box, ConstantDensity, Object, Quad, RotateY, Sphere, Translate};
+use raytracer::specifications::objects::{Box, DynObject, Group, JsonObject, Object, Quad, Sphere};
 use raytracer::specifications::scene::{Background, Environment, SceneFile};
 use raytracer::specifications::textures::image::Image as TexImage;
 use raytracer::specifications::textures::{SpatialChecker, Texture};
+use raytracer::specifications::transforms::{RotateY, Transform, Translate};
+use raytracer::specifications::volumes::{ConstantDensity, Volume};
 
 
 /***** ARGUMENTS *****/
@@ -235,7 +236,7 @@ fn main() -> ExitCode {
                             return ExitCode::FAILURE;
                         }
                     }
-                    let list: HitTree = HitTree::with_objs(scene.objects, (0..=scene.camera.shutter_time.into()).into());
+                    let list: HitList = HitList::with_objs(scene.objects, 0u64..u64::from(scene.camera.shutter_time) + 1u64);
 
                     // Now render based on the backend
                     let output: Image = match render.backend {
@@ -289,19 +290,20 @@ fn main() -> ExitCode {
 
                 RenderSubcommand::Cover(cover) => {
                     // Generate the list of objects for the correct book
-                    let mut objects: Vec<Object> = match cover.book {
+                    let mut objects: Vec<JsonObject> = match cover.book {
                         Book::OneWeekend => {
-                            let mut objects: Vec<Object> = Vec::with_capacity(1 + 21 * 21 + 3);
-                            objects.push(Object::Sphere(Sphere {
-                                center:   Vec3::new(0.0, -1000.0, 0.0),
-                                radius:   1000.0,
-                                material: Material::LambertianTexture(LambertianTexture {
+                            let mut objects: Vec<JsonObject> = Vec::with_capacity(1 + 21 * 21 + 3);
+                            objects.push(JsonObject::Object(Object {
+                                obj: DynObject::Sphere(Sphere { center: Vec3::new(0.0, -1000.0, 0.0), radius: 1000.0 }),
+                                mat: Material::LambertianTexture(LambertianTexture {
                                     texture: Texture::SpatialChecker(SpatialChecker {
                                         scale: 0.32,
                                         black: Colour::new(0.2, 0.3, 0.1, 1.0),
                                         white: Colour::new(0.9, 0.9, 0.9, 1.0),
                                     }),
                                 }),
+                                transforms: Vec::new(),
+                                volumized: None,
                             }));
                             for a in -11..11 {
                                 for b in -11..11 {
@@ -311,14 +313,22 @@ fn main() -> ExitCode {
                                         if mat < 0.8 {
                                             // It'll be a tiny diffuse sphere
                                             let colour = Colour::new(fastrand::f64(), fastrand::f64(), fastrand::f64(), 1.0);
-                                            let sphere = Sphere { center, radius: 0.2, material: Material::Lambertian(Lambertian { colour }) };
+                                            let sphere = Sphere { center, radius: 0.2 };
                                             objects.push(if fastrand::f64() < 0.1 {
-                                                Object::AnimatedSphere(AnimatedSphere {
-                                                    sphere,
-                                                    animation: Animation::Vertical(Vertical { len: 0.5 * fastrand::f64(), at: 0, duration: 1000 }),
+                                                let animation = Animation::Vertical(Vertical { len: 0.5 * fastrand::f64(), at: 0, duration: 1000 });
+                                                JsonObject::Object(Object {
+                                                    obj: DynObject::Sphere(sphere),
+                                                    mat: Material::Lambertian(Lambertian { colour }),
+                                                    volumized: None,
+                                                    transforms: Vec::new(),
                                                 })
                                             } else {
-                                                Object::Sphere(sphere)
+                                                JsonObject::Object(Object {
+                                                    obj: DynObject::Sphere(sphere),
+                                                    mat: Material::Lambertian(Lambertian { colour }),
+                                                    volumized: None,
+                                                    transforms: Vec::new(),
+                                                })
                                             });
                                         } else if mat < 0.95 {
                                             // Metal, with random fuzziness
@@ -329,39 +339,44 @@ fn main() -> ExitCode {
                                                 1.0,
                                             );
                                             let fuzz = fastrand::f64() / 2.0;
-                                            objects.push(Object::Sphere(Sphere {
-                                                center,
-                                                radius: 0.2,
-                                                material: Material::Metal(Metal { colour, fuzz }),
+                                            objects.push(JsonObject::Object(Object {
+                                                obj: DynObject::Sphere(Sphere { center, radius: 0.2 }),
+                                                mat: Material::Metal(Metal { colour, fuzz }),
+                                                volumized: None,
+                                                transforms: Vec::new(),
                                             }));
                                         } else {
                                             // Glass
-                                            objects.push(Object::Sphere(Sphere {
-                                                center,
-                                                radius: 0.2,
-                                                material: Material::Dielectric(Dielectric {
+                                            objects.push(JsonObject::Object(Object {
+                                                obj: DynObject::Sphere(Sphere { center, radius: 0.2 }),
+                                                mat: Material::Dielectric(Dielectric {
                                                     refraction_index: 1.5,
                                                     colour: Colour::new(1.0, 1.0, 1.0, 1.0),
                                                 }),
+                                                volumized: None,
+                                                transforms: Vec::new(),
                                             }));
                                         }
                                     }
                                 }
                             }
-                            objects.push(Object::Sphere(Sphere {
-                                center:   Vec3::new(0.0, 1.0, 0.0),
-                                radius:   1.0,
-                                material: Material::Dielectric(Dielectric { refraction_index: 1.5, colour: Colour::new(1.0, 1.0, 1.0, 1.0) }),
+                            objects.push(JsonObject::Object(Object {
+                                obj: DynObject::Sphere(Sphere { center: Vec3::new(0.0, 1.0, 0.0), radius: 1.0 }),
+                                mat: Material::Dielectric(Dielectric { refraction_index: 1.5, colour: Colour::new(1.0, 1.0, 1.0, 1.0) }),
+                                volumized: None,
+                                transforms: Vec::new(),
                             }));
-                            objects.push(Object::Sphere(Sphere {
-                                center:   Vec3::new(-4.0, 1.0, 0.0),
-                                radius:   1.0,
-                                material: Material::Lambertian(Lambertian { colour: Colour::new(0.4, 0.2, 0.1, 1.0) }),
+                            objects.push(JsonObject::Object(Object {
+                                obj: DynObject::Sphere(Sphere { center: Vec3::new(-4.0, 1.0, 0.0), radius: 1.0 }),
+                                mat: Material::Lambertian(Lambertian { colour: Colour::new(0.4, 0.2, 0.1, 1.0) }),
+                                volumized: None,
+                                transforms: Vec::new(),
                             }));
-                            objects.push(Object::Sphere(Sphere {
-                                center:   Vec3::new(4.0, 1.0, 0.0),
-                                radius:   1.0,
-                                material: Material::Metal(Metal { colour: Colour::new(0.7, 0.6, 0.5, 1.0), fuzz: 0.0 }),
+                            objects.push(JsonObject::Object(Object {
+                                obj: DynObject::Sphere(Sphere { center: Vec3::new(4.0, 1.0, 0.0), radius: 1.0 }),
+                                mat: Material::Metal(Metal { colour: Colour::new(0.7, 0.6, 0.5, 1.0), fuzz: 0.0 }),
+                                volumized: None,
+                                transforms: Vec::new(),
                             }));
                             objects
                         },
@@ -383,7 +398,7 @@ fn main() -> ExitCode {
                             let white = Material::Lambertian(Lambertian { colour: Colour::new(0.73, 0.73, 0.73, 1.0) });
 
                             // Define the ground
-                            let mut objects: Vec<Object> = Vec::with_capacity(1000);
+                            let mut objects: Vec<JsonObject> = Vec::with_capacity(1000);
                             const BOXES_PER_SIDE: u32 = 20;
                             for i in 0..BOXES_PER_SIDE {
                                 for j in 0..BOXES_PER_SIDE {
@@ -395,73 +410,104 @@ fn main() -> ExitCode {
                                     let x1 = x0 + w;
                                     let y1 = fastrand::f64() * 100.0 + 1.0;
                                     let z1 = z0 + w;
-                                    objects.push(Object::Box(Box {
-                                        aabb:     AABB::from_points(Vec3::new(x0, y0, z0), Vec3::new(x1, y1, z1)),
-                                        material: ground.clone(),
+                                    objects.push(JsonObject::Object(Object {
+                                        obj: DynObject::Box(Box { aabb: AABB::from_points(Vec3::new(x0, y0, z0), Vec3::new(x1, y1, z1)) }),
+                                        mat: ground.clone(),
+                                        volumized: None,
+                                        transforms: Vec::new(),
                                     }));
                                 }
                             }
 
                             // Define the ceiling light
-                            objects.push(Object::Quad(Quad {
-                                qd: Qd { pos: Vec3::new(123.0, 554.0, 147.0), u: Vec3::new(300.0, 0.0, 0.0), v: Vec3::new(0.0, 0.0, 265.0) },
-                                material: light,
+                            objects.push(JsonObject::Object(Object {
+                                obj: DynObject::Quad(Quad {
+                                    pos: Vec3::new(123.0, 554.0, 147.0),
+                                    u:   Vec3::new(300.0, 0.0, 0.0),
+                                    v:   Vec3::new(0.0, 0.0, 265.0),
+                                }),
+                                mat: light,
+                                volumized: None,
+                                transforms: Vec::new(),
                             }));
 
                             // Define the blurry sphere
-                            objects.push(Object::AnimatedSphere(AnimatedSphere {
-                                sphere:    Sphere { center: Vec3::new(400.0, 400.0, 200.0), radius: 50.0, material: brown },
-                                animation: Animation::Vertical(Vertical { len: 30.0, at: 0, duration: cover.shutter_time }),
+                            let animation = Animation::Vertical(Vertical { len: 30.0, at: 0, duration: cover.shutter_time });
+                            objects.push(JsonObject::Object(Object {
+                                obj: DynObject::Sphere(Sphere { center: Vec3::new(400.0, 400.0, 200.0), radius: 50.0 }),
+                                mat: brown,
+                                volumized: None,
+                                transforms: Vec::new(),
                             }));
 
                             // Define the loose glass & metal spheres
-                            objects.push(Object::Sphere(Sphere { center: Vec3::new(260.0, 150.0, 45.0), radius: 50.0, material: glass.clone() }));
-                            objects.push(Object::Sphere(Sphere { center: Vec3::new(0.0, 150.0, 145.0), radius: 50.0, material: grey_metal }));
-
-                            // Define glossy sphere (a dense fog in a glass sphere)
-                            let boundary =
-                                Object::Sphere(Sphere { center: Vec3::new(360.0, 150.0, 145.0), radius: 70.0, material: glass.clone() });
-                            objects.push(boundary.clone());
-                            objects.push(Object::ConstantDensity(ConstantDensity {
-                                boundary: std::boxed::Box::new(boundary),
-                                density: 0.2,
-                                phase_function: Isotropic { colour: Colour::new(0.2, 0.4, 0.9, 1.0) },
+                            objects.push(JsonObject::Object(Object {
+                                obj: DynObject::Sphere(Sphere { center: Vec3::new(260.0, 150.0, 45.0), radius: 50.0 }),
+                                mat: glass.clone(),
+                                volumized: None,
+                                transforms: Vec::new(),
+                            }));
+                            objects.push(JsonObject::Object(Object {
+                                obj: DynObject::Sphere(Sphere { center: Vec3::new(0.0, 150.0, 145.0), radius: 50.0 }),
+                                mat: grey_metal,
+                                volumized: None,
+                                transforms: Vec::new(),
                             }));
 
+                            // Define glossy sphere (a dense fog in a glass sphere)
+                            let mut boundary = Object {
+                                obj: DynObject::Sphere(Sphere { center: Vec3::new(360.0, 150.0, 145.0), radius: 70.0 }),
+                                mat: glass,
+                                volumized: None,
+                                transforms: Vec::new(),
+                            };
+                            objects.push(JsonObject::Object(boundary.clone()));
+                            boundary.mat = Material::Isotropic(Isotropic { colour: Colour::new(0.2, 0.4, 0.9, 1.0) });
+                            boundary.volumized = Some(Volume::ConstantDensity(ConstantDensity { density: 0.2 }));
+                            objects.push(JsonObject::Object(boundary));
+
                             // Define the overall haze over the scene
-                            objects.push(Object::ConstantDensity(ConstantDensity {
-                                boundary: std::boxed::Box::new(Object::Sphere(Sphere {
-                                    center:   Vec3::new(0.0, 0.0, 0.0),
-                                    radius:   5000.0,
-                                    material: glass,
-                                })),
-                                density: 0.0001,
-                                phase_function: Isotropic { colour: Colour::new(1.0, 1.0, 1.0, 1.0) },
+                            objects.push(JsonObject::Object(Object {
+                                obj: DynObject::Sphere(Sphere { center: Vec3::new(0.0, 0.0, 0.0), radius: 5000.0 }),
+                                mat: Material::Isotropic(Isotropic { colour: Colour::new(1.0, 1.0, 1.0, 1.0) }),
+                                volumized: Some(Volume::ConstantDensity(ConstantDensity { density: 0.0001 })),
+                                transforms: Vec::new(),
                             }));
 
                             // Define the earthy sphere and perlin noise sphere (although we just use a blank lambertian sphere)
-                            objects.push(Object::Sphere(Sphere { center: Vec3::new(400.0, 200.0, 400.0), radius: 100.0, material: earth }));
-                            objects.push(Object::Sphere(Sphere { center: Vec3::new(220.0, 280.0, 300.0), radius: 80.0, material: perlin_wink }));
+                            objects.push(JsonObject::Object(Object {
+                                obj: DynObject::Sphere(Sphere { center: Vec3::new(400.0, 200.0, 400.0), radius: 100.0 }),
+                                mat: earth,
+                                volumized: None,
+                                transforms: Vec::new(),
+                            }));
+                            objects.push(JsonObject::Object(Object {
+                                obj: DynObject::Sphere(Sphere { center: Vec3::new(220.0, 280.0, 300.0), radius: 80.0 }),
+                                mat: perlin_wink,
+                                volumized: None,
+                                transforms: Vec::new(),
+                            }));
 
                             // Define the box made out of spheres
                             const NUMBER_OF_SPHERES: usize = 1000;
                             let mut orbs = Vec::with_capacity(NUMBER_OF_SPHERES);
                             for _ in 0..NUMBER_OF_SPHERES {
-                                orbs.push(Object::Sphere(Sphere {
-                                    center:   Vec3::new(fastrand::f64() * 165.0, fastrand::f64() * 165.0, fastrand::f64() * 165.0),
-                                    radius:   10.0,
-                                    material: white.clone(),
+                                orbs.push(JsonObject::Object(Object {
+                                    obj: DynObject::Sphere(Sphere {
+                                        center: Vec3::new(fastrand::f64() * 165.0, fastrand::f64() * 165.0, fastrand::f64() * 165.0),
+                                        radius: 10.0,
+                                    }),
+                                    mat: white.clone(),
+                                    volumized: None,
+                                    transforms: Vec::new(),
                                 }));
                             }
-                            objects.push(Object::Translate(Translate {
-                                pos: Vec3::new(-100.0, 270.0, 395.0),
-                                obj: std::boxed::Box::new(Object::RotateY(RotateY {
-                                    angle: 15.0,
-                                    obj:   std::boxed::Box::new(Object::Group(std::boxed::Box::new(HitTree::with_objs(
-                                        orbs,
-                                        (0..=cover.shutter_time).into(),
-                                    )))),
-                                })),
+                            objects.push(JsonObject::Group(Group {
+                                objs: orbs,
+                                transforms: vec![
+                                    Transform::RotateY(RotateY { angle: 15.0 }),
+                                    Transform::Translate(Translate { pos: Vec3::new(-100.0, 270.0, 395.0) }),
+                                ],
                             }));
 
                             // Done
@@ -478,7 +524,7 @@ fn main() -> ExitCode {
                     }
 
                     // Convert that to a static HitList
-                    let list: HitTree = HitTree::with_objs(objects, (0..=cover.shutter_time).into());
+                    let list: HitList = HitList::with_objs(objects, 0u64..cover.shutter_time + 1u64);
                     let dims: (u32, u32) = if let Some(dims) = render.dims { (dims.0.into(), dims.1.into()) } else { (800, 600) };
                     let cam = match cover.book {
                         Book::OneWeekend => Camera::new(

@@ -42,6 +42,8 @@ macro_rules! animation_impl {
     ($($(#[$($attrs:tt)*])* $ani:ident),* $(,)?) => {
         /// A runtime abstraction of all possible animations.
         #[derive(Clone, Copy, Debug, Deserialize, Serialize)]
+        #[serde(tag = "type")]
+        #[serde(rename_all = "snake_case")]
         pub enum Animation {
             $($(#[$($attrs)*])* $ani($ani),)*
         }

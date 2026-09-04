@@ -18,34 +18,34 @@
 
 // Define the submodules
 pub mod boxed;
+pub mod group;
 mod hitrecord;
-pub mod medium;
 #[cfg(feature = "obj")]
 pub mod model;
 pub mod plane;
 pub mod sphere;
-pub mod translate;
 
 // Imports & Exports
 use std::cell::{Ref, RefMut};
+use std::convert::Infallible;
 use std::path::Path;
 use std::rc::Rc;
 use std::sync::{Arc, MutexGuard, RwLockReadGuard, RwLockWriteGuard};
 
 pub use boxed::Box;
+pub use group::Group;
 pub use hitrecord::*;
-pub use medium::ConstantDensity;
 pub use model::Model;
 pub use plane::{Quad, Triangle};
 use serde::{Deserialize, Serialize};
-pub use sphere::{AnimatedSphere, Sphere};
+pub use sphere::Sphere;
 use thiserror::Error;
-pub use translate::{RotateX, RotateY, RotateZ, Translate};
 
 use super::Loadable;
-use super::materials::Material;
+use super::materials::{Material, Scattering};
 use super::scene::Environment;
-use crate::hittree::HitTree;
+use super::transforms::{RotateX, RotateY, RotateZ, Transform, Transforming as _, Translate};
+use super::volumes::{Volume, Volumizing as _};
 use crate::math::{AABB, Ray};
 
 
@@ -69,7 +69,7 @@ macro_rules! hittable_ptr_impl {
     ('a, $ty:ty) => {
         impl<'a, T: Hittable> Hittable for $ty {
             #[inline]
-            fn hit(&self, ray: Ray, t_min: f64, t_max: f64, env: &Environment) -> Option<HitRecord<'_>> {
+            fn hit(&self, ray: Ray, t_min: f64, t_max: f64, env: &Environment) -> Option<HitData> {
                 <T as Hittable>::hit(self, ray, t_min, t_max, env)
             }
         }
@@ -77,11 +77,41 @@ macro_rules! hittable_ptr_impl {
     ($ty:ty) => {
         impl<T: Hittable> Hittable for $ty {
             #[inline]
-            fn hit(&self, ray: Ray, t_min: f64, t_max: f64, env: &Environment) -> Option<HitRecord<'_>> {
+            fn hit(&self, ray: Ray, t_min: f64, t_max: f64, env: &Environment) -> Option<HitData> {
                 <T as Hittable>::hit(self, ray, t_min, t_max, env)
             }
         }
     };
+}
+
+
+
+
+
+/***** ERRORS *****/
+/// Defines errors occurring when [loading](Loadable::load()) [`Object`]s.
+#[derive(Debug, Error)]
+pub enum JsonObjectLoadError {
+    /// The model failed.
+    #[error("{0}")]
+    Model(#[from] model::Error),
+    /// The object failed.
+    #[error("{0}")]
+    Object(#[source] <Object<DynObject, Material> as Loadable>::Error),
+    /// The group failed.
+    #[error("{0}")]
+    Group(#[source] std::boxed::Box<<Group as Loadable>::Error>),
+}
+
+/// Defines errors occurring when [loading](Loadable::load()) [`Object`]s.
+#[derive(Debug, Error)]
+pub enum ObjectLoadError<E1, E2> {
+    /// The object failed.
+    #[error("{0}")]
+    Obj(#[source] E1),
+    /// The material failed.
+    #[error("{0}")]
+    Mat(#[source] E2),
 }
 
 
@@ -130,8 +160,8 @@ pub trait Hittable: BoundingBoxable {
     /// - `env`: An [`Environment`] struct relating information about the scene's total environment.
     ///
     /// # Returns
-    /// A new [`HitRecord`] struct, which collects relevant information of this hit, or else [`None`] if the ray does not hit.
-    fn hit(&self, ray: Ray, t_min: f64, t_max: f64, env: &Environment) -> Option<HitRecord<'_>>;
+    /// A new [`HitData`] struct, which collects relevant information of this hit, or else [`None`] if the ray does not hit.
+    fn hit(&self, ray: Ray, t_min: f64, t_max: f64, env: &Environment) -> Option<HitData>;
 }
 
 // Pointer-like impls
@@ -154,28 +184,178 @@ hittable_ptr_impl!('a, parking_lot::MutexGuard<'a, T>);
 
 
 /***** LIBRARY *****/
-macro_rules! object_impl {
-    // Default error type insertion
-    (__ { $(#[$($fattrs:tt)*])* $fobj:ident $({$($fgen:tt)*})? $(, $(#[$($rattrs:tt)*])* $robj:ident $({$($rgen:tt)*})? $(( $rerrty:ty ))?)* } { $($(#[$($attrs:tt)*])* $obj:ident $({$($gen:tt)*})? ( $errty:ty )),* }) => {
-        object_impl!(__ {$($(#[$($rattrs)*])* $robj $({$($rgen)*})? $(($rerrty))?),*} { $(#[$($fattrs)*])* $fobj $({$($fgen)*})? (::std::convert::Infallible) $(, $(#[$($attrs)*])* $obj $({$($gen)*})? ($errty))* });
-    };
-    (__ { $(#[$($fattrs:tt)*])* $fobj:ident $({$($fgen:tt)*})? ($ferrty:ty) $(, $(#[$($rattrs:tt)*])* $robj:ident $({$($rgen:tt)*})? $(( $rerrty:ty ))?)* } { $($(#[$($attrs:tt)*])* $obj:ident $({$($gen:tt)*})? ( $errty:ty )),* }) => {
-        object_impl!(__ {$($(#[$($rattrs)*])* $robj $({$($rgen)*})? $(($rerrty))?),*} { $(#[$($fattrs)*])* $fobj $({$($fgen)*})? ($ferrty) $(, $(#[$($attrs)*])* $obj $({$($gen)*})? ($errty))* });
-    };
+/// Defines either a single object, or a group.
+///
+/// Used only to complete serialization.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub enum JsonObject {
+    /// It's an unloaded model.
+    Model(Model),
+    /// It's a loose object.
+    Object(Object<DynObject, Material>),
+    /// It's a group.
+    Group(Group),
+}
+
+// Interfaces
+impl Loadable for JsonObject {
+    type Error = JsonObjectLoadError;
+
+    #[inline]
+    fn load(&mut self, dir: &Path) -> Result<(), Self::Error> {
+        match self {
+            Self::Model(m) => {
+                // Attempt to load the model into a group
+                let group = m.load(dir)?;
+                // Replace the object with that group
+                *self = JsonObject::Group(group);
+                Ok(())
+            },
+            Self::Object(o) => o.load(dir).map_err(JsonObjectLoadError::Object),
+            Self::Group(g) => g.load(dir).map_err(std::boxed::Box::new).map_err(JsonObjectLoadError::Group),
+        }
+    }
+}
 
 
-    // Actual impl
-    (__ {} { $($(#[$($attrs:tt)*])* $obj:ident $({$($gen:tt)*})? ( $errty:ty )),* }) => {
+
+/// Defines the wrapper around an [`Object`], including any modifiers.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct Object<T, M> {
+    /// Defines the actual object that implements itself.
+    #[serde(flatten)]
+    pub obj: T,
+    /// Defines the material on the object.
+    #[serde(default, alias = "material")]
+    pub mat: M,
+    /// Defines if this object is volumized somehow.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub volumized: Option<Volume>,
+    /// Defines any transformations on the object.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub transforms: Vec<Transform>,
+}
+
+// Object
+impl<T, M> Object<T, M> {
+    /// Optimizes the transforms in this object by consolidating them.
+    pub fn consolidate_transforms(&mut self) {
+        let mut transforms = Vec::new();
+        let mut prev = None;
+        for transform in self.transforms.drain(..) {
+            match (prev, transform) {
+                // Group equal transforms in a row
+                (Some(Transform::RotateX(p)), Transform::RotateX(t)) => prev = Some(Transform::RotateX(RotateX { angle: p.angle + t.angle })),
+                (Some(Transform::RotateY(p)), Transform::RotateY(t)) => prev = Some(Transform::RotateY(RotateY { angle: p.angle + t.angle })),
+                (Some(Transform::RotateZ(p)), Transform::RotateZ(t)) => prev = Some(Transform::RotateZ(RotateZ { angle: p.angle + t.angle })),
+                (Some(Transform::Translate(p)), Transform::Translate(t)) => prev = Some(Transform::Translate(Translate { pos: p.pos + t.pos })),
+
+                // If they are equal, then push the prev
+                (Some(p), t) => {
+                    transforms.push(p);
+                    prev = Some(t);
+                },
+
+                // Otherwise, if there is no prev, then this becomes the prev
+                (None, transform) => prev = Some(transform),
+            }
+        }
+        if let Some(prev) = prev {
+            transforms.push(prev);
+        }
+        self.transforms = transforms;
+    }
+}
+
+// Interfaces
+impl<T: Loadable, M: Loadable> Loadable for Object<T, M>
+where
+    T::Error: 'static,
+    M::Error: 'static,
+{
+    type Error = ObjectLoadError<T::Error, M::Error>;
+
+    #[inline]
+    fn load(&mut self, dir: &Path) -> Result<(), Self::Error> {
+        self.obj.load(dir).map_err(ObjectLoadError::Obj)?;
+        self.mat.load(dir).map_err(ObjectLoadError::Mat)?;
+        Ok(())
+    }
+}
+impl<T: BoundingBoxable, M> BoundingBoxable for Object<T, M> {
+    #[inline]
+    fn aabb(&self, t_us: u64) -> AABB {
+        // Apply the transformations to the computed AABB
+        let mut aabb: AABB = self.obj.aabb(t_us);
+        for trans in &self.transforms {
+            aabb = trans.transform_aabb(aabb);
+        }
+        aabb
+    }
+}
+impl<T: Hittable, M> Hittable for Object<T, M> {
+    #[inline]
+    fn hit(&self, mut ray: Ray, t_min: f64, t_max: f64, env: &Environment) -> Option<HitData> {
+        // First, transform the ray on the way there...
+        for trans in self.transforms.iter() {
+            ray = trans.transform(ray);
+        }
+
+        // Then decide how to hit the object
+        let mut rec: HitData = if let Some(volume) = &self.volumized {
+            // Compute both hits - one on the front of the object, one on the back. And they must
+            // both hit!
+            let mut rec1: HitData = self.obj.hit(ray, -f64::INFINITY, f64::INFINITY, env)?;
+            let mut rec2: HitData = self.obj.hit(ray, rec1.t + 0.0001, f64::INFINITY, env)?;
+
+            // Bound the record's t's by the given ones and quit if it's too close
+            rec1.t = f64::max(rec1.t, t_min);
+            rec2.t = f64::min(rec2.t, t_max);
+            if rec1.t >= rec2.t {
+                return None;
+            }
+            rec1.t = f64::max(rec1.t, 0.0);
+
+            // Then run the volume function to turn that ray into a final hit
+            volume.volumize(ray, rec1.t, rec2.t)?
+        } else {
+            // Compute the hit
+            self.obj.hit(ray, t_min, t_max, env)?
+        };
+
+        // Transform the result back
+        for trans in self.transforms.iter().rev() {
+            rec = trans.transform_back(rec);
+        }
+        Some(rec)
+    }
+}
+impl<T: Hittable, M: Scattering> Object<T, M> {
+    /// Computes whether this Object is [`hit()`](Hittable::hit()), except that the relevant
+    /// material is also returned.
+    ///
+    /// # Arguments
+    /// - `ray`: The [`Ray`] to compute any hits with.
+    /// - `t_min`: The minimum point along the ray we still accept (we don't count it as a hit before that).
+    /// - `t_max`: The maximum point along the ray we still accept (we don't count is as a hit after that).
+    /// - `env`: An [`Environment`] struct relating information about the scene's total environment.
+    ///
+    /// # Returns
+    /// A new [`HitRecord`] struct, which collects relevant information of this hit, or else [`None`] if the ray does not hit.
+    #[inline]
+    pub fn hit_full(&self, ray: Ray, t_min: f64, t_max: f64, env: &Environment) -> Option<HitRecord<'_>> {
+        self.obj.hit(ray, t_min, t_max, env).map(|data| HitRecord { data, mat: &self.mat })
+    }
+}
+
+
+
+macro_rules! dyn_object_impl {
+    ($($(#[$($attrs:tt)*])* $obj:ident $({$($gen:tt)*})? ( $errty:ty )),* $(,)?) => {
         /// Errors occurring when loading an object.
         #[derive(Debug, Error)]
         pub enum Error {
             $(#[error("{0}")] $obj(#[source] $errty),)*
-            #[error("{0}")] ConstantDensity(#[source] std::boxed::Box<Self>),
-            #[error("{0}")] RotateX(#[source] std::boxed::Box<Self>),
-            #[error("{0}")] RotateY(#[source] std::boxed::Box<Self>),
-            #[error("{0}")] RotateZ(#[source] std::boxed::Box<Self>),
-            #[error("{0}")] Translate(#[source] std::boxed::Box<Self>),
-            #[error("{0}")] Group(#[source] std::boxed::Box<Self>),
         }
 
 
@@ -185,95 +365,48 @@ macro_rules! object_impl {
         /// # Generics
         /// - `M`: The type of material used.
         #[derive(Clone, Debug, Deserialize, Serialize)]
-        pub enum Object {
+        #[serde(tag = "type")]
+        #[serde(rename_all = "snake_case")]
+        pub enum DynObject {
             $($(#[$($attrs)*])* $obj($obj$(<$($gen)*>)?),)*
-            /// Turns a shape into a smoky shape.
-            ConstantDensity(ConstantDensity<std::boxed::Box<Self>>),
-            /// A rotation around the X-axis.
-            RotateX(RotateX<std::boxed::Box<Self>>),
-            /// A rotation around the Y-axis.
-            RotateY(RotateY<std::boxed::Box<Self>>),
-            /// A rotation around the Z-axis.
-            RotateZ(RotateZ<std::boxed::Box<Self>>),
-            /// A translation.
-            Translate(Translate<std::boxed::Box<Self>>),
-            /// A nested group of objects.
-            Group(std::boxed::Box<HitTree>),
         }
 
         // Interface
-        impl Loadable for Object {
+        impl Loadable for DynObject {
             type Error = Error;
 
             #[inline]
             fn load(&mut self, dir: &Path) -> Result<(), Self::Error> {
                 match self {
                     $(Self::$obj(o) => o.load(dir).map_err(Error::$obj),)*
-                    Self::ConstantDensity(c) => c.load(dir).map_err(std::boxed::Box::new).map_err(Error::ConstantDensity),
-                    Self::RotateX(r) => r.load(dir).map_err(std::boxed::Box::new).map_err(Error::RotateX),
-                    Self::RotateY(r) => r.load(dir).map_err(std::boxed::Box::new).map_err(Error::RotateY),
-                    Self::RotateZ(r) => r.load(dir).map_err(std::boxed::Box::new).map_err(Error::RotateZ),
-                    Self::Translate(t) => t.load(dir).map_err(std::boxed::Box::new).map_err(Error::Translate),
-                    Self::Group(g) => g.load(dir).map_err(std::boxed::Box::new).map_err(Error::Group),
                 }
             }
         }
-        impl BoundingBoxable for Object {
+        impl BoundingBoxable for DynObject {
             #[inline]
             fn aabb(&self, t_us: u64) -> AABB {
                 match self {
                     $(Self::$obj(o) => o.aabb(t_us),)*
-                    Self::ConstantDensity(c) => c.aabb(t_us),
-                    Self::RotateX(r) => r.aabb(t_us),
-                    Self::RotateY(r) => r.aabb(t_us),
-                    Self::RotateZ(r) => r.aabb(t_us),
-                    Self::Translate(t) => t.aabb(t_us),
-                    Self::Group(g) => g.aabb(t_us),
                 }
             }
         }
-        impl Hittable for Object {
+        impl Hittable for DynObject {
             #[inline]
-            fn hit(&self, ray: Ray, t_min: f64, t_max: f64, env: &Environment) -> Option<HitRecord<'_>> {
+            fn hit(&self, ray: Ray, t_min: f64, t_max: f64, env: &Environment) -> Option<HitData> {
                 match self {
                     $(Self::$obj(o) => o.hit(ray, t_min, t_max, env),)*
-                    Self::ConstantDensity(c) => c.hit(ray, t_min, t_max, env),
-                    Self::RotateX(r) => r.hit(ray, t_min, t_max, env),
-                    Self::RotateY(r) => r.hit(ray, t_min, t_max, env),
-                    Self::RotateZ(r) => r.hit(ray, t_min, t_max, env),
-                    Self::Translate(t) => t.hit(ray, t_min, t_max, env),
-                    Self::Group(g) => g.hit(ray, t_min, t_max, env),
                 }
             }
         }
     };
-
-    // Public interface
-    ($($(#[$($attrs:tt)*])* $obj:ident $({$($gen:tt)*})? $(( $errty:ty ))?),* $(,)?) => {
-        object_impl!(__ { $($(#[$($attrs)*])? $obj $({$($gen)*})? $(($errty))?),* } {});
-    };
 }
-object_impl!(
-    /// A regular sphere but animated.
-    AnimatedSphere{Material}(super::materials::Error),
-    /// A regular 3D circle.
-    Sphere{Material}(super::materials::Error),
-    /// A four-point shape on a 2D-plane.
-    Quad{Material}(super::materials::Error),
+dyn_object_impl!(
     /// A bunch of quads that make a box shape.
-    Box{Material}(super::materials::Error),
-    /// A rotation around the X-axis.
-    // RotateX{Box<Object>}(Box<Error>),
-    /// A rotation around the Y-axis.
-    // RotateY{Box<Object>}(Box<Error>),
-    /// A rotation around the Z-axis.
-    // RotateZ{Box<Object>}(Box<Error>),
-    /// A translation.
-    // Translate{Box<Object>}(Box<Error>),
-    /// A group of objects.
-    // HitTree{Box<Object>}(Box<Error>),
+    Box(Infallible),
+    /// A four-point shape on a 2D-plane.
+    Quad(Infallible),
+    /// A regular 3D circle.
+    Sphere(Infallible),
     /// A three-point shape on a 2D-plane.
-    Triangle{Material}(super::materials::Error),
-    /// A complex, triangle-based model.
-    Model(model::Error),
+    Triangle(Infallible),
 );

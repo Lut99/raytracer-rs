@@ -16,7 +16,7 @@ use std::num::{NonZeroU32, NonZeroU64};
 
 use serde::{Deserialize, Serialize};
 
-use super::objects::Object;
+use super::objects::JsonObject;
 use crate::common::file::{impl_toml_from_path, impl_toml_from_string, impl_toml_to_path, impl_toml_to_string};
 use crate::math::{Camera, Colour, Vec3};
 
@@ -196,7 +196,7 @@ pub struct SceneFile {
     #[serde(default, skip_serializing_if = "is_default")]
     pub camera:      CameraInfo,
     /// The objects found in this scene.
-    pub objects:     Vec<Object>,
+    pub objects:     Vec<JsonObject>,
 }
 impl SceneFile {
     impl_toml_from_string!();
@@ -215,7 +215,7 @@ mod tests {
     use super::*;
     use crate::math::Colour;
     use crate::specifications::materials::{Diffuse, Material, NormalMap};
-    use crate::specifications::objects::Sphere;
+    use crate::specifications::objects::{DynObject, Object, Sphere};
 
     #[test]
     fn test_scene_file_serialize() {
@@ -229,10 +229,11 @@ mod tests {
             SceneFile {
                 camera:      CameraInfo::default(),
                 environment: Environment::default(),
-                objects:     vec![Object::Sphere(Sphere {
-                    center:   [0.0, 0.0, 0.0].into(),
-                    radius:   1.0,
-                    material: Material::NormalMap(NormalMap),
+                objects:     vec![JsonObject::Object(Object {
+                    obj: DynObject::Sphere(Sphere { center: [0.0, 0.0, 0.0].into(), radius: 1.0 }),
+                    mat: Material::NormalMap(NormalMap),
+                    volumized: None,
+                    transforms: Vec::new(),
                 })],
             }
             .to_string()
@@ -259,10 +260,11 @@ mod tests {
             SceneFile {
                 camera:      CameraInfo::default(),
                 environment: Environment::default(),
-                objects:     vec![Object::Sphere(Sphere {
-                    center:   [0.0, 0.0, 0.0].into(),
-                    radius:   1.0,
-                    material: Material::Diffuse(Diffuse { colour: Colour::new(1.0, 1.0, 1.0, 1.0) }),
+                objects:     vec![JsonObject::Object(Object {
+                    obj: DynObject::Sphere(Sphere { center: [0.0, 0.0, 0.0].into(), radius: 1.0 }),
+                    mat: Material::Diffuse(Diffuse { colour: Colour::new(1.0, 1.0, 1.0, 1.0) }),
+                    volumized: None,
+                    transforms: Vec::new(),
                 })],
             }
             .to_string()

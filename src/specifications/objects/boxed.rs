@@ -5,42 +5,37 @@
 //!   Abstraction over a couple of quads to call it a box.
 //
 
+use std::convert::Infallible;
 use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
 use super::super::Loadable;
-use super::super::materials::Scattering;
-use super::{BoundingBoxable, HitRecord, Hittable};
+use super::{BoundingBoxable, HitData, Hittable};
 use crate::math::{AABB, Ray};
 use crate::specifications::scene::Environment;
 
 
 /***** LIBRARY *****/
 #[derive(Clone, Copy, Debug, Deserialize, Serialize)]
-pub struct Box<M> {
+pub struct Box {
     /// The interal AABB we use to render.
     #[serde(flatten)]
-    pub aabb:     AABB,
-    /// The material to render all quads with.
-    #[serde(alias = "mat")]
-    pub material: M,
+    pub aabb: AABB,
 }
 
 // Interface
-impl<M: Loadable> Loadable for Box<M> {
-    type Error = M::Error;
+impl Loadable for Box {
+    type Error = Infallible;
 
     #[inline]
-    fn load(&mut self, dir: &Path) -> Result<(), Self::Error> { self.material.load(dir) }
+    fn load(&mut self, _dir: &Path) -> Result<(), Self::Error> { Ok(()) }
 }
-impl<M> BoundingBoxable for Box<M> {
+impl BoundingBoxable for Box {
     #[inline]
     fn aabb(&self, _t_us: u64) -> AABB { self.aabb }
 }
-impl<M: Scattering> Hittable for Box<M> {
+impl Hittable for Box {
     #[inline]
-    fn hit(&self, ray: Ray, t_min: f64, t_max: f64, env: &Environment) -> Option<HitRecord<'_>> {
-        self.aabb.hit(ray, t_min, t_max, env).map(|rec| HitRecord { mat: &self.material, data: rec.data })
-    }
+    fn hit(&self, ray: Ray, t_min: f64, t_max: f64, env: &Environment) -> Option<HitData> { self.aabb.hit(ray, t_min, t_max, env) }
 }

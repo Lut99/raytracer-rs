@@ -5,9 +5,8 @@
 //!   Contains some common functions across CPU-based renderers.
 //
 
-use crate::hittree::HitTree;
+use crate::hitlist::HitList;
 use crate::math::{Colour, Ray, Vec3};
-use crate::specifications::objects::{Hittable as _, Object};
 use crate::specifications::scene::{Background, Environment};
 
 
@@ -22,14 +21,14 @@ use crate::specifications::scene::{Background, Environment};
 ///
 /// # Returns
 /// A new [`Rgba`] struct that contains the matched colour.
-pub fn ray_colour(ray: Ray, world: &HitTree<Object>, depth: usize, env: &Environment) -> Colour {
+pub fn ray_colour(ray: Ray, world: &HitList, depth: usize, env: &Environment) -> Colour {
     // We stop if there is no more to bounce
     if depth == 0 {
         return Colour::BLACK;
     }
 
     // Try to find the object that hits closest
-    match world.hit(ray, 0.001, f64::INFINITY, env) {
+    match world.hit_full(ray, 0.001, f64::INFINITY, env) {
         Some(record) => {
             // Compute if the material emits anything
             let colour_from_emission = record.emitted();

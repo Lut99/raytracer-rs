@@ -22,7 +22,7 @@ use serde::{Deserialize, Serialize};
 
 use super::ray::Ray;
 use super::vec3::Vec3;
-use crate::specifications::objects::{BoundingBoxable, HitRecord, Hittable};
+use crate::specifications::objects::{BoundingBoxable, HitData, Hittable};
 use crate::specifications::scene::Environment;
 
 
@@ -93,8 +93,23 @@ impl Interval {
     pub const unsafe fn new_ordered(v1: f64, v2: f64) -> Self { Self(v1, v2) }
 }
 
-// Mutators
+// Opts
 impl Interval {
+    /// Checks if this interval overlaps with another one.
+    ///
+    /// # Arguments
+    /// - `other`: The other interval to check overlap with.
+    ///
+    /// # Returns
+    /// True if they overlap, or false otherwise.
+    #[inline]
+    pub const fn overlaps_with(self, other: Self) -> bool {
+        // https://stackoverflow.com/a/3269471
+        self.0 <= other.1 && other.0 <= self.1
+    }
+
+
+
     /// Translates the whole interval by a fixed amount.
     ///
     /// # Arguments
@@ -270,30 +285,10 @@ impl AABB {
     /// - `t_max`: A maximal `t` (i.e., distance along the Ray from its origin) that we accept.
     ///
     /// # Returns
-    /// Whether the given ray hits this AABB.
+    /// Whether the given ray hits this AABB. If so, then the interval of the ray that intersects
+    /// with the AABB is given.
     #[inline]
-    pub fn hittest(&self, ray: Ray, t_min: f64, t_max: f64) -> bool {
-        // let int = [self.x, self.y, self.z];
-        // for i in 0..3 {
-        //     // Compute the hit points with the AABB
-        //     let inv_direction: f64 = 1.0 / ray.direct[i];
-        //     let mut t0: f64 = (int[i].min() - ray.origin[i]) * inv_direction;
-        //     let mut t1: f64 = (int[i].max() - ray.origin[i]) * inv_direction;
-
-        //     // Ensure we order the values properly, and then bind them by the given min/max
-        //     if t0 > t1 {
-        //         mem::swap(&mut t0, &mut t1);
-        //     }
-        //     t_min = f64::max(t_min, t0);
-        //     t_max = f64::min(t_max, t1);
-
-        //     // We don't hit if t_max is now too small
-        //     if t_max <= t_min {
-        //         return false;
-        //     }
-        // }
-        // true
-
+    pub fn hittest(&self, ray: Ray, t_min: f64, t_max: f64) -> Option<Interval> {
         // Compute the hitpoints with the box' intervals
         // The `Interval` takes care to order  them from small to large anyway
         let (invdirx, invdiry, invdirz): (f64, f64, f64) = (1.0 / ray.direct.x, 1.0 / ray.direct.y, 1.0 / ray.direct.z);
@@ -304,7 +299,8 @@ impl AABB {
         // If it overlaps, it's a hit; otherwise it isn't.
         let hitmin = f64::max(t_min, f64::max(f64::max(tx.min(), ty.min()), tz.min()));
         let hitmax = f64::min(t_max, f64::min(f64::min(tx.max(), ty.max()), tz.max()));
-        hitmin < hitmax
+        // SAFETY: hitmin is guaranteed to be <= hitmax
+        if hitmin < hitmax { Some(unsafe { Interval::new_ordered(hitmin, hitmax) }) } else { None }
     }
 
 
@@ -335,7 +331,7 @@ impl BoundingBoxable for AABB {
 }
 impl Hittable for AABB {
     #[inline]
-    fn hit(&self, ray: Ray, t_min: f64, t_max: f64, _env: &Environment) -> Option<HitRecord<'_>> {
+    fn hit(&self, ray: Ray, t_min: f64, t_max: f64, _env: &Environment) -> Option<HitData> {
         // Compute the hitpoints with the box' intervals
         // The `Interval` takes care to order  them from small to large anyway
         let (invdirx, invdiry, invdirz): (f64, f64, f64) = (1.0 / ray.direct.x, 1.0 / ray.direct.y, 1.0 / ray.direct.z);
@@ -378,13 +374,12 @@ impl Hittable for AABB {
         };
 
         // Create the hitrecord and return
-        Some(HitRecord::new(
+        Some(HitData::new(
             ray,
             ray.at(hit),
             hit,
             norm,
             (0.0, 0.0), // TODO
-            &(),
         ))
     }
 }

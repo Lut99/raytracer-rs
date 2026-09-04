@@ -21,7 +21,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::math::{AABB, Ray};
 use crate::specifications::Loadable;
-use crate::specifications::objects::{BoundingBoxable, HitRecord, Hittable, Object};
+use crate::specifications::materials::Material;
+use crate::specifications::objects::{BoundingBoxable, HitData, Hittable, Object, ObjectKind};
 use crate::specifications::scene::Environment;
 
 
@@ -350,7 +351,7 @@ impl<T: Hittable> Hittable for BVHNode<T> {
     /// A new [`HitRecord`] struct, which collects relevant information of this hit, or else
     /// [`None`] if the ray does not hit.
     #[inline]
-    fn hit(&self, ray: Ray, t_min: f64, t_max: f64, env: &Environment) -> Option<HitRecord<'_>> {
+    fn hit(&self, ray: Ray, t_min: f64, t_max: f64, env: &Environment) -> Option<HitData> {
         // Check if we're hit in the first place
         if !self.aabb(ray.time).hittest(ray, t_min, t_max) {
             return None;
@@ -362,11 +363,11 @@ impl<T: Hittable> Hittable for BVHNode<T> {
             Self::Object(_, obj) => obj.hit(ray, t_min, t_max, env),
             // Check which half of the BVH is hit instead
             Self::Next(_, lhs, rhs) => {
-                let lhs: Option<HitRecord> = lhs.hit(ray, t_min, t_max, env);
-                let rhs: Option<HitRecord> = rhs.hit(ray, t_min, t_max, env);
+                let lhs: Option<HitData> = lhs.hit(ray, t_min, t_max, env);
+                let rhs: Option<HitData> = rhs.hit(ray, t_min, t_max, env);
                 match (lhs, rhs) {
                     // Return the closest of the two hits if both
-                    (Some(lhs), Some(rhs)) if lhs.data.t <= rhs.data.t => Some(lhs),
+                    (Some(lhs), Some(rhs)) if lhs.t <= rhs.t => Some(lhs),
                     (Some(_), Some(rhs)) => Some(rhs),
                     // Else, return the hit half
                     (Some(lhs), None) => Some(lhs),
@@ -408,7 +409,7 @@ impl<T> IntoIterator for BVHNode<T> {
 /***** LIBRARY *****/
 /// A vector that contains [`Hittable`] objects.
 #[derive(Clone, Debug, PartialEq)]
-pub struct HitTree<T = Object> {
+pub struct HitTree<T = Object<ObjectKind, Material>> {
     /// The elements in this HitTree.
     elems: Option<BVHNode<T>>,
     /// The time range for which the AABB's in the `elems` are valid.
@@ -496,7 +497,7 @@ impl<T> BoundingBoxable for HitTree<T> {
 impl<T: Hittable> Hittable for HitTree<T> {
     #[inline]
     #[cfg_attr(debug_assertions, track_caller)]
-    fn hit(&self, ray: Ray, t_min: f64, t_max: f64, env: &Environment) -> Option<HitRecord<'_>> {
+    fn hit(&self, ray: Ray, t_min: f64, t_max: f64, env: &Environment) -> Option<HitData> {
         #[cfg(debug_assertions)]
         if ray.time < self.ts[0] || ray.time > self.ts[1] {
             panic!("HitTree initialized for time range {:?} cannot compute Ray hit at time {}", self.ts, ray.time);
@@ -504,6 +505,23 @@ impl<T: Hittable> Hittable for HitTree<T> {
 
         // Run the hit
         self.elems.as_ref().and_then(|elems| elems.hit(ray, t_min, t_max, env))
+    }
+}
+impl<T: Hittable> HitTree<T> {
+    /// Computes whether this Object is [`hit()`](Hittable::hit()), except that the relevant
+    /// material is also returned.
+    ///
+    /// # Arguments
+    /// - `ray`: The [`Ray`] to compute any hits with.
+    /// - `t_min`: The minimum point along the ray we still accept (we don't count it as a hit before that).
+    /// - `t_max`: The maximum point along the ray we still accept (we don't count is as a hit after that).
+    /// - `env`: An [`Environment`] struct relating information about the scene's total environment.
+    ///
+    /// # Returns
+    /// A new [`HitRecord`] struct, which collects relevant information of this hit, or else [`None`] if the ray does not hit.
+    #[inline]
+    fn hit_full(&self, ray: Ray, t_min: f64, t_max: f64, env: &Environment) -> Option<HitRecord<'_>> {
+        self.obj.hit(ray, t_min, t_max, env).map(|data| HitRecord { data, mat: &self.mat })
     }
 }
 

@@ -193,8 +193,18 @@ macro_rules! material_impl {
 
         /// A runtime abstraction of all possible materials.
         #[derive(Clone, Debug, Deserialize, Serialize)]
+        #[serde(tag = "type")]
+        #[serde(rename_all = "snake_case")]
         pub enum Material {
             $($(#[$($attrs)*])* $mat($mat),)*
+            /// The empty material, used when defining a model and such.
+            Empty,
+        }
+
+        // Constructors
+        impl Default for Material {
+            #[inline]
+            fn default() -> Self { Self::Empty }
         }
 
         // Interface
@@ -202,31 +212,39 @@ macro_rules! material_impl {
             type Error = Error;
 
             #[inline]
+            #[track_caller]
             fn load(&mut self, dir: &Path) -> Result<(), Self::Error> {
                 match self {
                     $(Self::$mat(m) => m.load(dir).map_err(Error::$mat),)*
+                    Self::Empty => panic!("Cannot load the empty material; please specify one"),
                 }
             }
         }
         impl Scattering for Material {
             #[inline]
+            #[track_caller]
             fn pdf(&self, ray: Ray, record: &HitData, env: &Environment, scattered: Ray) -> f64 {
                 match self {
                     $(Self::$mat(m) => m.pdf(ray, record, env, scattered),)*
+                    Self::Empty => panic!("Cannot get a PDF of the empty material; please specify one"),
                 }
             }
 
             #[inline]
+            #[track_caller]
             fn emitted(&self, uv: (f64, f64), p: Vec3) -> Colour {
                 match self {
                     $(Self::$mat(m) => m.emitted(uv, p),)*
+                    Self::Empty => panic!("Cannot emit anything from the empty material; please specify one"),
                 }
             }
 
             #[inline]
+            #[track_caller]
             fn scatter(&self, ray: Ray, record: &HitData, env: &Environment) -> (Option<Ray>, Colour, f64) {
                 match self {
                     $(Self::$mat(m) => m.scatter(ray, record, env),)*
+                    Self::Empty => panic!("Cannot scatter anything off the empty material; please specify one"),
                 }
             }
         }
@@ -238,6 +256,8 @@ macro_rules! material_impl {
     };
 }
 material_impl!(
+    // /// The empty material.
+    // (),
     /// A refracting material (e.g., glass, water-on-air, etc).
     Dielectric,
     /// A material randomly scattering rays, imperfectly.

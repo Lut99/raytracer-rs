@@ -16,15 +16,12 @@ use obj::Vertex;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use super::super::Loadable;
 #[cfg(feature = "obj")]
 use super::super::materials::Lambertian;
 use super::super::materials::Material;
-use super::super::scene::Environment;
-use super::plane::Triag;
-use super::{BoundingBoxable, HitRecord, Hittable};
-use crate::hittree::HitTree;
-use crate::math::{AABB, Colour, Ray, Vec3};
+use super::plane::Triangle;
+use super::{DynObject, Group, JsonObject, Object};
+use crate::math::{Colour, Vec3};
 use crate::specifications::materials::LambertianTexture;
 use crate::specifications::textures::{SpatialChecker, Texture};
 
@@ -151,35 +148,45 @@ pub enum ModelFormat {
 
 
 
+
+
+/***** LIBRARY *****/
+
+
 /// Defines an object that loads a model from disk.
 #[derive(Clone, Debug, Deserialize, Serialize)]
-#[serde(untagged)]
-pub enum Model {
-    /// A model that's already loaded.
-    #[serde(skip)]
-    Loaded(LoadedModel),
+pub struct Model {
     /// A reference to a to-be-loaded model.
-    ToLoad { path: PathBuf, format: Option<ModelFormat> },
+    pub path:   PathBuf,
+    /// The format to the file if the user bothered to give it.
+    pub format: Option<ModelFormat>,
 }
 
-// Interface
-impl Loadable for Model {
-    type Error = Error;
-
-    fn load(&mut self, dir: &Path) -> Result<(), Self::Error> {
-        let Self::ToLoad { path, format } = &*self else { return Ok(()) };
-
+// Loading
+impl Model {
+    /// Loads this Model into a [`Group`] of models.
+    ///
+    /// # Arguments
+    /// - `dir`: The parent directory of the file this model is loaded from.
+    ///
+    /// # Returns
+    /// A new [`Group`] with the loaded triangles.
+    ///
+    /// # Errors
+    /// This function can error if we fail to load the model somehow.
+    pub fn load(&self, dir: &Path) -> Result<Group, Error> {
         // Determine a format
-        let fmt: ModelFormat = format
+        let fmt: ModelFormat = self
+            .format
             .ok_or_else(|| {
                 // Inspect the file extension to see what's what
-                let spath = path.to_string_lossy();
+                let spath = self.path.to_string_lossy();
                 #[cfg(feature = "obj")]
                 if spath.ends_with(".obj") {
                     return Ok(ModelFormat::Obj);
                 }
                 return Err(Error::UnknownModelExtension {
-                    name: path.file_name().map(OsStr::to_string_lossy).map(Cow::into_owned).unwrap_or_else(String::new),
+                    name: self.path.file_name().map(OsStr::to_string_lossy).map(Cow::into_owned).unwrap_or_else(String::new),
                 });
             })
             .or_else(std::convert::identity)?;
@@ -191,7 +198,7 @@ impl Loadable for Model {
                 // Open the file
 
                 use std::collections::HashMap;
-                let path: Cow<Path> = if path.is_relative() { Cow::Owned(dir.join(path)) } else { Cow::Borrowed(path) };
+                let path: Cow<Path> = if self.path.is_relative() { Cow::Owned(dir.join(&self.path)) } else { Cow::Borrowed(&self.path) };
                 debug!("Loading model {path:?} as .obj file...");
                 let handle = match File::open(&path) {
                     Ok(handle) => handle,
@@ -236,7 +243,7 @@ impl Loadable for Model {
 
                 // Generate a list of Raytracer vertices from this
                 let mut i: usize = 0;
-                let mut groups: Vec<LoadedGroup> = Vec::with_capacity(obj.objs.values().map(|o| o.faces.len()).sum::<usize>());
+                let mut groups: Vec<JsonObject> = Vec::with_capacity(obj.objs.values().map(|o| o.faces.len()).sum::<usize>());
                 for (oname, obj) in obj.objs {
                     for group in obj.faces {
                         if group.faces.is_empty() {
@@ -245,6 +252,7 @@ impl Loadable for Model {
                         let mut triags = Vec::with_capacity(group.faces.len());
                         for face in group.faces {
                             // Get the three vertices for this face and turn it into a triangle
+                            let mat = group.material.as_ref().map(|m| mtls.get(m).unwrap_or(&UNKNOWN_MAT)).unwrap_or(&DEFAULT_MAT).clone();
                             match face.elems.as_slice() {
                                 [v1, v2, v3] => {
                                     let [v1, v2, v3] = [
@@ -253,7 +261,12 @@ impl Loadable for Model {
                                         vertex_get(&obj.vertices, v3.vertex)?,
                                     ];
                                     let [v1, v2, v3] = [Vec3::new(v1.x, v1.y, v1.z), Vec3::new(v2.x, v2.y, v2.z), Vec3::new(v3.x, v3.y, v3.z)];
-                                    triags.push(Triag { pos: v1, u: v2 - v1, v: v3 - v1 });
+                                    triags.push(JsonObject::Object(Object {
+                                        obj: DynObject::Triangle(Triangle { pos: v1, u: v2 - v1, v: v3 - v1 }),
+                                        mat,
+                                        volumized: None,
+                                        transforms: Vec::new(),
+                                    }));
                                 },
                                 [v1, v2, v3, v4] => {
                                     // Get the vertex equivalent
@@ -272,104 +285,45 @@ impl Loadable for Model {
 
                                     // Split it into two triangles and add them
                                     let sides = split_four_into_triangles([v1, v2, v3, v4]);
-                                    triags.push(Triag { pos: sides[0][0], u: sides[0][1] - sides[0][0], v: sides[0][2] - sides[0][0] });
-                                    triags.push(Triag { pos: sides[1][0], u: sides[1][1] - sides[1][0], v: sides[1][2] - sides[1][0] });
+                                    triags.push(JsonObject::Object(Object {
+                                        obj: DynObject::Triangle(Triangle {
+                                            pos: sides[0][0],
+                                            u:   sides[0][1] - sides[0][0],
+                                            v:   sides[0][2] - sides[0][0],
+                                        }),
+                                        mat: mat.clone(),
+                                        volumized: None,
+                                        transforms: Vec::new(),
+                                    }));
+                                    triags.push(JsonObject::Object(Object {
+                                        obj: DynObject::Triangle(Triangle {
+                                            pos: sides[1][0],
+                                            u:   sides[1][1] - sides[1][0],
+                                            v:   sides[1][2] - sides[1][0],
+                                        }),
+                                        mat,
+                                        volumized: None,
+                                        transforms: Vec::new(),
+                                    }));
                                 },
                                 _ => return Err(Error::NonTriangleFace { path: path.into(), oname, gname: None, i, got: face.elems.len() }),
                             }
                             i += 1;
                         }
-                        groups.push(LoadedGroup {
-                            triags: HitTree::with_objs(triags, (0..=1).into()),
-                            mat:    group.material.as_ref().map(|m| mtls.get(m).unwrap_or(&UNKNOWN_MAT)).unwrap_or(&DEFAULT_MAT).clone(),
-                        });
+                        groups.push(JsonObject::Group(Group { objs: triags, transforms: Vec::new() }));
                     }
                 }
 
                 // When loaded, replace us with the loaded model
-                debug!("Succesfully loaded model {path:?} with {i} faces ({} triangles)", groups.iter().map(|g| g.triags.len()).sum::<usize>());
+                debug!(
+                    "Succesfully loaded model {path:?} with {i} faces ({} triangles)",
+                    groups.iter().map(|g| if let JsonObject::Group(g) = g { g.objs.len() } else { 0 }).sum::<usize>()
+                );
                 // for t in &triangles {
                 //     println!("{{ {}, {} x {} }}", t.pos, t.u, t.v);
                 // }
-                *self = Self::Loaded(LoadedModel { aabb: groups.iter().map(|t| t.aabb(0)).collect(), groups });
-                Ok(())
+                Ok(Group { objs: groups, transforms: Vec::new() })
             },
         }
-    }
-}
-impl BoundingBoxable for Model {
-    #[inline]
-    fn aabb(&self, t_us: u64) -> AABB {
-        match self {
-            Self::Loaded(m) => m.aabb(t_us),
-            Self::ToLoad { path, format: _ } => panic!("Cannot get AABB of unloaded model {path:?}"),
-        }
-    }
-}
-impl Hittable for Model {
-    #[inline]
-    fn hit(&self, ray: Ray, t_min: f64, t_max: f64, env: &Environment) -> Option<HitRecord<'_>> {
-        match self {
-            Self::Loaded(m) => m.hit(ray, t_min, t_max, env),
-            Self::ToLoad { path, format: _ } => panic!("Cannot check hit of unloaded model {path:?}"),
-        }
-    }
-}
-
-
-
-
-
-/***** LIBRARY *****/
-/// Represents a group of triangles, already loaded.
-#[derive(Clone, Debug)]
-struct LoadedGroup {
-    /// A list of triangles that we can render.
-    triags: HitTree<Triag>,
-    /// The material that we render with.
-    mat:    Material,
-}
-
-// Interface
-impl BoundingBoxable for LoadedGroup {
-    #[inline]
-    fn aabb(&self, t_us: u64) -> AABB { self.triags.aabb(t_us) }
-}
-impl Hittable for LoadedGroup {
-    #[inline]
-    fn hit(&self, ray: Ray, t_min: f64, t_max: f64, env: &Environment) -> Option<HitRecord<'_>> {
-        self.triags.hit(ray, t_min, t_max, env).map(|rec| HitRecord { mat: &self.mat, data: rec.data })
-    }
-}
-
-
-
-/// A loaded counterpart of [`Model`].
-#[derive(Clone, Debug)]
-pub struct LoadedModel {
-    /// Overarching set of AABBs.
-    aabb:   AABB,
-    /// A set of groups, each with their own material.
-    groups: Vec<LoadedGroup>,
-}
-
-// Raytracer
-impl BoundingBoxable for LoadedModel {
-    #[inline]
-    fn aabb(&self, _t_us: u64) -> AABB { self.aabb }
-}
-impl Hittable for LoadedModel {
-    #[inline]
-    fn hit(&self, ray: Ray, t_min: f64, t_max: f64, env: &Environment) -> Option<HitRecord<'_>> {
-        // Attempt to hit all groups
-        let mut hit = None;
-        let mut t = t_max;
-        for g in &self.groups {
-            if let Some(ghit) = g.hit(ray, t_min, t, env) {
-                hit = Some(ghit);
-                t = ghit.data.t;
-            }
-        }
-        hit
     }
 }

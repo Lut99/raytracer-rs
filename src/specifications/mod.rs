@@ -21,6 +21,8 @@ pub mod materials;
 pub mod objects;
 pub mod scene;
 pub mod textures;
+pub mod transforms;
+pub mod volumes;
 
 // Imports
 use std::cell::RefMut;

@@ -22,7 +22,7 @@ use std::fmt::Debug;
 
 use clap::ValueEnum;
 
-use crate::hittree::HitTree;
+use crate::hitlist::HitList;
 use crate::math::Camera;
 use crate::render::image::Image;
 use crate::specifications::scene::Environment;
@@ -37,14 +37,14 @@ pub trait RayRenderer: Debug {
     /// Renders a single frame of the given dimensions.
     ///
     /// # Arguments
-    /// - `world`: The [`HitTree`] that contains the scene to render.
+    /// - `world`: The [`HitList`] that contains the scene to render.
     ///
     /// # Returns
     /// A new [`Image`] struct that contains the rendered frame.
     ///
     /// # Errors
     /// This function may error. This will typically be an error relating to the backend of the renderer, since the rendering process, mathmatically, does not error.
-    fn render_frame(&self, world: &HitTree, cam: &Camera, env: &Environment) -> Result<Image, Self::Error>;
+    fn render_frame(&self, world: &HitList, cam: &Camera, env: &Environment) -> Result<Image, Self::Error>;
 }
 
 

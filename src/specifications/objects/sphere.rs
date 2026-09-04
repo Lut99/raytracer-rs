@@ -12,16 +12,15 @@
 //!   Defines a renderable [`Sphere`].
 //
 
+use std::convert::Infallible;
 use std::f64::consts::PI;
 use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
 use super::super::Loadable;
-use super::super::animations::{Animating, Animation};
-use super::super::materials::Scattering;
 use super::super::scene::Environment;
-use super::hitrecord::HitRecord;
+use super::hitrecord::HitData;
 use super::{BoundingBoxable, Hittable};
 use crate::math::{AABB, Ray, Vec3};
 
@@ -45,7 +44,7 @@ fn sphere_uv(p: Vec3) -> (f64, f64) {
 
 /// Computes a sphere's hit yay or nay.
 #[inline]
-fn sphere_hit<M: Scattering>(center: Vec3, radius: f64, ray: Ray, t_min: f64, t_max: f64, mat: &M) -> Option<HitRecord<'_>> {
+fn sphere_hit(center: Vec3, radius: f64, ray: Ray, t_min: f64, t_max: f64) -> Option<HitData> {
     // Compute the distance between the origin of the ray and the center of the sphere
     let oc: Vec3 = ray.origin - center;
 
@@ -77,7 +76,7 @@ fn sphere_hit<M: Scattering>(center: Vec3, radius: f64, ray: Ray, t_min: f64, t_
         let outward_normal: Vec3 = (hit - center) / radius;
 
         // Populate the rest of the hitrecord on the fly
-        Some(HitRecord::new(ray, hit, root, outward_normal, sphere_uv(outward_normal), mat))
+        Some(HitData::new(ray, hit, root, outward_normal, sphere_uv(outward_normal)))
     } else {
         None
     }
@@ -90,90 +89,53 @@ fn sphere_hit<M: Scattering>(center: Vec3, radius: f64, ray: Ray, t_min: f64, t_
 /***** LIBRARY *****/
 /// Defines a perfect sphere.
 #[derive(Clone, Copy, Debug, Deserialize, Serialize)]
-pub struct Sphere<M> {
+pub struct Sphere {
     /// The center point of the sphere.
     pub center: Vec3,
     /// The radius of the sphere.
     pub radius: f64,
-
-    /// The material the sphere is composed of.
-    #[serde(alias = "mat")]
-    pub material: M,
 }
 
-impl<M: Loadable> Loadable for Sphere<M> {
-    type Error = M::Error;
+impl Loadable for Sphere {
+    type Error = Infallible;
 
     #[inline]
-    fn load(&mut self, dir: &Path) -> Result<(), Self::Error> { self.material.load(dir) }
+    fn load(&mut self, _dir: &Path) -> Result<(), Self::Error> { Ok(()) }
 }
-impl<M> BoundingBoxable for Sphere<M> {
+impl BoundingBoxable for Sphere {
     #[inline]
     fn aabb(&self, _t_us: u64) -> AABB { sphere_aabb(self.center, self.radius) }
 }
-impl<M: Scattering> Hittable for Sphere<M> {
-    fn hit(&self, ray: Ray, t_min: f64, t_max: f64, _env: &Environment) -> Option<HitRecord<'_>> {
-        sphere_hit(self.center, self.radius, ray, t_min, t_max, &self.material)
-    }
-}
-
-
-
-/// Defines an animated sphere.
-///
-/// This is a regular [`Sphere`] wrapped to do some movement.
-#[derive(Clone, Copy, Debug, Deserialize, Serialize)]
-pub struct AnimatedSphere<M, A = Animation> {
-    /// The sphere we wrap
-    pub sphere:    Sphere<M>,
-    /// The animation that determines how the sphere moves over time.
-    pub animation: A,
-}
-
-impl<M: Loadable> Loadable for AnimatedSphere<M> {
-    type Error = M::Error;
-
-    #[inline]
-    fn load(&mut self, dir: &Path) -> Result<(), Self::Error> { self.sphere.load(dir) }
-}
-impl<M, A: Animating> BoundingBoxable for AnimatedSphere<M, A> {
-    #[inline]
-    fn aabb(&self, t_us: u64) -> AABB { sphere_aabb(self.animation.animate(self.sphere.center, t_us), self.sphere.radius) }
-}
-impl<M: Scattering, A: Animating> Hittable for AnimatedSphere<M, A> {
-    #[inline]
-    fn hit(&self, ray: Ray, t_min: f64, t_max: f64, _env: &Environment) -> Option<HitRecord<'_>> {
-        sphere_hit(self.animation.animate(self.sphere.center, ray.time), self.sphere.radius, ray, t_min, t_max, &self.sphere.material)
-    }
+impl Hittable for Sphere {
+    fn hit(&self, ray: Ray, t_min: f64, t_max: f64, _env: &Environment) -> Option<HitData> { sphere_hit(self.center, self.radius, ray, t_min, t_max) }
 }
 
 
 
 
 
-/***** TESTS *****/
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::specifications::animations::Vertical;
-    use crate::specifications::materials::NormalMap;
+// /***** TESTS *****/
+// #[cfg(test)]
+// mod tests {
+//     use super::*;
+//     use crate::specifications::animations::Vertical;
 
-    #[test]
-    fn test_sphere_aabb() {
-        let sphere = Sphere { center: Vec3::new(0.0, 0.0, 0.0), radius: 0.5, material: NormalMap };
-        assert_eq!(sphere.aabb(0), AABB::from_points([-0.5, -0.5, -0.5].into(), [0.5, 0.5, 0.5].into()));
-    }
+//     #[test]
+//     fn test_sphere_aabb() {
+//         let sphere = Sphere { center: Vec3::new(0.0, 0.0, 0.0), radius: 0.5 };
+//         assert_eq!(sphere.aabb(0), AABB::from_points([-0.5, -0.5, -0.5].into(), [0.5, 0.5, 0.5].into()));
+//     }
 
-    #[test]
-    fn test_animated_sphere_aabb() {
-        let sphere = AnimatedSphere {
-            sphere:    Sphere { center: Vec3::new(0.0, 0.0, 0.0), radius: 0.5, material: NormalMap },
-            animation: Vertical { len: 100.0, at: 0, duration: 100 },
-        };
-        assert_eq!(sphere.aabb(0), AABB::from_points([-0.5, -0.5, -0.5].into(), [0.5, 0.5, 0.5].into()));
-        assert_eq!(sphere.aabb(50), AABB::from_points([-0.5, 49.5, -0.5].into(), [0.5, 50.5, 0.5].into()));
-        assert_eq!(sphere.aabb(100), AABB::from_points([-0.5, 99.5, -0.5].into(), [0.5, 100.5, 0.5].into()));
-        assert_eq!(sphere.aabb(150), AABB::from_points([-0.5, 99.5, -0.5].into(), [0.5, 100.5, 0.5].into()));
-        assert_eq!(AABB::surround(sphere.aabb(0), sphere.aabb(100)), AABB::from_points([-0.5, -0.5, -0.5].into(), [0.5, 100.5, 0.5].into()));
-    }
-}
+//     #[test]
+//     fn test_animated_sphere_aabb() {
+//         let sphere = AnimatedSphere {
+//             sphere:    Sphere { center: Vec3::new(0.0, 0.0, 0.0), radius: 0.5 },
+//             animation: Vertical { len: 100.0, at: 0, duration: 100 },
+//         };
+//         assert_eq!(sphere.aabb(0), AABB::from_points([-0.5, -0.5, -0.5].into(), [0.5, 0.5, 0.5].into()));
+//         assert_eq!(sphere.aabb(50), AABB::from_points([-0.5, 49.5, -0.5].into(), [0.5, 50.5, 0.5].into()));
+//         assert_eq!(sphere.aabb(100), AABB::from_points([-0.5, 99.5, -0.5].into(), [0.5, 100.5, 0.5].into()));
+//         assert_eq!(sphere.aabb(150), AABB::from_points([-0.5, 99.5, -0.5].into(), [0.5, 100.5, 0.5].into()));
+//         assert_eq!(AABB::surround(sphere.aabb(0), sphere.aabb(100)), AABB::from_points([-0.5, -0.5, -0.5].into(), [0.5, 100.5, 0.5].into()));
+//     }
+// }

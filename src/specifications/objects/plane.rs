@@ -5,14 +5,14 @@
 //!   Implements some planar primitives like quads and (importantly!) vertices.
 //
 
+use std::convert::Infallible;
 use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
 use super::super::Loadable;
-use super::super::materials::Scattering;
 use super::super::scene::Environment;
-use super::{BoundingBoxable, HitData, HitRecord, Hittable};
+use super::{BoundingBoxable, HitData, Hittable};
 use crate::math::{AABB, Ray, Vec3};
 
 
@@ -94,10 +94,10 @@ fn plane_hit(pos: Vec3, u: Vec3, v: Vec3, ray: Ray, t_min: f64, t_max: f64) -> O
 
 
 
-/***** HELPERS *****/
-/// Defines the internals of [`Triangle`] without the material.
+/***** LIBRARY *****/
+/// Defines a 2D triangle.
 #[derive(Clone, Copy, Debug, Deserialize, Serialize)]
-pub struct Triag {
+pub struct Triangle {
     /// The position of the bottom-left corner of the triangle.
     pub pos: Vec3,
     /// The "X-axis" of the triangle's plane.
@@ -107,7 +107,13 @@ pub struct Triag {
 }
 
 // Interface
-impl BoundingBoxable for Triag {
+impl Loadable for Triangle {
+    type Error = Infallible;
+
+    #[inline]
+    fn load(&mut self, _dir: &Path) -> Result<(), Self::Error> { Ok(()) }
+}
+impl BoundingBoxable for Triangle {
     #[inline]
     fn aabb(&self, _t_us: u64) -> AABB {
         // For a triangle, we need to make sure we always have the biggest AABB
@@ -116,9 +122,9 @@ impl BoundingBoxable for Triag {
             .surround(AABB::from_points(self.pos + self.u, self.pos + self.v))
     }
 }
-impl Hittable for Triag {
+impl Hittable for Triangle {
     #[inline]
-    fn hit(&self, ray: Ray, t_min: f64, t_max: f64, _env: &Environment) -> Option<HitRecord<'_>> {
+    fn hit(&self, ray: Ray, t_min: f64, t_max: f64, _env: &Environment) -> Option<HitData> {
         // Compute a hit with this vertex' plane
         let rec: HitData = plane_hit(self.pos, self.u, self.v, ray, t_min, t_max)?;
 
@@ -126,7 +132,7 @@ impl Hittable for Triag {
         // the alpha and beta are scaled 0-1. Hence:
         if rec.uv.0 >= 0.0 && rec.uv.1 >= 0.0 && rec.uv.0 + rec.uv.1 <= 1.0 {
             // The alpha and beta now form the uv, done!
-            Some(HitRecord { mat: &(), data: rec })
+            Some(rec)
         } else {
             None
         }
@@ -135,9 +141,9 @@ impl Hittable for Triag {
 
 
 
-/// Defines the internals of a [`Quad`] without the material.
+/// Defines a 2D square spanned by two arrows.
 #[derive(Clone, Copy, Debug, Deserialize, Serialize)]
-pub struct Qd {
+pub struct Quad {
     /// The position of the bottom-left corner of the Quad.
     pub pos: Vec3,
     /// The "X-axis" of the Quad's plane.
@@ -147,7 +153,13 @@ pub struct Qd {
 }
 
 // Interface
-impl BoundingBoxable for Qd {
+impl Loadable for Quad {
+    type Error = Infallible;
+
+    #[inline]
+    fn load(&mut self, _dir: &Path) -> Result<(), Self::Error> { Ok(()) }
+}
+impl BoundingBoxable for Quad {
     #[inline]
     fn aabb(&self, _t_us: u64) -> AABB {
         // We compute two bounding boxes, one for each diagonal of the Quad
@@ -156,9 +168,9 @@ impl BoundingBoxable for Qd {
         diag1.surround(diag2)
     }
 }
-impl Hittable for Qd {
+impl Hittable for Quad {
     #[inline]
-    fn hit(&self, ray: Ray, t_min: f64, t_max: f64, _env: &Environment) -> Option<HitRecord<'_>> {
+    fn hit(&self, ray: Ray, t_min: f64, t_max: f64, _env: &Environment) -> Option<HitData> {
         // Compute a hit with this quad's plane
         let rec: HitData = plane_hit(self.pos, self.u, self.v, ray, t_min, t_max)?;
 
@@ -166,74 +178,9 @@ impl Hittable for Qd {
         // the alpha and beta are scaled 0-1. Hence:
         if rec.uv.0 >= 0.0 && rec.uv.0 <= 1.0 && rec.uv.1 >= 0.0 && rec.uv.1 <= 1.0 {
             // The alpha and beta now form the uv, done!
-            Some(HitRecord { data: rec, mat: &() })
+            Some(rec)
         } else {
             None
         }
-    }
-}
-
-
-
-
-
-/***** LIBRARY *****/
-/// Implements a triangle but given by a point and two vectors.
-#[derive(Clone, Copy, Debug, Deserialize, Serialize)]
-pub struct Triangle<M> {
-    /// The inners of the triangle.
-    #[serde(flatten)]
-    pub triag:    Triag,
-    /// The material that scatters rays hitting the Triangle.
-    #[serde(alias = "mat")]
-    pub material: M,
-}
-
-// Object
-impl<M: Loadable> Loadable for Triangle<M> {
-    type Error = M::Error;
-
-    #[inline]
-    fn load(&mut self, dir: &Path) -> Result<(), Self::Error> { self.material.load(dir) }
-}
-impl<M> BoundingBoxable for Triangle<M> {
-    #[inline]
-    fn aabb(&self, t_us: u64) -> AABB { self.triag.aabb(t_us) }
-}
-impl<M: Scattering> Hittable for Triangle<M> {
-    #[inline]
-    fn hit(&self, ray: Ray, t_min: f64, t_max: f64, env: &Environment) -> Option<HitRecord<'_>> {
-        self.triag.hit(ray, t_min, t_max, env).map(|rec| HitRecord { mat: &self.material, data: rec.data })
-    }
-}
-
-
-
-/// Implements a rectangle that needn't have straight corners.
-#[derive(Clone, Copy, Debug, Deserialize, Serialize)]
-pub struct Quad<M> {
-    /// The internal Qd that does the math.
-    #[serde(flatten)]
-    pub qd: Qd,
-    /// The material that scatters rays hitting the Quad.
-    #[serde(alias = "mat")]
-    pub material: M,
-}
-
-// Object
-impl<M: Loadable> Loadable for Quad<M> {
-    type Error = M::Error;
-
-    #[inline]
-    fn load(&mut self, dir: &Path) -> Result<(), Self::Error> { self.material.load(dir) }
-}
-impl<M> BoundingBoxable for Quad<M> {
-    #[inline]
-    fn aabb(&self, t_us: u64) -> AABB { self.qd.aabb(t_us) }
-}
-impl<M: Scattering> Hittable for Quad<M> {
-    #[inline]
-    fn hit(&self, ray: Ray, t_min: f64, t_max: f64, env: &Environment) -> Option<HitRecord<'_>> {
-        self.qd.hit(ray, t_min, t_max, env).map(|rec| HitRecord { mat: &self.material, data: rec.data })
     }
 }

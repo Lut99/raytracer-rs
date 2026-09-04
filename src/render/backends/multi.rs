@@ -29,7 +29,7 @@ use super::super::RayRenderer;
 use super::super::image::Image;
 use super::cpu::ray_colour;
 use crate::common::file::{impl_toml_from_path, impl_toml_from_string, impl_toml_to_path, impl_toml_to_string};
-use crate::hittree::HitTree;
+use crate::hitlist::HitList;
 use crate::math::camera::Rays;
 use crate::math::{Camera, Colour, Ray};
 use crate::specifications::scene::Environment;
@@ -140,7 +140,7 @@ impl MultiThreadRenderer {
 impl RayRenderer for MultiThreadRenderer {
     type Error = std::convert::Infallible;
 
-    fn render_frame(&self, world: &HitTree, cam: &Camera, env: &Environment) -> Result<crate::render::image::Image, Self::Error> {
+    fn render_frame(&self, world: &HitList, cam: &Camera, env: &Environment) -> Result<crate::render::image::Image, Self::Error> {
         info!("Rendering scene ({} objects)...", world.len());
 
         // Let us define the camera (static, for now)

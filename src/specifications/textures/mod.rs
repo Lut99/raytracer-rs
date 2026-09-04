@@ -64,6 +64,8 @@ macro_rules! texture_impl {
 
         /// A runtime abstraction of all possible textures.
         #[derive(Clone, Debug, Deserialize, Serialize)]
+        #[serde(tag = "type")]
+        #[serde(rename_all = "snake_case")]
         pub enum Texture {
             $($(#[$($attrs)*])* $tex($tex),)*
         }

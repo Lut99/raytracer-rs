@@ -20,7 +20,7 @@ use log::info;
 use super::super::RayRenderer;
 use super::super::image::Image;
 use super::cpu::ray_colour;
-use crate::hittree::HitTree;
+use crate::hitlist::HitList;
 use crate::math::camera::Camera;
 use crate::math::colour::Colour;
 use crate::specifications::scene::Environment;
@@ -54,7 +54,7 @@ impl SingleThreadRenderer {
 impl RayRenderer for SingleThreadRenderer {
     type Error = std::convert::Infallible;
 
-    fn render_frame(&self, world: &HitTree, cam: &Camera, env: &Environment) -> Result<crate::render::image::Image, Self::Error> {
+    fn render_frame(&self, world: &HitList, cam: &Camera, env: &Environment) -> Result<crate::render::image::Image, Self::Error> {
         info!("Rendering scene ({} objects)...", world.len());
 
         // Create the image to render

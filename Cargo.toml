@@ -1,7 +1,7 @@
 [package]
 name = "raytracer"
 version = "0.3.0"
-edition = "2021"
+edition = "2024"
 authors = [ "Lut99" ]
 description = "A new attempt at writing a simple raytracer. This time, no fumbling about with real-time stuff, but instead creating a good-old, offline renderer. Based on <https://raytracing.github.io/books/RayTracingInOneWeekend.html>."
 
