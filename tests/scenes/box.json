@@ -22,17 +22,7 @@
   "objects": [
     {
       "path": "./box.obj",
-      "format": "obj",
-      "transforms": [
-        {
-          "type": "translate",
-          "pos": [
-            0.0,
-            0.0,
-            0.0
-          ]
-        }
-      ]
+      "format": "obj"
     }
   ]
 }

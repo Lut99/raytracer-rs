@@ -288,7 +288,7 @@ impl<T: BoundingBoxable, M> BoundingBoxable for Object<T, M> {
     fn aabb(&self, t_us: u64) -> AABB {
         // Apply the transformations to the computed AABB
         let mut aabb: AABB = self.obj.aabb(t_us);
-        for trans in &self.transforms {
+        for trans in self.transforms.iter() {
             aabb = trans.transform_aabb(t_us, aabb);
         }
         aabb
@@ -299,7 +299,7 @@ impl<T: Hittable, M> Hittable for Object<T, M> {
     fn hit(&self, mut ray: Ray, t_min: f64, t_max: f64, env: &Environment) -> Option<HitData> {
         // First, transform the ray on the way there...
         let t_us: u64 = ray.time;
-        for trans in self.transforms.iter() {
+        for trans in self.transforms.iter().rev() {
             ray = trans.transform(t_us, ray);
         }
 
@@ -326,7 +326,7 @@ impl<T: Hittable, M> Hittable for Object<T, M> {
         };
 
         // Transform the result back
-        for trans in self.transforms.iter().rev() {
+        for trans in self.transforms.iter() {
             rec = trans.transform_back(t_us, rec);
         }
         Some(rec)
