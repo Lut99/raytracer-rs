@@ -21,57 +21,59 @@ use crate::common::file::{impl_toml_from_path, impl_toml_from_string, impl_toml_
 use crate::math::{Camera, Colour, Vec3};
 
 
+/***** HELPER MACROS *****/
+macro_rules! default_value_impl {
+    ($($(#[$($attrs:tt)*])* $name:ident -> $ty:ty { $value:expr })*) => {
+        ::paste::paste!{
+            $(
+                $(#[$($attrs)*])*
+                #[inline]
+                pub fn [<default_ $name>]() -> $ty { $value }
+
+                #[inline]
+                pub fn [<is_default_ $name>](value: &$ty) -> bool { value == &[<default_ $name>]() }
+            )*
+        }
+    };
+}
+
+
+
+
+
 /***** HELPER FUNCTIONS *****/
-/// Returns the default refraction index of the world.
-#[inline]
-pub const fn default_environment_air_refraction_index() -> f64 { 1.0 }
+default_value_impl! {
+    /// Returns the default refraction index of the world.
+    environment_air_refraction_index -> f64 { 1.0 }
+    /// Returns the default background of the world.
+    environment_background -> Background { Background::IlluminatedSky }
 
-/// Returns the default background of the world.
-#[inline]
-pub const fn default_environment_background() -> Background { Background::IlluminatedSky }
-
-
-
-/// Returns the default dimensions for a [`CameraInfo`].
-#[inline]
-pub const fn default_camera_info_dims() -> (NonZeroU32, NonZeroU32) {
-    // SAFETY: This works because the values are not 0.
-    (unsafe { NonZeroU32::new_unchecked(800) }, unsafe { NonZeroU32::new_unchecked(600) })
+    /// Returns the default dimensions for a [`CameraInfo`].
+    camera_info_dims -> (NonZeroU32, NonZeroU32) {
+        // SAFETY: This works because the values are not 0.
+        (unsafe { NonZeroU32::new_unchecked(800) }, unsafe { NonZeroU32::new_unchecked(600) })
+    }
+    /// Returns the default sample-per-pixel number for a [`CameraInfo`].
+    camera_info_n_samples -> NonZeroU64 {
+        // SAFETY: This works because the value is not 0.
+        unsafe { NonZeroU64::new_unchecked(100) }
+    }
+    /// Returns the default vertical field-of-view (FOV) for a [`CameraInfo`].
+    camera_info_vfov -> f64 { 90.0 }
+    /// Returns the default defocus angle for a [`CameraInfo`].
+    camera_info_defocus_angle -> f64 { 0.0 }
+    /// Returns the default focal point distance for a [`CameraInfo`].
+    camera_info_focus_dist -> f64 { 0.0 }
+    /// Returns the default shutter time for a [`CameraInfo`].
+    camera_info_shutter_time -> NonZeroU64 {
+        // SAFETY: This works because the value is not 0.
+        unsafe { NonZeroU64::new_unchecked(1) }
+    }
 }
-
-/// Returns the default sample-per-pixel number for a [`CameraInfo`].
-#[inline]
-pub const fn default_camera_info_n_samples() -> NonZeroU64 {
-    // SAFETY: This works because the value is not 0.
-    unsafe { NonZeroU64::new_unchecked(100) }
-}
-
-/// Returns the default vertical field-of-view (FOV) for a [`CameraInfo`].
-#[inline]
-pub const fn default_camera_info_vfov() -> f64 { 90.0 }
-
-/// Returns the default defocus angle for a [`CameraInfo`].
-#[inline]
-pub const fn default_camera_info_defocus_angle() -> f64 { 0.0 }
-
-/// Returns the default focal point distance for a [`CameraInfo`].
-#[inline]
-pub const fn default_camera_info_focus_dist() -> f64 { 0.0 }
-
-/// Returns the default shutter time for a [`CameraInfo`].
-#[inline]
-pub const fn default_camera_info_shutter_time() -> NonZeroU64 {
-    // SAFETY: This works because the value is not 0.
-    unsafe { NonZeroU64::new_unchecked(1) }
-}
-
-
 
 /// Function checking if something equals its default.
 #[inline]
 fn is_default<T: Default + PartialEq>(obj: &T) -> bool { obj == &T::default() }
-
-
 
 
 
@@ -80,10 +82,10 @@ fn is_default<T: Default + PartialEq>(obj: &T) -> bool { obj == &T::default() }
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Serialize)]
 pub struct Environment {
     /// The refraction index of the outer world.
-    #[serde(default = "default_environment_air_refraction_index")]
+    #[serde(default = "default_environment_air_refraction_index", skip_serializing_if = "is_default_environment_air_refraction_index")]
     pub air_refraction_index: f64,
     /// The background.
-    #[serde(default = "default_environment_background")]
+    #[serde(default = "default_environment_background", skip_serializing_if = "is_default_environment_background")]
     pub background: Background,
 }
 impl Default for Environment {
@@ -126,31 +128,31 @@ impl Default for CameraPos {
 pub struct CameraInfo {
     // Image properties
     /// The dimensions of the camera.
-    #[serde(default = "default_camera_info_dims")]
+    #[serde(default = "default_camera_info_dims", skip_serializing_if = "is_default_camera_info_dims")]
     pub dims: (NonZeroU32, NonZeroU32),
 
     // Features
     /// The number of rays fired per pixel.
-    #[serde(default = "default_camera_info_n_samples")]
+    #[serde(default = "default_camera_info_n_samples", skip_serializing_if = "is_default_camera_info_n_samples")]
     pub n_samples: NonZeroU64,
     /// The vertical field-of-view of the camera.
-    #[serde(default = "default_camera_info_vfov")]
+    #[serde(default = "default_camera_info_vfov", skip_serializing_if = "is_default_camera_info_vfov")]
     pub vfov: f64,
     /// The vertical field-of-view of the camera.
-    #[serde(default = "default_camera_info_defocus_angle")]
+    #[serde(default = "default_camera_info_defocus_angle", skip_serializing_if = "is_default_camera_info_defocus_angle")]
     pub defocus_angle: f64,
     /// The vertical field-of-view of the camera.
-    #[serde(default = "default_camera_info_focus_dist")]
+    #[serde(default = "default_camera_info_focus_dist", skip_serializing_if = "is_default_camera_info_focus_dist")]
     pub focus_dist: f64,
     /// The shutter time, in microseconds, of the camera.
     ///
     /// Use `1` to disable it (instant shutter).
-    #[serde(default = "default_camera_info_shutter_time")]
+    #[serde(default = "default_camera_info_shutter_time", skip_serializing_if = "is_default_camera_info_shutter_time")]
     pub shutter_time: NonZeroU64,
 
     // Position
     /// Defining the position & orientation of the camera.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "is_default")]
     pub pos: CameraPos,
 }
 impl Default for CameraInfo {
@@ -196,6 +198,7 @@ pub struct SceneFile {
     #[serde(default, skip_serializing_if = "is_default")]
     pub camera:      CameraInfo,
     /// The objects found in this scene.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub objects:     Vec<JsonObject>,
 }
 impl SceneFile {
