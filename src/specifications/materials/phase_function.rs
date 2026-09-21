@@ -38,6 +38,9 @@ impl Loadable for Isotropic {
 }
 impl Scattering for Isotropic {
     #[inline]
+    fn pdf(&self, _ray: Ray, _record: &HitData, _env: &Environment, _scattered: Ray) -> f64 { 1.0 / (4.0 * PI) }
+
+    #[inline]
     fn scatter(&self, ray: Ray, rec: &HitData, _env: &Environment) -> (Option<Ray>, Colour, f64) {
         // Create a new ray bouncing randomly in any direction
         (Some(Ray::with_time(rec.hit, random3_uniform(), ray.time)), self.colour, 1.0 / (4.0 * PI))

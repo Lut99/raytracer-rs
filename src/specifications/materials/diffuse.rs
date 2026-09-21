@@ -22,6 +22,7 @@ use serde::{Deserialize, Serialize};
 use super::super::Loadable;
 use super::super::scene::Environment;
 use super::Scattering;
+use crate::math::pdf::{CosinePDF, PDF as _};
 use crate::math::{Colour, ONB, Ray, Vec3};
 use crate::random;
 use crate::specifications::objects::HitData;
@@ -79,8 +80,8 @@ pub fn random3_cosine_direction() -> Vec3 {
 /// Implements the PDF used by Lambertian scattering.
 #[inline]
 pub fn lambertian_pdf(record: &HitData, scattered: Ray) -> f64 {
-    let cos_theta = record.normal.dot(scattered.direct.unit());
-    f64::max(0.0, cos_theta / PI)
+    let pdf = CosinePDF { onb: ONB::from_single_axis(record.normal) };
+    pdf.value(scattered.direct)
 }
 
 /// Implements Lambertian scattering logic.
@@ -88,13 +89,12 @@ pub fn lambertian_pdf(record: &HitData, scattered: Ray) -> f64 {
 pub fn lambertian_scatter(ray: Ray, record: &HitData, colour: Colour) -> (Option<Ray>, Colour, f64) {
     // Get a coordinate base around the hit normal, then get a random direction in that unit sphere
     // to find a random scatter direction.
-    let uvw = ONB::from_single_axis(record.normal);
-    let scattered = uvw.transform(random3_cosine_direction()).unit();
-    let scattered = Ray::with_time(record.hit, scattered, ray.time);
+    let pdf = CosinePDF { onb: ONB::from_single_axis(record.normal) };
+    let scattered = Ray::with_time(record.hit, pdf.sample().unit(), ray.time);
 
     // Now we can simply return the new ray to bounce and the colour
     // NOTE: By construction, `uvw.w` == `record.normal` but unit)
-    (Some(scattered), colour, uvw.w.dot(scattered.direct) / PI)
+    (Some(scattered), colour, record.normal.dot(scattered.direct) / PI)
 }
 
 
