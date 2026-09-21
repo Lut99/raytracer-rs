@@ -7,9 +7,11 @@
 
 use serde::{Deserialize, Serialize};
 
+use super::super::materials::{Isotropic, Scattering};
 use super::super::objects::HitData;
+use super::super::scene::Environment;
 use super::Volumizing;
-use crate::math::Vec3;
+use crate::math::{Colour, Ray, Vec3};
 use crate::random;
 
 
@@ -19,9 +21,25 @@ use crate::random;
 pub struct ConstantDensity {
     /// The density of the volume.
     pub density: f64,
+    /// The "material" (not really a choice) that will scatter according to the constant density.
+    #[serde(flatten)]
+    pub phase_function: Isotropic,
 }
 
 // Interfaces
+impl Scattering for ConstantDensity {
+    #[track_caller]
+    #[inline]
+    fn pdf(&self, ray: Ray, record: &HitData, env: &Environment, scattered: Ray) -> f64 { self.phase_function.pdf(ray, record, env, scattered) }
+
+    #[track_caller]
+    #[inline]
+    fn emitted(&self, uv: (f64, f64), p: Vec3) -> Colour { self.phase_function.emitted(uv, p) }
+
+    #[track_caller]
+    #[inline]
+    fn scatter(&self, ray: Ray, record: &HitData, env: &Environment) -> (Option<Ray>, Colour, f64) { self.phase_function.scatter(ray, record, env) }
+}
 impl Volumizing for ConstantDensity {
     fn volumize(&self, ray: crate::math::Ray, t1: f64, t2: f64) -> Option<HitData> {
         // Compute a random hitpoint in the gas (or outside of it)

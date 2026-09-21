@@ -344,7 +344,10 @@ impl<T: Hittable, M: Scattering> Object<T, M> {
     /// A new [`HitRecord`] struct, which collects relevant information of this hit, or else [`None`] if the ray does not hit.
     #[inline]
     pub fn hit_full(&self, ray: Ray, t_min: f64, t_max: f64, env: &Environment) -> Option<HitRecord<'_>> {
-        self.obj.hit(ray, t_min, t_max, env).map(|data| HitRecord { data, mat: &self.mat })
+        self.obj.hit(ray, t_min, t_max, env).map(|data| {
+            // Either get the object's original material, or override it with the volume's
+            if let Some(volume) = &self.volumized { HitRecord { data, mat: volume } } else { HitRecord { data, mat: &self.mat } }
+        })
     }
 }
 

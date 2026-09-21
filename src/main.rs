@@ -462,15 +462,21 @@ fn main() -> ExitCode {
                                 transforms: Vec::new(),
                             };
                             objects.push(JsonObject::Object(boundary.clone()));
-                            boundary.mat = Material::Isotropic(Isotropic { colour: Colour::new(0.2, 0.4, 0.9, 1.0) });
-                            boundary.volumized = Some(Volume::ConstantDensity(ConstantDensity { density: 0.2 }));
+                            boundary.mat = Material::Empty;
+                            boundary.volumized = Some(Volume::ConstantDensity(ConstantDensity {
+                                density: 0.2,
+                                phase_function: Isotropic { colour: Colour::new(0.2, 0.4, 0.9, 1.0) },
+                            }));
                             objects.push(JsonObject::Object(boundary));
 
                             // Define the overall haze over the scene
                             objects.push(JsonObject::Object(Object {
                                 obj: DynObject::Sphere(Sphere { center: Vec3::new(0.0, 0.0, 0.0), radius: 5000.0 }),
-                                mat: Material::Isotropic(Isotropic { colour: Colour::new(1.0, 1.0, 1.0, 1.0) }),
-                                volumized: Some(Volume::ConstantDensity(ConstantDensity { density: 0.0001 })),
+                                mat: Material::Empty,
+                                volumized: Some(Volume::ConstantDensity(ConstantDensity {
+                                    density: 0.0001,
+                                    phase_function: Isotropic { colour: Colour::new(1.0, 1.0, 1.0, 1.0) },
+                                })),
                                 transforms: Vec::new(),
                             }));
 

@@ -17,8 +17,10 @@ use std::sync::{Arc, MutexGuard, RwLockReadGuard, RwLockWriteGuard};
 pub use constant::ConstantDensity;
 use serde::{Deserialize, Serialize};
 
+use super::materials::Scattering;
 use super::objects::HitData;
-use crate::math::Ray;
+use super::scene::Environment;
+use crate::math::{Colour, Ray, Vec3};
 
 
 /***** HELPER MACROS *****/
@@ -44,7 +46,7 @@ macro_rules! volumizing_ptr_impl {
 /***** INTERFACES *****/
 /// Defines something that turns a front/back sides, hollow object into a "volumous" object, i.e.,
 /// one that may also hit _in between_ the sides.
-pub trait Volumizing {
+pub trait Volumizing: Scattering {
     /// Given a ray and two points along it where it hits the object (at the front and at the
     /// back), compute a hit somewhere _within_ the volume.
     ///
@@ -89,6 +91,31 @@ macro_rules! volume_impl {
         }
 
         // Interfaces
+        impl Scattering for Volume {
+            #[inline]
+            #[track_caller]
+            fn pdf(&self, ray: Ray, record: &HitData, env: &Environment, scattered: Ray) -> f64 {
+                match self {
+                    $(Self::$volume(v) => v.pdf(ray, record, env, scattered),)*
+                }
+            }
+
+            #[inline]
+            #[track_caller]
+            fn emitted(&self, uv: (f64, f64), p: Vec3) -> Colour {
+                match self {
+                    $(Self::$volume(v) => v.emitted(uv, p),)*
+                }
+            }
+
+            #[inline]
+            #[track_caller]
+            fn scatter(&self, ray: Ray, record: &HitData, env: &Environment) -> (Option<Ray>, Colour, f64) {
+                match self {
+                    $(Self::$volume(v) => v.scatter(ray, record, env),)*
+                }
+            }
+        }
         impl Volumizing for Volume {
             #[inline]
             fn volumize(&self, ray: Ray, t_front: f64, t_back: f64) -> Option<HitData> {
