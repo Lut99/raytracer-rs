@@ -70,7 +70,7 @@ macro_rules! rotate_impl {
         // Interfaces
         impl Transforming for $name {
             #[inline]
-            fn transform_aabb(&self, aabb: AABB) -> AABB {
+            fn transform_aabb(&self, _t_us: u64, aabb: AABB) -> AABB {
                 // Compute the sin_theta and cos_theta for this angle
                 let angle_radians: f64 = degrees_to_radians(self.angle);
                 let sin_theta: f64 = angle_radians.sin();
@@ -106,7 +106,7 @@ macro_rules! rotate_impl {
             }
 
             #[inline]
-            fn transform(&self, ray: Ray) -> Ray {
+            fn transform(&self, _t_us: u64, ray: Ray) -> Ray {
                 // Compute the sin_theta and cos_theta for this angle
                 let angle_radians: f64 = degrees_to_radians(self.angle);
                 let sin_theta: f64 = angle_radians.sin();
@@ -119,7 +119,7 @@ macro_rules! rotate_impl {
             }
 
             #[inline]
-            fn transform_back(&self, mut rec: HitData) -> HitData {
+            fn transform_back(&self, _t_us: u64, mut rec: HitData) -> HitData {
                 // Compute the sin_theta and cos_theta for this angle
                 let angle_radians: f64 = degrees_to_radians(self.angle);
                 let sin_theta: f64 = angle_radians.sin();

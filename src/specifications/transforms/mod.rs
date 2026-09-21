@@ -16,7 +16,7 @@ use std::sync::{Arc, MutexGuard, RwLockReadGuard, RwLockWriteGuard};
 
 pub use rotate::{RotateX, RotateY, RotateZ};
 use serde::{Deserialize, Serialize};
-pub use translate::Translate;
+pub use translate::{AnimatedTranslate, Translate};
 
 use super::objects::HitData;
 use crate::math::{AABB, Ray};
@@ -27,25 +27,25 @@ macro_rules! transforming_ptr_impl {
     ('a, $ty:ty) => {
         impl<'a, T: Transforming> Transforming for $ty {
             #[inline]
-            fn transform_aabb(&self, aabb: AABB) -> AABB { <T as Transforming>::transform_aabb(self, aabb) }
+            fn transform_aabb(&self, t_us: u64, aabb: AABB) -> AABB { <T as Transforming>::transform_aabb(self, t_us, aabb) }
 
             #[inline]
-            fn transform(&self, ray: Ray) -> Ray { <T as Transforming>::transform(self, ray) }
+            fn transform(&self, t_us: u64, ray: Ray) -> Ray { <T as Transforming>::transform(self, t_us, ray) }
 
             #[inline]
-            fn transform_back(&self, rec: HitData) -> HitData { <T as Transforming>::transform_back(self, rec) }
+            fn transform_back(&self, t_us: u64, rec: HitData) -> HitData { <T as Transforming>::transform_back(self, t_us, rec) }
         }
     };
     ($ty:ty) => {
         impl<T: Transforming> Transforming for $ty {
             #[inline]
-            fn transform_aabb(&self, aabb: AABB) -> AABB { <T as Transforming>::transform_aabb(self, aabb) }
+            fn transform_aabb(&self, t_us: u64, aabb: AABB) -> AABB { <T as Transforming>::transform_aabb(self, t_us, aabb) }
 
             #[inline]
-            fn transform(&self, ray: Ray) -> Ray { <T as Transforming>::transform(self, ray) }
+            fn transform(&self, t_us: u64, ray: Ray) -> Ray { <T as Transforming>::transform(self, t_us, ray) }
 
             #[inline]
-            fn transform_back(&self, rec: HitData) -> HitData { <T as Transforming>::transform_back(self, rec) }
+            fn transform_back(&self, t_us: u64, rec: HitData) -> HitData { <T as Transforming>::transform_back(self, t_us, rec) }
         }
     };
 }
@@ -60,11 +60,12 @@ pub trait Transforming {
     /// Transforms an object's AABB.
     ///
     /// # Arguments
+    /// - `t_us`: The time, in us since the start of the scene, at which the transformation needs to occur.
     /// - `aabb`: The [`AABB`] to transform.
     ///
     /// # Returns
     /// A new [`AABB`] representing the transformed version.
-    fn transform_aabb(&self, aabb: AABB) -> AABB;
+    fn transform_aabb(&self, t_us: u64, aabb: AABB) -> AABB;
 
     /// Transforms a Ray shot at an object.
     ///
@@ -72,22 +73,24 @@ pub trait Transforming {
     /// this.
     ///
     /// # Arguments
+    /// - `t_us`: The time, in us since the start of the scene, at which the transformation needs to occur.
     /// - `ray`: The [`Ray`] to transform.
     ///
     /// # Returns
     /// A new [`Ray`] in transformed space.
-    fn transform(&self, ray: Ray) -> Ray;
+    fn transform(&self, t_us: u64, ray: Ray) -> Ray;
 
     /// Transforms a Ray shot at an object back into normal space.
     ///
     /// This is executed after an object's hit. [`Transform::transform()`] is called before.
     ///
     /// # Arguments
+    /// - `t_us`: The time, in us since the start of the scene, at which the transformation needs to occur.
     /// - `rec`: The [`HitData`] in transformed space to transform back.
     ///
     /// # Returns
     /// A new [`HitData`] in transformed space.
-    fn transform_back(&self, rec: HitData) -> HitData;
+    fn transform_back(&self, t_us: u64, rec: HitData) -> HitData;
 }
 
 // Pointer-like impls
@@ -123,23 +126,23 @@ macro_rules! transform_impl {
         // Interfaces
         impl Transforming for Transform {
             #[inline]
-            fn transform_aabb(&self, aabb: AABB) -> AABB {
+            fn transform_aabb(&self, t_us: u64, aabb: AABB) -> AABB {
                 match self {
-                    $(Self::$obj(o) => o.transform_aabb(aabb),)*
+                    $(Self::$obj(o) => o.transform_aabb(t_us, aabb),)*
                 }
             }
 
             #[inline]
-            fn transform(&self, ray: Ray) -> Ray {
+            fn transform(&self, t_us: u64, ray: Ray) -> Ray {
                 match self {
-                    $(Self::$obj(o) => o.transform(ray),)*
+                    $(Self::$obj(o) => o.transform(t_us, ray),)*
                 }
             }
 
             #[inline]
-            fn transform_back(&self, rec: HitData) -> HitData {
+            fn transform_back(&self, t_us: u64, rec: HitData) -> HitData {
                 match self {
-                    $(Self::$obj(o) => o.transform_back(rec),)*
+                    $(Self::$obj(o) => o.transform_back(t_us, rec),)*
                 }
             }
         }
@@ -152,6 +155,8 @@ transform_impl!(
     RotateY,
     /// Defines a rotation over the Z-axis.
     RotateZ,
+    /// Defines a translation in space, over time.
+    AnimatedTranslate,
     /// Defines a translation in space.
-    Translate
+    Translate,
 );

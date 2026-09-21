@@ -29,13 +29,13 @@ use raytracer::render::backends::single::SingleThreadRenderer;
 use raytracer::render::image::Image;
 use raytracer::render::{RayRenderer as _, RenderBackend};
 use raytracer::specifications::Loadable as _;
-use raytracer::specifications::animations::{Animation, Vertical};
 use raytracer::specifications::materials::{Dielectric, DiffuseLight, Isotropic, Lambertian, LambertianTexture, Material, Metal};
 use raytracer::specifications::objects::{Box, DynObject, Group, JsonObject, Object, Quad, Sphere};
 use raytracer::specifications::scene::{Background, Environment, SceneFile};
 use raytracer::specifications::textures::image::Image as TexImage;
 use raytracer::specifications::textures::{SpatialChecker, Texture};
-use raytracer::specifications::transforms::{RotateY, Transform, Translate};
+use raytracer::specifications::transforms::translate::Trajectory;
+use raytracer::specifications::transforms::{AnimatedTranslate, RotateY, Transform, Translate};
 use raytracer::specifications::volumes::{ConstantDensity, Volume};
 
 
@@ -315,12 +315,15 @@ fn main() -> ExitCode {
                                             let colour = Colour::new(fastrand::f64(), fastrand::f64(), fastrand::f64(), 1.0);
                                             let sphere = Sphere { center, radius: 0.2 };
                                             objects.push(if fastrand::f64() < 0.1 {
-                                                let animation = Animation::Vertical(Vertical { len: 0.5 * fastrand::f64(), at: 0, duration: 1000 });
                                                 JsonObject::Object(Object {
                                                     obj: DynObject::Sphere(sphere),
                                                     mat: Material::Lambertian(Lambertian { colour }),
                                                     volumized: None,
-                                                    transforms: Vec::new(),
+                                                    transforms: vec![Transform::AnimatedTranslate(AnimatedTranslate {
+                                                        trajectory: Trajectory::Vertical { len: 0.5 * fastrand::f64() },
+                                                        at: 0,
+                                                        duration: 1000,
+                                                    })],
                                                 })
                                             } else {
                                                 JsonObject::Object(Object {
@@ -432,12 +435,15 @@ fn main() -> ExitCode {
                             }));
 
                             // Define the blurry sphere
-                            let animation = Animation::Vertical(Vertical { len: 30.0, at: 0, duration: cover.shutter_time });
                             objects.push(JsonObject::Object(Object {
                                 obj: DynObject::Sphere(Sphere { center: Vec3::new(400.0, 400.0, 200.0), radius: 50.0 }),
                                 mat: brown,
                                 volumized: None,
-                                transforms: Vec::new(),
+                                transforms: vec![Transform::AnimatedTranslate(AnimatedTranslate {
+                                    trajectory: Trajectory::Vertical { len: 30.0 },
+                                    at: 0,
+                                    duration: cover.shutter_time,
+                                })],
                             }));
 
                             // Define the loose glass & metal spheres
