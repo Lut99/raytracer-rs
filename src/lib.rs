@@ -17,7 +17,6 @@
 // Declare the library modules
 pub mod common;
 pub mod hitlist;
-// pub mod hittree;
 pub mod math;
 pub mod random;
 pub mod specifications;
