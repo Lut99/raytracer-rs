@@ -21,6 +21,7 @@ use super::super::materials::Lambertian;
 use super::super::materials::{LambertianTexture, Material};
 use super::super::textures::{SpatialChecker, Texture};
 use super::super::transforms::Transform;
+use super::super::volumes::Volume;
 use super::plane::Triangle;
 use super::{DynObject, Group, JsonObject, Object};
 use crate::math::{Colour, Vec3};
@@ -160,6 +161,9 @@ pub struct Model {
     pub path: PathBuf,
     /// The format to the file if the user bothered to give it.
     pub format: Option<ModelFormat>,
+    /// Defines if this model is volumized somehow.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub volumized: Option<Volume>,
     /// Any transforms to apply to the model.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub transforms: Vec<Transform>,
