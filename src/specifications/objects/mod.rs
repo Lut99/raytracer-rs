@@ -188,8 +188,7 @@ hittable_ptr_impl!('a, parking_lot::MutexGuard<'a, T>);
 ///
 /// Used only to complete serialization.
 #[derive(Clone, Debug, Deserialize, Serialize)]
-#[serde(tag = "type")]
-#[serde(rename_all = "snake_case")]
+#[serde(untagged)]
 pub enum JsonObject {
     /// It's an unloaded model.
     Model(Model),
