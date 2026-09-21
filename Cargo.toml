@@ -45,3 +45,8 @@ archive = []
 # Models
 models = ["obj"]
 obj = ["dep:mtllib", "dep:obj"]
+
+
+[workspace]
+resolver = "2"
+members = ["tools/update_scene_files"]

@@ -6,6 +6,8 @@
 //
 
 use std::borrow::Cow;
+#[cfg(feature = "obj")]
+use std::collections::HashMap;
 use std::ffi::OsStr;
 #[cfg(feature = "obj")]
 use std::fs::File;
@@ -203,8 +205,6 @@ impl Model {
             #[cfg(feature = "obj")]
             ModelFormat::Obj => {
                 // Open the file
-
-                use std::collections::HashMap;
                 let path: Cow<Path> = if self.path.is_relative() { Cow::Owned(dir.join(&self.path)) } else { Cow::Borrowed(&self.path) };
                 debug!("Loading model {path:?} as .obj file...");
                 let handle = match File::open(&path) {
@@ -271,7 +271,7 @@ impl Model {
                                     triags.push(JsonObject::Object(Object {
                                         obj: DynObject::Triangle(Triangle { pos: v1, u: v2 - v1, v: v3 - v1 }),
                                         mat,
-                                        volumized: None,
+                                        volumized: self.volumized.clone(),
                                         transforms: Vec::new(),
                                     }));
                                 },
@@ -299,7 +299,7 @@ impl Model {
                                             v:   sides[0][2] - sides[0][0],
                                         }),
                                         mat: mat.clone(),
-                                        volumized: None,
+                                        volumized: self.volumized.clone(),
                                         transforms: Vec::new(),
                                     }));
                                     triags.push(JsonObject::Object(Object {
@@ -309,7 +309,7 @@ impl Model {
                                             v:   sides[1][2] - sides[1][0],
                                         }),
                                         mat,
-                                        volumized: None,
+                                        volumized: self.volumized.clone(),
                                         transforms: Vec::new(),
                                     }));
                                 },
@@ -329,7 +329,7 @@ impl Model {
                 // for t in &triangles {
                 //     println!("{{ {}, {} x {} }}", t.pos, t.u, t.v);
                 // }
-                Ok(Group { objs: groups, transforms: Vec::new() })
+                Ok(Group { objs: groups, transforms: self.transforms.clone() })
             },
         }
     }

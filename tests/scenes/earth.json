@@ -1,26 +1,41 @@
 {
   "camera": {
-    "vfov": 20,
+    "vfov": 20.0,
     "pos": {
-      "lookfrom": [0, 0, 12],
-      "lookat": [0, 0, 0],
-      "lookup": [0, 1, 0]
+      "lookfrom": [
+        0.0,
+        0.0,
+        12.0
+      ],
+      "lookat": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "lookup": [
+        0.0,
+        1.0,
+        0.0
+      ]
     }
   },
-  "objects": [{
-    "Sphere": {
-      "center": [0, 0, 0],
-      "radius": 2,
-      "material": {
-        "LambertianTexture": {
-          "texture": {
-            "Image": {
-              "path": "./earthmap.jpg",
-              "format": "Jpeg"
-            }
-          }
+  "objects": [
+    {
+      "type": "sphere",
+      "center": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "radius": 2.0,
+      "mat": {
+        "type": "lambertian_texture",
+        "texture": {
+          "type": "image",
+          "path": "./earthmap.jpg",
+          "format": "Jpeg"
         }
       }
     }
-  }]
+  ]
 }

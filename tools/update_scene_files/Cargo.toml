@@ -1,0 +1,15 @@
+[package]
+name = "update_scene_files"
+version = "1.0.0"
+edition = "2024"
+
+
+[dependencies]
+error-trace = "4.0.0"
+humanlog = { git = "https://github.com/Lut99/humanlog-rs", tag = "v0.2.0" }
+log = "0.4.0"
+serde = "1.0.0"
+serde_json = "1.0.0"
+
+raytracer_old = { git = "https://github.com/Lut99/raytracer-rs", rev = "ab88eb0", package = "raytracer" }
+raytracer_new = { git = "https://github.com/Lut99/raytracer-rs", rev = "635cf4c", package = "raytracer" }

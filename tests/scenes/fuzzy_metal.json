@@ -1,49 +1,77 @@
 {
   "objects": [
     {
-      "Sphere": {
-        "center": [0, -100.5, -1],
-        "radius": 100,
-        "material": {
-          "Lambertian": {
-            "colour": [0.8, 0.8, 0, 1]
-          }
-        }
+      "type": "sphere",
+      "center": [
+        0.0,
+        -100.5,
+        -1.0
+      ],
+      "radius": 100.0,
+      "mat": {
+        "type": "lambertian",
+        "colour": [
+          0.8,
+          0.8,
+          0.0,
+          1.0
+        ]
       }
     },
     {
-      "Sphere": {
-        "center": [0, 0, -1.2],
-        "radius": 0.5,
-        "material": {
-          "Lambertian": {
-            "colour": [0.1, 0.2, 0.5, 1]
-          }
-        }
+      "type": "sphere",
+      "center": [
+        0.0,
+        0.0,
+        -1.2
+      ],
+      "radius": 0.5,
+      "mat": {
+        "type": "lambertian",
+        "colour": [
+          0.1,
+          0.2,
+          0.5,
+          1.0
+        ]
       }
     },
     {
-      "Sphere": {
-        "center": [-1, 0, -1],
-        "radius": 0.5,
-        "material": {
-          "Metal": {
-            "colour": [0.8, 0.8, 0.8, 1],
-            "fuzz": 0.3
-          }
-        }
+      "type": "sphere",
+      "center": [
+        -1.0,
+        0.0,
+        -1.0
+      ],
+      "radius": 0.5,
+      "mat": {
+        "type": "metal",
+        "colour": [
+          0.8,
+          0.8,
+          0.8,
+          1.0
+        ],
+        "fuzz": 0.3
       }
     },
     {
-      "Sphere": {
-        "center": [1, 0, -1],
-        "radius": 0.5,
-        "material": {
-          "Metal": {
-            "colour": [0.8, 0.6, 0.2, 1],
-            "fuzz": 1.0
-          }
-        }
+      "type": "sphere",
+      "center": [
+        1.0,
+        0.0,
+        -1.0
+      ],
+      "radius": 0.5,
+      "mat": {
+        "type": "metal",
+        "colour": [
+          0.8,
+          0.6,
+          0.2,
+          1.0
+        ],
+        "fuzz": 1.0
       }
     }
   ]

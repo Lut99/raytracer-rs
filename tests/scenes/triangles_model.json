@@ -1,23 +1,38 @@
 {
   "camera": {
-    "vfov": 80,
+    "vfov": 80.0,
     "pos": {
-      "lookfrom": [0, 0, 9],
-      "lookat": [0, 0, 0],
-      "lookup": [0, 1, 0]
+      "lookfrom": [
+        0.0,
+        0.0,
+        9.0
+      ],
+      "lookat": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "lookup": [
+        0.0,
+        1.0,
+        0.0
+      ]
     }
   },
   "objects": [
     {
-      "Translate": {
-        "pos": [0, 0, 0],
-        "obj": {
-          "Model": {
-            "path": "./triangles.obj",
-            "format": "obj"
-          }
+      "path": "./triangles.obj",
+      "format": "obj",
+      "transforms": [
+        {
+          "type": "translate",
+          "pos": [
+            0.0,
+            0.0,
+            0.0
+          ]
         }
-      }
+      ]
     }
   ]
 }

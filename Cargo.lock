@@ -547,6 +547,17 @@ checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
 [[package]]
 name = "humanlog"
 version = "0.2.0"
+source = "git+https://github.com/Lut99/humanlog-rs?tag=v0.2.0#0bceaaeb6426a6c990017c1d3c0aa7f51adbbfa1"
+dependencies = [
+ "chrono",
+ "console 0.15.11",
+ "log",
+ "parking_lot",
+]
+
+[[package]]
+name = "humanlog"
+version = "0.2.0"
 source = "git+https://github.com/Lut99/humanlog-rs#0bceaaeb6426a6c990017c1d3c0aa7f51adbbfa1"
 dependencies = [
  "chrono",
@@ -1191,7 +1202,53 @@ dependencies = [
  "console 0.16.4",
  "error-trace",
  "fastrand",
- "humanlog",
+ "humanlog 0.2.0 (git+https://github.com/Lut99/humanlog-rs)",
+ "image",
+ "indicatif",
+ "log",
+ "mtllib",
+ "obj",
+ "parking_lot",
+ "paste",
+ "serde",
+ "serde_json",
+ "thiserror",
+]
+
+[[package]]
+name = "raytracer"
+version = "0.3.0"
+source = "git+https://github.com/Lut99/raytracer-rs?rev=635cf4c#635cf4c486affbfcc3761a2ba1ac104b04b469e2"
+dependencies = [
+ "base64",
+ "clap",
+ "console 0.16.4",
+ "error-trace",
+ "fastrand",
+ "humanlog 0.2.0 (git+https://github.com/Lut99/humanlog-rs)",
+ "image",
+ "indicatif",
+ "log",
+ "mtllib",
+ "obj",
+ "parking_lot",
+ "paste",
+ "serde",
+ "serde_json",
+ "thiserror",
+]
+
+[[package]]
+name = "raytracer"
+version = "0.3.0"
+source = "git+https://github.com/Lut99/raytracer-rs?rev=ab88eb0#ab88eb0d2745d1af55e8c8ffccd7e087604abf17"
+dependencies = [
+ "base64",
+ "clap",
+ "console 0.16.4",
+ "error-trace",
+ "fastrand",
+ "humanlog 0.2.0 (git+https://github.com/Lut99/humanlog-rs)",
  "image",
  "indicatif",
  "log",
@@ -1398,6 +1455,19 @@ name = "unit-prefix"
 version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "81e544489bf3d8ef66c953931f56617f423cd4b5494be343d9b9d3dda037b9a3"
+
+[[package]]
+name = "update_scene_files"
+version = "1.0.0"
+dependencies = [
+ "error-trace",
+ "humanlog 0.2.0 (git+https://github.com/Lut99/humanlog-rs?tag=v0.2.0)",
+ "log",
+ "raytracer 0.3.0 (git+https://github.com/Lut99/raytracer-rs?rev=635cf4c)",
+ "raytracer 0.3.0 (git+https://github.com/Lut99/raytracer-rs?rev=ab88eb0)",
+ "serde",
+ "serde_json",
+]
 
 [[package]]
 name = "utf8parse"

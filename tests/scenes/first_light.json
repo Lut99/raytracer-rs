@@ -1,48 +1,89 @@
 {
-  "camera": {
-    "vfov": 20,
-    "pos": {
-      "lookfrom": [26, 3, 6],
-      "lookat": [0, 2, 0],
-      "lookup": [0, 1, 0]
-    }
-  },
   "environment": {
     "background": "None"
   },
+  "camera": {
+    "vfov": 20.0,
+    "pos": {
+      "lookfrom": [
+        26.0,
+        3.0,
+        6.0
+      ],
+      "lookat": [
+        0.0,
+        2.0,
+        0.0
+      ],
+      "lookup": [
+        0.0,
+        1.0,
+        0.0
+      ]
+    }
+  },
   "objects": [
     {
-      "Sphere": {
-        "center": [0, -1000, 0],
-        "radius": 1000,
-        "material": {
-          "Lambertian": {
-            "colour": [0.5, 0.5, 0.5, 1.0]
-          }
-        }
+      "type": "sphere",
+      "center": [
+        0.0,
+        -1000.0,
+        0.0
+      ],
+      "radius": 1000.0,
+      "mat": {
+        "type": "lambertian",
+        "colour": [
+          0.5,
+          0.5,
+          0.5,
+          1.0
+        ]
       }
     },
     {
-      "Sphere": {
-        "center": [0, 2, 0],
-        "radius": 2,
-        "material": {
-          "Lambertian": {
-            "colour": [0.5, 0.5, 0.5, 1.0]
-          }
-        }
+      "type": "sphere",
+      "center": [
+        0.0,
+        2.0,
+        0.0
+      ],
+      "radius": 2.0,
+      "mat": {
+        "type": "lambertian",
+        "colour": [
+          0.5,
+          0.5,
+          0.5,
+          1.0
+        ]
       }
     },
     {
-      "Quad": {
-        "pos": [3, 1, -2],
-        "u": [2, 0, 0],
-        "v": [0, 2, 0],
-        "mat": {
-          "DiffuseLight": {
-            "colour": [4.0, 4.0, 4.0, 1.0]
-          }
-        }
+      "type": "quad",
+      "pos": [
+        3.0,
+        1.0,
+        -2.0
+      ],
+      "u": [
+        2.0,
+        0.0,
+        0.0
+      ],
+      "v": [
+        0.0,
+        2.0,
+        0.0
+      ],
+      "mat": {
+        "type": "diffuse_light",
+        "colour": [
+          4.0,
+          4.0,
+          4.0,
+          1.0
+        ]
       }
     }
   ]
