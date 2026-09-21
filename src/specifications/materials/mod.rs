@@ -216,7 +216,7 @@ macro_rules! material_impl {
             fn load(&mut self, dir: &Path) -> Result<(), Self::Error> {
                 match self {
                     $(Self::$mat(m) => m.load(dir).map_err(Error::$mat),)*
-                    Self::Empty => panic!("Cannot load the empty material; please specify one"),
+                    Self::Empty => Ok(()),
                 }
             }
         }
