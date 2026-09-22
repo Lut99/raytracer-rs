@@ -83,6 +83,23 @@ macro_rules! scattering_ptr_impl {
 
 
 
+/***** AUXILLARY *****/
+/// Denotes the "kind" of [`Material`]s.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum ObjectKind {
+    /// The material is a light source, so it may be random but we will still want to sample from
+    /// it.
+    Light,
+    /// The material has a random component to the scatter.
+    Scatter,
+    /// The scatter is deterministic.
+    Specular,
+}
+
+
+
+
+
 /***** INTERFACES *****/
 /// The Scattering trait implements any material that we can use to cover an object.
 pub trait Scattering {
@@ -173,16 +190,30 @@ scattering_ptr_impl!('a, parking_lot::MutexGuard<'a, T>);
 /***** LIBRARY *****/
 macro_rules! material_impl {
     // Default error type insertion
-    (__ { $(#[$($fattrs:tt)*])* $fmat:ident $(, $(#[$($rattrs:tt)*])* $rmat:ident $(( $rerrty:ty ))?)* } { $($(#[$($attrs:tt)*])* $mat:ident ( $errty:ty )),* }) => {
-        material_impl!(__ {$($(#[$($rattrs)*])* $rmat $(($rerrty))?),*} { $(#[$($fattrs)*])* $fmat (::std::convert::Infallible) $(, $(#[$($attrs)*])* $mat ($errty))* });
+    (__ { $(#[$($fattrs:tt)*])+ $fty:tt $fmat:ident $(, $(#[$($rattrs:tt)*])+ $rty:tt $rmat:ident $(( $rerrty:ty ))?)* } { $($(#[$($attrs:tt)*])+ $ty:tt $mat:ident ( $errty:ty )),* }) => {
+        material_impl!(__ {$($(#[$($rattrs)*])+ $rty $rmat $(($rerrty))?),*} { $(#[$($fattrs)*])+ $fty $fmat (::std::convert::Infallible) $(, $(#[$($attrs)*])+ $ty $mat ($errty))* });
     };
-    (__ { $(#[$($fattrs:tt)*])* $fmat:ident ($ferrty:ty) $(, $(#[$($rattrs:tt)*])* $rmat:ident $(( $rerrty:ty ))?)* } { $($(#[$($attrs:tt)*])* $mat:ident ( $errty:ty )),* }) => {
-        material_impl!(__ {$($(#[$($rattrs)*])* $rmat $(($rerrty))?),*} { $(#[$($fattrs)*])* $fmat ($ferrty) $(, $(#[$($attrs)*])* $mat ($errty))* });
+    (__ { $(#[$($fattrs:tt)*])+ $fty:tt $fmat:ident ($ferrty:ty) $(, $(#[$($rattrs:tt)*])+ $rty:tt $rmat:ident $(( $rerrty:ty ))?)* } { $($(#[$($attrs:tt)*])+ $ty:tt $mat:ident ( $errty:ty )),* }) => {
+        material_impl!(__ {$($(#[$($rattrs)*])+ $rty $rmat $(($rerrty))?),*} { $(#[$($fattrs)*])+ $fty $fmat ($ferrty) $(, $(#[$($attrs)*])+ $ty $mat ($errty))* });
+    };
+    (__ {} { $($(#[$($attrs:tt)*])+ $ty:tt $mat:ident ( $errty:ty )),* }) => {
+        material_impl!(__2 { $($(#[$($attrs)*])+ $ty $mat ( $errty )),* } {});
+    };
+
+    // Material type resolution
+    (__2 { $(#[$($fattrs:tt)*])+ * $fmat:ident ($ferrty:ty) $(, $(#[$($rattrs:tt)*])+ $rty:tt $rmat:ident ( $rerrty:ty ))* } { $($(#[$($attrs:tt)*])+ $ty:tt $mat:ident ( $errty:ty )),* }) => {
+        material_impl!(__2 {$($(#[$($rattrs)*])+ $rty $rmat ($rerrty)),*} { $(#[$($fattrs)*])+ Scatter $fmat ($ferrty) $(, $(#[$($attrs)*])+ $ty $mat ($errty))* });
+    };
+    (__2 { $(#[$($fattrs:tt)*])+ > $fmat:ident ($ferrty:ty) $(, $(#[$($rattrs:tt)*])+ $rty:tt $rmat:ident ( $rerrty:ty ))* } { $($(#[$($attrs:tt)*])+ $ty:tt $mat:ident ( $errty:ty )),* }) => {
+        material_impl!(__2 {$($(#[$($rattrs)*])+ $rty $rmat ($rerrty)),*} { $(#[$($fattrs)*])+ Specular $fmat ($ferrty) $(, $(#[$($attrs)*])+ $ty $mat ($errty))* });
+    };
+    (__2 { $(#[$($fattrs:tt)*])+ ! $fmat:ident ($ferrty:ty) $(, $(#[$($rattrs:tt)*])+ $rty:tt $rmat:ident ( $rerrty:ty ))* } { $($(#[$($attrs:tt)*])+ $ty:tt $mat:ident ( $errty:ty )),* }) => {
+        material_impl!(__2 {$($(#[$($rattrs)*])+ $rty $rmat ($rerrty)),*} { $(#[$($fattrs)*])+ Light $fmat ($ferrty) $(, $(#[$($attrs)*])+ $ty $mat ($errty))* });
     };
 
 
     // Actual impl
-    (__ {} { $($(#[$($attrs:tt)*])* $mat:ident ( $errty:ty )),* }) => {
+    (__2 {} { $($(#[$($attrs:tt)*])+ $ty:ident $mat:ident ( $errty:ty )),* }) => {
         /// Errors occurring when loading the material.
         #[derive(Debug, Error)]
         pub enum Error {
@@ -205,6 +236,21 @@ macro_rules! material_impl {
         impl Default for Material {
             #[inline]
             fn default() -> Self { Self::Empty }
+        }
+
+        // Material
+        impl Material {
+            /// Returns the kind of the material.
+            ///
+            /// This is either [`ObjectKind::Scatter`] when the material has a random component
+            /// to the scatter; or [`ObjectKind::Specular`] of it does not.
+            #[inline]
+            pub const fn kind(&self) -> ObjectKind {
+                match self {
+                    $(Self::$mat(_) => ObjectKind::$ty,)*
+                    Self::Empty => ObjectKind::Specular,
+                }
+            }
         }
 
         // Interface
@@ -251,31 +297,29 @@ macro_rules! material_impl {
     };
 
     // Public interface
-    ($($(#[$($attrs:tt)*])* $tex:ident $(( $errty:ty ))?),* $(,)?) => {
-        material_impl!(__ { $($(#[$($attrs)*])? $tex $(($errty))?),* } {});
+    ($($(#[$($attrs:tt)*])+ $ty:tt $tex:ident $(( $errty:ty ))?),* $(,)?) => {
+        material_impl!(__ { $($(#[$($attrs)*])+ $ty $tex $(($errty))?),* } {});
     };
 }
 material_impl!(
     // /// The empty material.
     // (),
     /// A refracting material (e.g., glass, water-on-air, etc).
-    Dielectric,
+    > Dielectric,
     /// A material randomly scattering rays, imperfectly.
-    Diffuse,
+    * Diffuse,
     /// A meterial emitted light randomly.
-    DiffuseLight,
-    /// A material randomly scattering rays not even taking a surface into account. Useful for gasses.
-    Isotropic,
+    ! DiffuseLight,
     /// A material randomly scattering rays.
-    Lambertian,
+    * Lambertian,
     /// A material randomly scattering rays but with a texture.
-    LambertianTexture(super::textures::Error),
+    * LambertianTexture(super::textures::Error),
     /// A material reflecting rays perfectly.
-    Metal,
+    > Metal,
     /// A material having colours of the object's normals.
-    NormalMap,
+    > NormalMap,
     /// A partially refracting material (has some holes in the math that stops is refracting).
-    PartialDielectric,
+    > PartialDielectric,
     /// A material having a static colour.
-    StaticColour,
+    > StaticColour,
 );

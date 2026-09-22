@@ -7,18 +7,58 @@
 
 use std::ops::Range;
 
+use clap::ValueEnum;
+
 use crate::math::aabb::Interval;
 use crate::math::{AABB, Ray};
-use crate::specifications::materials::Material;
+use crate::specifications::materials::{Material, ObjectKind};
 use crate::specifications::objects::{BoundingBoxable, DynObject, HitData, HitRecord, Hittable, JsonObject, Object};
 use crate::specifications::scene::Environment;
+
+
+/***** HELPERS *****/
+/// Introduces an index in either list.
+#[derive(Clone, Copy, Debug)]
+enum ObjectIndex {
+    Scatter(usize),
+    Specular(usize),
+}
+
+impl ObjectIndex {
+    /// Returns the object in either list.
+    ///
+    /// # Arguments
+    /// - `scatters`: The list of scattering objects.
+    /// - `speculars`: The list of specular objects.
+    ///
+    /// # Returns
+    /// A reference to the chosen object.
+    ///
+    /// # Panics
+    /// This function panics if the internal index is out-of-scope for the relevant vector.
+    #[track_caller]
+    #[inline]
+    pub const fn get<'o>(
+        &self,
+        scatters: &'o [Object<DynObject, Material>],
+        speculars: &'o [Object<DynObject, Material>],
+    ) -> &'o Object<DynObject, Material> {
+        match self {
+            Self::Scatter(i) => &scatters[*i],
+            Self::Specular(i) => &speculars[*i],
+        }
+    }
+}
+
+
+
 
 
 /***** ITERATORS *****/
 #[derive(Debug)]
 struct BVHNodeIter(Vec<BVHNode>);
 impl Iterator for BVHNodeIter {
-    type Item = (usize, AABB);
+    type Item = (ObjectIndex, AABB);
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
@@ -44,7 +84,7 @@ enum BVHNode {
     /// It's a branching node.
     Branch(AABB, Box<Self>, Box<Self>),
     /// It's a leaf.
-    Leaf(AABB, usize),
+    Leaf(AABB, ObjectIndex),
 }
 
 // Constructors
@@ -60,7 +100,7 @@ impl BVHNode {
     /// A new BVHNode that wraps the given `objs`.
     #[inline]
     #[track_caller]
-    fn new(mut objs: Vec<(usize, AABB)>) -> Self {
+    fn new(mut objs: Vec<(ObjectIndex, AABB)>) -> Self {
         // Handle base cases
         let objs_len: usize = objs.len();
         if objs_len == 0 {
@@ -96,21 +136,22 @@ impl BVHNode {
 // HitList
 impl BVHNode {
     /// Recomputes the AABBs in this node.
-    fn recompute_aabbs(&mut self, objs: &[Object<DynObject, Material>], ts: [u64; 2]) -> AABB {
+    fn recompute_aabbs(&mut self, scatters: &[Object<DynObject, Material>], speculars: &[Object<DynObject, Material>], ts: [u64; 2]) -> AABB {
         match self {
             Self::Branch(aabb, lhs, rhs) => {
-                *aabb = AABB::surround(lhs.recompute_aabbs(objs, ts), rhs.recompute_aabbs(objs, ts));
+                *aabb = AABB::surround(lhs.recompute_aabbs(scatters, speculars, ts), rhs.recompute_aabbs(scatters, speculars, ts));
                 *aabb
             },
             Self::Leaf(aabb, obj) => {
-                *aabb = AABB::surround(objs[*obj].aabb(ts[0]), objs[*obj].aabb(ts[1]));
+                let obj = obj.get(scatters, speculars);
+                *aabb = AABB::surround(obj.aabb(ts[0]), obj.aabb(ts[1]));
                 *aabb
             },
         }
     }
 
     /// Computes a list of hit objects.
-    fn hittest(&self, ray: Ray, t_min: f64, t_max: f64, hits: &mut Vec<(Interval, usize)>) {
+    fn hittest(&self, ray: Ray, t_min: f64, t_max: f64, hits: &mut Vec<(Interval, ObjectIndex)>) {
         match self {
             Self::Branch(aabb, lhs, rhs) if aabb.hittest(ray, t_min, t_max).is_some() => {
                 lhs.hittest(ray, t_min, t_max, hits);
@@ -126,11 +167,27 @@ impl BVHNode {
 
 // Iteration
 impl IntoIterator for BVHNode {
-    type Item = (usize, AABB);
+    type Item = (ObjectIndex, AABB);
     type IntoIter = BVHNodeIter;
 
     #[inline]
     fn into_iter(self) -> Self::IntoIter { BVHNodeIter(vec![self]) }
+}
+
+
+
+
+/***** AUXILLARY *****/
+/// The possible modes of splitting objects.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, ValueEnum)]
+#[clap(rename_all = "snake_case")]
+pub enum SplitMode {
+    /// Split only the lights as specular.
+    LightsOnly,
+    /// Split only scattering objects as scattering, the rest as specular.
+    ScatterOnly,
+    /// Split nothing, everything is scattering.
+    ScatterAll,
 }
 
 
@@ -142,11 +199,21 @@ pub struct HitList {
     /// The set of all AABBs, as a BVH tree.
     aabbs: Option<BVHNode>,
     /// The current time range for which we computed the AABBs in the list.
-    ts:    [u64; 2],
-    /// The set of all objects in the hitlist.
+    ts: [u64; 2],
+    /// The set of all "scattering" objects in the hitlist.
+    ///
+    /// These are all objects that send rays in random directions. As such, we use the Monte Carlo
+    /// optimizations to unbias our scene for these objects.
     ///
     /// These are referred to by the aabbs in the nodes.
-    objs:  Vec<Object<DynObject, Material>>,
+    scatters: Vec<Object<DynObject, Material>>,
+    /// The set of all "specular" objects in the hitlist.
+    ///
+    /// These are all objects that send rays in fixed directions. As such, we won't need to
+    /// optimize these but instead importance sample towards these objects.
+    ///
+    /// These are referred to by the aabbs in the nodes.
+    speculars: Vec<Object<DynObject, Material>>,
 }
 
 // Constructors
@@ -154,13 +221,15 @@ impl HitList {
     /// Constructor for a HitList that creates it from a list of objects or object groups.
     ///
     /// # Arguments
-    /// - `objs`: A list of [`JsonObject`]s that can be AABB'ed.
+    /// - `split_mode`: The [`SplitMode`] that determines how to split the objects into scattering- and
+    ///   specular ones.
     /// - `ts`: An [`Interval`] of timestamps (in us since the start of the scene) for which to
     ///   compute the AABBs.
+    /// - `objs`: A list of [`JsonObject`]s that can be AABB'ed.
     ///
     /// # Returns
     /// A new HitList that is created to match the given JsonObject.
-    pub fn with_objs(objs: impl IntoIterator<Item = JsonObject>, ts: Range<u64>) -> Self {
+    pub fn with_objs(split_mode: SplitMode, ts: Range<u64>, objs: impl IntoIterator<Item = JsonObject>) -> Self {
         // Decompress the objects by removing the groups
         fn _decompress_json_object(objs: impl IntoIterator<Item = JsonObject>, res: &mut Vec<Object<DynObject, Material>>) {
             for obj in objs {
@@ -188,7 +257,7 @@ impl HitList {
 
         // Early escape clause for empty lists
         if dobjs.is_empty() {
-            return Self { aabbs: None, ts: [ts.start, ts.end], objs: Vec::new() };
+            return Self { aabbs: None, ts: [ts.start, ts.end], scatters: Vec::new(), speculars: Vec::new() };
         }
 
         // Optimize the transforms in all objects
@@ -197,17 +266,56 @@ impl HitList {
         }
 
         // Compute the AABBs for all objects
-        let (objs, aabbs): (Vec<Object<DynObject, Material>>, Vec<(usize, AABB)>) = dobjs
+        let mut scatters = Vec::new();
+        let mut speculars = Vec::new();
+        let aabbs: Vec<(ObjectIndex, AABB)> = dobjs
             .into_iter()
-            .enumerate()
-            .map(|(i, o)| {
+            .map(|o| {
+                // Compute the AABB, always
                 let aabb = AABB::surround(o.aabb(ts.start), o.aabb(ts.end));
-                (o, (i, aabb))
+
+                // Decide on the type of object
+                let i: ObjectIndex = match split_mode {
+                    SplitMode::LightsOnly => match o.mat.kind() {
+                        ObjectKind::Scatter | ObjectKind::Specular => {
+                            let i = scatters.len();
+                            scatters.push(o);
+                            ObjectIndex::Scatter(i)
+                        },
+                        ObjectKind::Light => {
+                            let i = speculars.len();
+                            speculars.push(o);
+                            ObjectIndex::Specular(i)
+                        },
+                    },
+
+                    SplitMode::ScatterOnly => match o.mat.kind() {
+                        ObjectKind::Scatter => {
+                            let i = scatters.len();
+                            scatters.push(o);
+                            ObjectIndex::Scatter(i)
+                        },
+                        ObjectKind::Light | ObjectKind::Specular => {
+                            let i = speculars.len();
+                            speculars.push(o);
+                            ObjectIndex::Specular(i)
+                        },
+                    },
+
+                    SplitMode::ScatterAll => {
+                        let i = scatters.len();
+                        scatters.push(o);
+                        ObjectIndex::Scatter(i)
+                    },
+                };
+
+                // Done
+                (i, aabb)
             })
-            .unzip();
+            .collect();
 
         // There are always objects!
-        Self { aabbs: Some(BVHNode::new(aabbs)), ts: [ts.start, ts.end], objs }
+        Self { aabbs: Some(BVHNode::new(aabbs)), ts: [ts.start, ts.end], scatters, speculars }
     }
 }
 
@@ -226,7 +334,7 @@ impl HitList {
     /// The compute AABB for this node.
     #[inline]
     pub fn recompute_aabbs(&mut self, ts: Range<u64>) -> AABB {
-        if let Some(node) = &mut self.aabbs { node.recompute_aabbs(&self.objs, [ts.start, ts.end]) } else { AABB::zeroes() }
+        if let Some(node) = &mut self.aabbs { node.recompute_aabbs(&self.scatters, &self.speculars, [ts.start, ts.end]) } else { AABB::zeroes() }
     }
 
     /// Rebalances the BVH tree behind this list.
@@ -251,7 +359,7 @@ impl HitList {
 
     /// Returns the number of objec`T`s in the HitTree.
     #[inline]
-    pub const fn len(&self) -> usize { self.objs.len() }
+    pub const fn len(&self) -> usize { self.scatters.len() + self.speculars.len() }
 }
 
 // Interfaces
@@ -288,21 +396,22 @@ impl HitList {
 
         // Search through the nodes to find the correct hit
         let Some(aabbs) = &self.aabbs else { return None };
-        let mut hits: Vec<(Interval, usize)> = Vec::new();
+        let mut hits: Vec<(Interval, ObjectIndex)> = Vec::new();
         aabbs.hittest(ray, t_min, t_max, &mut hits);
         if hits.is_empty() {
             // No hits is simple
             return None;
         } else if let [(_, obj)] = hits.as_slice() {
             // One hit too: simply only test that object
-            return self.objs[*obj].hit_full(ray, t_min, t_max, env);
+            let obj = obj.get(&self.scatters, &self.speculars);
+            return obj.hit_full(ray, t_min, t_max, env);
         }
 
         // Else, sort the hits and group them into overlapping intervals
         // https://www.geeksforgeeks.org/dsa/merging-intervals/
         hits.sort_by(|(i1, _), (i2, _)| i1.min().total_cmp(&i2.min()));
         let mut last_int: Option<Interval> = None;
-        let mut hit_groups: Vec<Vec<(Interval, usize)>> = Vec::new();
+        let mut hit_groups: Vec<Vec<(Interval, ObjectIndex)>> = Vec::new();
         for (range, hit) in hits {
             // If there is a previous group and it overlaps...
             if let Some(li) = last_int
@@ -322,7 +431,8 @@ impl HitList {
         for group in hit_groups {
             let mut res: Option<HitRecord> = None;
             for (_, obj) in group {
-                match (res, self.objs[obj].hit_full(ray, t_min, t_max, env)) {
+                let obj = obj.get(&self.scatters, &self.speculars);
+                match (res, obj.hit_full(ray, t_min, t_max, env)) {
                     (Some(prev), Some(hit)) if prev.data.t > hit.data.t => res = Some(hit),
                     (None, hit) => res = hit,
                     _ => continue,
@@ -360,22 +470,22 @@ impl HitList {
 }
 impl<'a> IntoIterator for &'a HitList {
     type Item = &'a Object<DynObject, Material>;
-    type IntoIter = std::slice::Iter<'a, Object<DynObject, Material>>;
+    type IntoIter = std::iter::Chain<std::slice::Iter<'a, Object<DynObject, Material>>, std::slice::Iter<'a, Object<DynObject, Material>>>;
 
     #[inline]
-    fn into_iter(self) -> Self::IntoIter { self.objs.iter() }
+    fn into_iter(self) -> Self::IntoIter { self.scatters.iter().chain(self.speculars.iter()) }
 }
 impl<'a> IntoIterator for &'a mut HitList {
     type Item = &'a mut Object<DynObject, Material>;
-    type IntoIter = std::slice::IterMut<'a, Object<DynObject, Material>>;
+    type IntoIter = std::iter::Chain<std::slice::IterMut<'a, Object<DynObject, Material>>, std::slice::IterMut<'a, Object<DynObject, Material>>>;
 
     #[inline]
-    fn into_iter(self) -> Self::IntoIter { self.objs.iter_mut() }
+    fn into_iter(self) -> Self::IntoIter { self.scatters.iter_mut().chain(self.speculars.iter_mut()) }
 }
 impl IntoIterator for HitList {
     type Item = Object<DynObject, Material>;
-    type IntoIter = std::vec::IntoIter<Object<DynObject, Material>>;
+    type IntoIter = std::iter::Chain<std::vec::IntoIter<Object<DynObject, Material>>, std::vec::IntoIter<Object<DynObject, Material>>>;
 
     #[inline]
-    fn into_iter(self) -> Self::IntoIter { self.objs.into_iter() }
+    fn into_iter(self) -> Self::IntoIter { self.scatters.into_iter().chain(self.speculars.into_iter()) }
 }

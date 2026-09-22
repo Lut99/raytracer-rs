@@ -22,7 +22,7 @@ use humanlog::{DebugMode, HumanLogger};
 use log::{debug, error, info};
 use raytracer::common::input::Dimensions;
 use raytracer::generate;
-use raytracer::hitlist::HitList;
+use raytracer::hitlist::{HitList, SplitMode};
 use raytracer::math::{AABB, Camera, Colour, Vec3};
 use raytracer::render::backends::multi::{MultiThreadRenderer, MultiThreadRendererConfig};
 use raytracer::render::backends::single::SingleThreadRenderer;
@@ -110,6 +110,9 @@ struct RenderArguments {
                 setting to '0' not even fires the ray. If omitted, uses the value from the scene file."
     )]
     ray_max_depth: Option<usize>,
+    /// Determines the mode of splitting objects between scattering and specular materials.
+    #[clap(long, default_value = "scatter_only")]
+    split_mode: SplitMode,
 
     /// A once-more nested subcommand that defines what type of media to render.
     #[clap(subcommand)]
@@ -236,7 +239,7 @@ fn main() -> ExitCode {
                             return ExitCode::FAILURE;
                         }
                     }
-                    let list: HitList = HitList::with_objs(scene.objects, 0u64..u64::from(scene.camera.shutter_time) + 1u64);
+                    let list: HitList = HitList::with_objs(render.split_mode, 0u64..u64::from(scene.camera.shutter_time) + 1u64, scene.objects);
 
                     // Now render based on the backend
                     let output: Image = match render.backend {
@@ -536,7 +539,7 @@ fn main() -> ExitCode {
                     }
 
                     // Convert that to a static HitList
-                    let list: HitList = HitList::with_objs(objects, 0u64..cover.shutter_time + 1u64);
+                    let list: HitList = HitList::with_objs(render.split_mode, 0u64..cover.shutter_time + 1u64, objects);
                     let dims: (u32, u32) = if let Some(dims) = render.dims { (dims.0.into(), dims.1.into()) } else { (800, 600) };
                     let cam = match cover.book {
                         Book::OneWeekend => Camera::new(
