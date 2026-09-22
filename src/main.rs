@@ -541,7 +541,7 @@ fn main() -> ExitCode {
                     let cam = match cover.book {
                         Book::OneWeekend => Camera::new(
                             dims,
-                            100,
+                            render.n_samples.unwrap_or_else(|| 100.try_into().unwrap()).into(),
                             20.0,
                             0.6,
                             10.0,
@@ -552,7 +552,7 @@ fn main() -> ExitCode {
                         ),
                         Book::NextWeek => Camera::new(
                             dims,
-                            5000,
+                            render.n_samples.unwrap_or_else(|| 5000.try_into().unwrap()).into(),
                             40.0,
                             0.0,
                             0.0,
