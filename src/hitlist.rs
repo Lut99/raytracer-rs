@@ -8,10 +8,12 @@
 use std::ops::Range;
 
 use clap::ValueEnum;
+use log::debug;
 
 use crate::math::aabb::Interval;
 use crate::math::{AABB, Ray};
 use crate::specifications::materials::{Material, ObjectKind};
+use crate::specifications::objects::pdf::LightPDF;
 use crate::specifications::objects::{BoundingBoxable, DynObject, HitData, HitRecord, Hittable, JsonObject, Object};
 use crate::specifications::scene::Environment;
 
@@ -315,6 +317,7 @@ impl HitList {
             .collect();
 
         // There are always objects!
+        debug!("Built hitlist with {} scatter object(s) / {} specular object(s)", scatters.len(), speculars.len());
         Self { aabbs: Some(BVHNode::new(aabbs)), ts: [ts.start, ts.end], scatters, speculars }
     }
 }
@@ -347,6 +350,20 @@ impl HitList {
         // Re-assemble the list from scratch. I know, I know...
         self.aabbs = self.aabbs.take().map(|node| BVHNode::new(node.into_iter().collect()))
     }
+
+
+
+    /// Returns a PDF with all of the samplable objects.
+    ///
+    /// Which objects specifically, depends on the [`SplitMode`] given when creating the list:
+    /// - [`SplitMode::LightsOnly`]: Only all lights are returned.
+    /// - [`SplitMode::ScatterOnly`]: The lights and specular objects are returned.
+    /// - [`SplitMode::ScatterAll`]: Nothing is returned.
+    ///
+    /// # Returns
+    /// A [`LightPDF`] that samples towards all objects that might produce light.
+    #[inline]
+    pub fn light_pdf(&self) -> LightPDF<std::slice::Iter<'_, Object<DynObject, Material>>> { LightPDF { objs: self.speculars.iter() } }
 
 
 

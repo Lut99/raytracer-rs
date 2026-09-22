@@ -12,8 +12,10 @@ use serde::{Deserialize, Serialize};
 
 use super::super::Loadable;
 use super::super::scene::Environment;
+use super::pdf::PDF;
 use super::{BoundingBoxable, HitData, Hittable};
 use crate::math::{AABB, Ray, Vec3};
+use crate::random;
 
 
 /***** HELPER FUNCTIONS *****/
@@ -122,6 +124,13 @@ impl BoundingBoxable for Triangle {
             .surround(AABB::from_points(self.pos + self.u, self.pos + self.v))
     }
 }
+impl PDF for Triangle {
+    #[inline]
+    fn value(&self, direct: Ray, _env: &Environment) -> f64 { todo!() }
+
+    #[inline]
+    fn sample(&self, _t_us: u64, origin: Vec3) -> Vec3 { todo!() }
+}
 impl Hittable for Triangle {
     #[inline]
     fn hit(&self, ray: Ray, t_min: f64, t_max: f64, _env: &Environment) -> Option<HitData> {
@@ -166,6 +175,29 @@ impl BoundingBoxable for Quad {
         let diag1 = AABB::from_points(self.pos, self.pos + self.u + self.v);
         let diag2 = AABB::from_points(self.pos + self.u, self.pos + self.v);
         diag1.surround(diag2)
+    }
+}
+impl PDF for Quad {
+    #[inline]
+    fn value(&self, direct: Ray, env: &Environment) -> f64 {
+        // Do the expensive, harder test
+        let Some(rec) = self.hit(direct, 0.001, f64::INFINITY, env) else { return 0.0 };
+
+        // Recompute the normal
+        let un: Vec3 = self.u.cross(self.v);
+
+        // Compute the chance of this hit
+        let direct: Vec3 = direct.direct;
+        let dist_squared: f64 = rec.t * rec.t * direct.length2();
+        let cosine = f64::abs(direct.dot(rec.normal) / direct.length());
+        dist_squared / (cosine * un.length())
+    }
+
+    #[inline]
+    fn sample(&self, _t_us: u64, origin: Vec3) -> Vec3 {
+        // Pick a random point in the Quad
+        let p = self.pos + (random::f64() * self.u) + (random::f64() * self.v);
+        p - origin
     }
 }
 impl Hittable for Quad {

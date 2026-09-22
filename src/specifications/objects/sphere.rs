@@ -21,6 +21,7 @@ use serde::{Deserialize, Serialize};
 use super::super::Loadable;
 use super::super::scene::Environment;
 use super::hitrecord::HitData;
+use super::pdf::PDF;
 use super::{BoundingBoxable, Hittable};
 use crate::math::{AABB, Ray, Vec3};
 
@@ -105,6 +106,13 @@ impl Loadable for Sphere {
 impl BoundingBoxable for Sphere {
     #[inline]
     fn aabb(&self, _t_us: u64) -> AABB { sphere_aabb(self.center, self.radius) }
+}
+impl PDF for Sphere {
+    #[inline]
+    fn value(&self, direct: Ray, _env: &Environment) -> f64 { todo!() }
+
+    #[inline]
+    fn sample(&self, _t_us: u64, origin: Vec3) -> Vec3 { todo!() }
 }
 impl Hittable for Sphere {
     fn hit(&self, ray: Ray, t_min: f64, t_max: f64, _env: &Environment) -> Option<HitData> { sphere_hit(self.center, self.radius, ray, t_min, t_max) }

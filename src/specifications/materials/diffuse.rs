@@ -20,13 +20,13 @@ use std::path::Path;
 use serde::{Deserialize, Serialize};
 
 use super::super::Loadable;
+use super::super::objects::HitData;
+use super::super::objects::pdf::{CosinePDF, PDF as _};
 use super::super::scene::Environment;
+use super::super::textures::{Texture, Textured};
 use super::Scattering;
-use crate::math::pdf::{CosinePDF, PDF as _};
 use crate::math::{Colour, ONB, Ray, Vec3};
 use crate::random;
-use crate::specifications::objects::HitData;
-use crate::specifications::textures::{Texture, Textured};
 
 
 /***** HELPER FUNCTIONS *****/
@@ -79,9 +79,9 @@ pub fn random3_cosine_direction() -> Vec3 {
 
 /// Implements the PDF used by Lambertian scattering.
 #[inline]
-pub fn lambertian_pdf(record: &HitData, scattered: Ray) -> f64 {
+pub fn lambertian_pdf(record: &HitData, scattered: Ray, env: &Environment) -> f64 {
     let pdf = CosinePDF { onb: ONB::from_single_axis(record.normal) };
-    pdf.value(scattered.direct)
+    pdf.value(scattered, env)
 }
 
 /// Implements Lambertian scattering logic.
@@ -90,7 +90,7 @@ pub fn lambertian_scatter(ray: Ray, record: &HitData, colour: Colour) -> (Option
     // Get a coordinate base around the hit normal, then get a random direction in that unit sphere
     // to find a random scatter direction.
     let pdf = CosinePDF { onb: ONB::from_single_axis(record.normal) };
-    let scattered = Ray::with_time(record.hit, pdf.sample().unit(), ray.time);
+    let scattered = Ray::with_time(record.hit, pdf.sample(ray.time, record.hit).unit(), ray.time);
 
     // Now we can simply return the new ray to bounce and the colour
     // NOTE: By construction, `uvw.w` == `record.normal` but unit)
@@ -158,7 +158,7 @@ impl Loadable for Lambertian {
 }
 impl Scattering for Lambertian {
     #[inline]
-    fn pdf(&self, _ray: Ray, record: &HitData, _env: &Environment, scattered: Ray) -> f64 { lambertian_pdf(record, scattered) }
+    fn pdf(&self, _ray: Ray, record: &HitData, env: &Environment, scattered: Ray) -> f64 { lambertian_pdf(record, scattered, env) }
 
     #[inline]
     fn scatter(&self, ray: Ray, record: &HitData, _env: &Environment) -> (Option<Ray>, Colour, f64) { lambertian_scatter(ray, record, self.colour) }
@@ -180,7 +180,7 @@ impl<T: Loadable> Loadable for LambertianTexture<T> {
 }
 impl<T: Textured> Scattering for LambertianTexture<T> {
     #[inline]
-    fn pdf(&self, _ray: Ray, record: &HitData, _env: &Environment, scattered: Ray) -> f64 { lambertian_pdf(record, scattered) }
+    fn pdf(&self, _ray: Ray, record: &HitData, env: &Environment, scattered: Ray) -> f64 { lambertian_pdf(record, scattered, env) }
 
     #[inline]
     fn scatter(&self, ray: Ray, record: &HitData, _env: &Environment) -> (Option<Ray>, Colour, f64) {

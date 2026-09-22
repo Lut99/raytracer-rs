@@ -43,6 +43,26 @@ pub fn f64int(min: f64, max: f64) -> f64 {
 
 
 
+/// Returns a random index in the given range.
+///
+/// # Arguments
+/// - `min`: The minimum value (inclusive).
+/// - `max`: The maximum value (exclusive).
+///
+/// # Returns
+/// A random [`f64`] in the range `[min, max)`.
+#[inline]
+#[cfg_attr(debug_assertions, track_caller)]
+pub fn usizeint(min: usize, max: usize) -> usize {
+    #[cfg(debug_assertions)]
+    if min > max {
+        panic!("Cannot draw a random number in empty range [{min}, {max})")
+    }
+    fastrand::usize(min..max)
+}
+
+
+
 impl Vec3 {
     /// Returns a random 3D vector with each element the range `[0, 1)`.
     ///

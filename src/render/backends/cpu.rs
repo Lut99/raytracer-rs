@@ -7,6 +7,7 @@
 
 use crate::hitlist::HitList;
 use crate::math::{Colour, Ray, Vec3};
+use crate::specifications::objects::pdf::PDF;
 use crate::specifications::scene::{Background, Environment};
 
 
@@ -36,11 +37,24 @@ pub fn ray_colour(ray: Ray, world: &HitList, depth: usize, env: &Environment) ->
             // Scatter the ray now we've found it
             match record.scatter(ray, env) {
                 // Return the recursive bounce of the returned ray + whatever we ourselves emit
-                (Some(scatter), attenuation, pdf_value) => {
+                (Some(mut scatter), attenuation, pdf_value) => {
                     // Update: _if_ we hit, then compensate the found colour value for the bias
                     // introduced by the scattering PDF
+
+                    // Compute the PDF value, which averages the found one with the lights one
+                    let lights_pdf = world.light_pdf();
+                    let pdf_value = 0.5 * pdf_value + 0.5 * lights_pdf.value(scatter, env);
+
+                    // Compute the new scatter, which is one of the two rays, randomly
+                    if fastrand::f64() < 0.5 {
+                        scatter = Ray::with_time(record.data.hit, lights_pdf.sample(ray.time, record.data.hit).unit(), ray.time);
+                    }
                     let scattering_pdf = record.pdf(ray, env, scatter);
-                    colour_from_emission + ((attenuation * scattering_pdf * ray_colour(scatter, world, depth - 1, env)) / pdf_value)
+
+                    // Finally, use them in the result
+                    let sample_colour = ray_colour(scatter, world, depth - 1, env);
+                    println!("{:?}", colour_from_emission + ((attenuation * scattering_pdf * sample_colour) / pdf_value));
+                    colour_from_emission + ((attenuation * scattering_pdf * sample_colour) / pdf_value)
                 },
 
                 // We can simply return the emitted colour

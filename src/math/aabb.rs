@@ -22,6 +22,7 @@ use serde::{Deserialize, Serialize};
 
 use super::ray::Ray;
 use super::vec3::Vec3;
+use crate::specifications::objects::pdf::PDF;
 use crate::specifications::objects::{BoundingBoxable, HitData, Hittable};
 use crate::specifications::scene::Environment;
 
@@ -328,6 +329,13 @@ impl AABB {
 impl BoundingBoxable for AABB {
     #[inline]
     fn aabb(&self, _t_us: u64) -> AABB { *self }
+}
+impl PDF for AABB {
+    #[inline]
+    fn value(&self, direct: Ray, _env: &Environment) -> f64 { todo!() }
+
+    #[inline]
+    fn sample(&self, _t_us: u64, origin: Vec3) -> Vec3 { todo!() }
 }
 impl Hittable for AABB {
     #[inline]

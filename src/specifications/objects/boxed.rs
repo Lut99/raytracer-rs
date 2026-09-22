@@ -11,9 +11,10 @@ use std::path::Path;
 use serde::{Deserialize, Serialize};
 
 use super::super::Loadable;
+use super::super::scene::Environment;
+use super::pdf::PDF;
 use super::{BoundingBoxable, HitData, Hittable};
-use crate::math::{AABB, Ray};
-use crate::specifications::scene::Environment;
+use crate::math::{AABB, Ray, Vec3};
 
 
 /***** LIBRARY *****/
@@ -34,6 +35,13 @@ impl Loadable for Box {
 impl BoundingBoxable for Box {
     #[inline]
     fn aabb(&self, _t_us: u64) -> AABB { self.aabb }
+}
+impl PDF for Box {
+    #[inline]
+    fn value(&self, direct: Ray, _env: &Environment) -> f64 { todo!() }
+
+    #[inline]
+    fn sample(&self, _t_us: u64, origin: Vec3) -> Vec3 { todo!() }
 }
 impl Hittable for Box {
     #[inline]

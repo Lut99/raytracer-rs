@@ -22,6 +22,7 @@ pub mod group;
 mod hitrecord;
 #[cfg(feature = "obj")]
 pub mod model;
+pub mod pdf;
 pub mod plane;
 pub mod sphere;
 
@@ -36,6 +37,7 @@ pub use boxed::Box;
 pub use group::Group;
 pub use hitrecord::*;
 pub use model::Model;
+use pdf::PDF;
 pub use plane::{Quad, Triangle};
 use serde::{Deserialize, Serialize};
 pub use sphere::Sphere;
@@ -46,7 +48,7 @@ use super::materials::{Material, Scattering};
 use super::scene::Environment;
 use super::transforms::{RotateX, RotateY, RotateZ, Transform, Transforming as _, Translate};
 use super::volumes::{Volume, Volumizing as _};
-use crate::math::{AABB, Ray};
+use crate::math::{AABB, Ray, Vec3};
 
 
 /***** MACRO RULES *****/
@@ -294,6 +296,26 @@ impl<T: BoundingBoxable, M> BoundingBoxable for Object<T, M> {
         aabb
     }
 }
+impl<T: PDF, M> PDF for Object<T, M> {
+    #[inline]
+    fn value(&self, mut direct: Ray, env: &Environment) -> f64 {
+        // Transform the ray accordingly, first
+        for trans in self.transforms.iter() {
+            direct = trans.transform(direct.time, direct);
+        }
+        self.obj.value(direct, env)
+    }
+
+    #[inline]
+    fn sample(&self, t_us: u64, origin: Vec3) -> Vec3 {
+        // Transform the ray accordingly, first
+        let mut origin = Ray::new(origin, Vec3::zeroes());
+        for trans in self.transforms.iter() {
+            origin = trans.transform(t_us, origin);
+        }
+        self.obj.sample(t_us, origin.origin)
+    }
+}
 impl<T: Hittable, M> Hittable for Object<T, M> {
     #[inline]
     fn hit(&self, mut ray: Ray, t_min: f64, t_max: f64, env: &Environment) -> Option<HitData> {
@@ -392,6 +414,21 @@ macro_rules! dyn_object_impl {
             fn aabb(&self, t_us: u64) -> AABB {
                 match self {
                     $(Self::$obj(o) => o.aabb(t_us),)*
+                }
+            }
+        }
+        impl PDF for DynObject {
+            #[inline]
+            fn value(&self, direct: Ray, env: &Environment) -> f64 {
+                match self {
+                    $(Self::$obj(o) => o.value(direct, env),)*
+                }
+            }
+
+            #[inline]
+            fn sample(&self, t_us: u64, origin: Vec3) -> Vec3 {
+                match self {
+                    $(Self::$obj(o) => o.sample(t_us, origin),)*
                 }
             }
         }
