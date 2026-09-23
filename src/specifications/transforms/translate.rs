@@ -47,13 +47,13 @@ impl Transforming for Translate {
     }
 
     #[inline]
-    fn transform(&self, _t_us: u64, mut ray: Ray) -> Ray {
+    fn transform(&self, mut ray: Ray) -> Ray {
         ray.origin -= self.pos;
         ray
     }
 
     #[inline]
-    fn transform_back(&self, _t_us: u64, mut rec: HitData) -> HitData {
+    fn transform_back(&self, mut rec: HitData) -> HitData {
         rec.hit += self.pos;
         rec
     }
@@ -107,9 +107,9 @@ impl Transforming for AnimatedTranslate {
     }
 
     #[inline]
-    fn transform(&self, t_us: u64, mut ray: Ray) -> Ray {
+    fn transform(&self, mut ray: Ray) -> Ray {
         // Compute the position for this timestep
-        let dpos: Vec3 = self.compute_dpos(t_us);
+        let dpos: Vec3 = self.compute_dpos(ray.time);
 
         // Run the update
         ray.origin -= dpos;
@@ -117,9 +117,9 @@ impl Transforming for AnimatedTranslate {
     }
 
     #[inline]
-    fn transform_back(&self, t_us: u64, mut rec: HitData) -> HitData {
+    fn transform_back(&self, mut rec: HitData) -> HitData {
         // Compute the position for this timestep
-        let dpos: Vec3 = self.compute_dpos(t_us);
+        let dpos: Vec3 = self.compute_dpos(rec.time);
 
         // Run the update
         rec.hit += dpos;

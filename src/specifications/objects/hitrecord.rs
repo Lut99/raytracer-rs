@@ -18,6 +18,8 @@ pub struct HitData {
     pub hit: Vec3,
     /// The (closest) point where the [`Ray`] hits an object, given as distance from the ray's origin.
     pub t: f64,
+    /// The time of the hit.
+    pub time: u64,
     /// The surface normal on the point we are hitting.
     pub normal: Vec3,
     /// Whether we are hitting the front face of the object or the backface.
@@ -46,7 +48,7 @@ impl HitData {
         let normal: Vec3 = if front_face { outward_normal } else { -outward_normal };
 
         // Return ourselves
-        Self { hit, t, normal, front_face, uv }
+        Self { hit, t, time: ray.time, normal, front_face, uv }
     }
 }
 

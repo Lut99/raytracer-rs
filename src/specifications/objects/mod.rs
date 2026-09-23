@@ -369,29 +369,42 @@ impl<T: PDF, M> PDF for Object<T, M> {
     #[inline]
     fn value(&self, mut direct: Ray, env: &Environment) -> f64 {
         // Transform the ray accordingly, first
-        for trans in self.transforms.iter() {
-            direct = trans.transform(direct.time, direct);
+        for trans in self.transforms.iter().rev() {
+            direct = trans.transform(direct);
         }
+
+        // Compute the probability it hit
         self.obj.value(direct, env)
     }
 
     #[inline]
     fn sample(&self, t_us: u64, origin: Vec3) -> Vec3 {
         // Transform the ray accordingly, first
+        // A bit ugly, going thru rays, but oh well...
         let mut origin = Ray::new(origin, Vec3::zeroes());
-        for trans in self.transforms.iter() {
-            origin = trans.transform(t_us, origin);
+        for trans in self.transforms.iter().rev() {
+            origin = trans.transform(origin);
         }
-        self.obj.sample(t_us, origin.origin)
+
+        // Sample a new point
+        let p = self.obj.sample(t_us, origin.origin);
+
+        // Transform it back
+        // A bit ugly, going thru hitdatas, but oh well...
+        let mut rec = HitData::new(Ray::zeroes(), p, 0.0, Vec3::zeroes(), (0.0, 0.0));
+        for trans in self.transforms.iter() {
+            // Jump through some hoops to translate back...
+            rec = trans.transform_back(rec);
+        }
+        rec.hit
     }
 }
 impl<T: Hittable, M> Hittable for Object<T, M> {
     #[inline]
     fn hit(&self, mut ray: Ray, t_min: f64, t_max: f64, env: &Environment) -> Option<HitData> {
         // First, transform the ray on the way there...
-        let t_us: u64 = ray.time;
         for trans in self.transforms.iter().rev() {
-            ray = trans.transform(t_us, ray);
+            ray = trans.transform(ray);
         }
 
         // Then decide how to hit the object
@@ -418,7 +431,7 @@ impl<T: Hittable, M> Hittable for Object<T, M> {
 
         // Transform the result back
         for trans in self.transforms.iter() {
-            rec = trans.transform_back(t_us, rec);
+            rec = trans.transform_back(rec);
         }
         Some(rec)
     }

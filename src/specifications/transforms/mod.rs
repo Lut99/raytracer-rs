@@ -30,10 +30,10 @@ macro_rules! transforming_ptr_impl {
             fn transform_aabb(&self, t_us: u64, aabb: AABB) -> AABB { <T as Transforming>::transform_aabb(self, t_us, aabb) }
 
             #[inline]
-            fn transform(&self, t_us: u64, ray: Ray) -> Ray { <T as Transforming>::transform(self, t_us, ray) }
+            fn transform(&self, ray: Ray) -> Ray { <T as Transforming>::transform(self, ray) }
 
             #[inline]
-            fn transform_back(&self, t_us: u64, rec: HitData) -> HitData { <T as Transforming>::transform_back(self, t_us, rec) }
+            fn transform_back(&self, rec: HitData) -> HitData { <T as Transforming>::transform_back(self, rec) }
         }
     };
     ($ty:ty) => {
@@ -42,10 +42,10 @@ macro_rules! transforming_ptr_impl {
             fn transform_aabb(&self, t_us: u64, aabb: AABB) -> AABB { <T as Transforming>::transform_aabb(self, t_us, aabb) }
 
             #[inline]
-            fn transform(&self, t_us: u64, ray: Ray) -> Ray { <T as Transforming>::transform(self, t_us, ray) }
+            fn transform(&self, ray: Ray) -> Ray { <T as Transforming>::transform(self, ray) }
 
             #[inline]
-            fn transform_back(&self, t_us: u64, rec: HitData) -> HitData { <T as Transforming>::transform_back(self, t_us, rec) }
+            fn transform_back(&self, rec: HitData) -> HitData { <T as Transforming>::transform_back(self, rec) }
         }
     };
 }
@@ -73,24 +73,22 @@ pub trait Transforming {
     /// this.
     ///
     /// # Arguments
-    /// - `t_us`: The time, in us since the start of the scene, at which the transformation needs to occur.
     /// - `ray`: The [`Ray`] to transform.
     ///
     /// # Returns
     /// A new [`Ray`] in transformed space.
-    fn transform(&self, t_us: u64, ray: Ray) -> Ray;
+    fn transform(&self, ray: Ray) -> Ray;
 
     /// Transforms a Ray shot at an object back into normal space.
     ///
     /// This is executed after an object's hit. [`Transform::transform()`] is called before.
     ///
     /// # Arguments
-    /// - `t_us`: The time, in us since the start of the scene, at which the transformation needs to occur.
     /// - `rec`: The [`HitData`] in transformed space to transform back.
     ///
     /// # Returns
     /// A new [`HitData`] in transformed space.
-    fn transform_back(&self, t_us: u64, rec: HitData) -> HitData;
+    fn transform_back(&self, rec: HitData) -> HitData;
 }
 
 // Pointer-like impls
@@ -133,16 +131,16 @@ macro_rules! transform_impl {
             }
 
             #[inline]
-            fn transform(&self, t_us: u64, ray: Ray) -> Ray {
+            fn transform(&self, ray: Ray) -> Ray {
                 match self {
-                    $(Self::$obj(o) => o.transform(t_us, ray),)*
+                    $(Self::$obj(o) => o.transform(ray),)*
                 }
             }
 
             #[inline]
-            fn transform_back(&self, t_us: u64, rec: HitData) -> HitData {
+            fn transform_back(&self, rec: HitData) -> HitData {
                 match self {
-                    $(Self::$obj(o) => o.transform_back(t_us, rec),)*
+                    $(Self::$obj(o) => o.transform_back(rec),)*
                 }
             }
         }
