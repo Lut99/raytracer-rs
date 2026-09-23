@@ -41,20 +41,19 @@ pub fn ray_colour(ray: Ray, world: &HitList, depth: usize, env: &Environment) ->
                     // Update: _if_ we hit, then compensate the found colour value for the bias
                     // introduced by the scattering PDF
 
-                    // Compute the PDF value, which averages the found one with the lights one
-                    let lights_pdf = world.light_pdf();
-                    let pdf_value = 0.5 * pdf_value + 0.5 * lights_pdf.value(scatter, env);
-
                     // Compute the new scatter, which is one of the two rays, randomly
+                    let lights_pdf = world.light_pdf();
                     if fastrand::f64() < 0.5 {
                         scatter = Ray::with_time(record.data.hit, lights_pdf.sample(ray.time, record.data.hit).unit(), ray.time);
                     }
+
+                    // Compute the PDF values based on the scatter, which averages the found one with the lights one
+                    let comb_pdf_value = 0.5 * pdf_value + 0.5 * lights_pdf.value(scatter, env);
                     let scattering_pdf = record.pdf(ray, env, scatter);
 
                     // Finally, use them in the result
                     let sample_colour = ray_colour(scatter, world, depth - 1, env);
-                    println!("{:?}", colour_from_emission + ((attenuation * scattering_pdf * sample_colour) / pdf_value));
-                    colour_from_emission + ((attenuation * scattering_pdf * sample_colour) / pdf_value)
+                    colour_from_emission + ((attenuation * scattering_pdf * sample_colour) / comb_pdf_value)
                 },
 
                 // We can simply return the emitted colour
