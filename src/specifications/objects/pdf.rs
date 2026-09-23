@@ -7,6 +7,7 @@
 //
 
 use std::cell::{Ref, RefMut};
+use std::convert::Infallible;
 use std::f64::consts::PI;
 use std::rc::Rc;
 use std::sync::{Arc, MutexGuard, RwLockReadGuard, RwLockWriteGuard};
@@ -73,6 +74,15 @@ pub trait PDF {
     fn sample(&self, t_us: u64, origin: Vec3) -> Vec3;
 }
 
+// Std impls
+impl PDF for Infallible {
+    #[inline]
+    fn value(&self, _direct: Ray, _env: &Environment) -> f64 { unreachable!() }
+
+    #[inline]
+    fn sample(&self, _t_us: u64, _origin: Vec3) -> Vec3 { unreachable!() }
+}
+
 // Pointer-like impls
 pdf_ptr_impl!('a, &'a T);
 pdf_ptr_impl!('a, &'a mut T);
@@ -94,6 +104,7 @@ pdf_ptr_impl!('a, parking_lot::MutexGuard<'a, T>);
 
 /***** LIBRARY *****/
 /// A uniform PDF over the unit sphere.
+#[derive(Clone, Copy, Debug)]
 pub struct UnitPDF;
 
 // Interfaces
@@ -108,6 +119,7 @@ impl PDF for UnitPDF {
 
 
 /// Cosine PDF over the unit sphere.
+#[derive(Clone, Copy, Debug)]
 pub struct CosinePDF {
     /// The orthonormal basis for coordinates on the unit sphere.
     pub onb: ONB,
@@ -128,6 +140,7 @@ impl PDF for CosinePDF {
 
 
 /// PDF over objects.
+#[derive(Clone, Copy, Debug)]
 pub struct LightPDF<I> {
     /// An iterator yielding the objects to sample from.
     pub objs: I,

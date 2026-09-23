@@ -5,7 +5,7 @@
 //!   Auxillary struct for remembering where a [`Ray`] hit an [`Object`].
 //
 
-use super::super::materials::Scattering;
+use super::super::materials::{ScatterRecord, Scattering};
 use super::super::scene::Environment;
 use crate::math::{Colour, Ray, Vec3};
 
@@ -54,15 +54,15 @@ impl HitData {
 
 /// Defines everything we want to know about a hit.
 #[derive(Clone, Copy)]
-pub struct HitRecord<'a> {
+pub struct HitRecord<M> {
     /// The material that we hit.
-    pub mat:  &'a dyn Scattering,
+    pub mat:  M,
     /// The data about where we hit it.
     pub data: HitData,
 }
 
 // Constructors
-impl<'a> HitRecord<'a> {
+impl<M> HitRecord<M> {
     /// Constructor for the HitRecord that compute the internal `hit`, `normal` and `front_face` from the given ray, hit distance on that ray and outward normal.
     ///
     /// # Arguments
@@ -76,13 +76,13 @@ impl<'a> HitRecord<'a> {
     /// # Returns
     /// A new `HitRecord` with the math taken care of.
     #[inline]
-    pub fn new(ray: Ray, hit: Vec3, t: f64, outward_normal: Vec3, uv: (f64, f64), mat: &'a dyn Scattering) -> Self {
+    pub fn new(ray: Ray, hit: Vec3, t: f64, outward_normal: Vec3, uv: (f64, f64), mat: M) -> Self {
         Self { mat, data: HitData::new(ray, hit, t, outward_normal, uv) }
     }
 }
 
 // Raytracer
-impl<'a> HitRecord<'a> {
+impl<M: Scattering> HitRecord<M> {
     /// Scatters using the internal [`HitData`]'s material's PDF.
     ///
     /// # Arguments
@@ -100,7 +100,7 @@ impl<'a> HitRecord<'a> {
     /// # Returns
     /// A [`Colour`] of the light being emitted. Is black if this emits nothing.
     #[inline]
-    pub fn emitted(&self) -> Colour { self.mat.emitted(self.data.uv, self.data.hit) }
+    pub fn emitted(&self) -> Colour { self.mat.emitted(&self.data) }
 
     /// Scatters the internal material using the internal [`HitData`].
     ///
@@ -112,5 +112,5 @@ impl<'a> HitRecord<'a> {
     /// A next [`Ray`] after the object's bounce, if any; an attenuated [`Colour`] for this
     /// material and the scattering PDF's correction weight.
     #[inline]
-    pub fn scatter(&self, ray: Ray, env: &Environment) -> (Option<Ray>, Colour, f64) { self.mat.scatter(ray, &self.data, env) }
+    pub fn scatter(&self, ray: Ray, env: &Environment) -> Option<ScatterRecord<M::PDF>> { self.mat.scatter(ray, &self.data, env) }
 }

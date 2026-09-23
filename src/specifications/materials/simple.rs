@@ -19,10 +19,9 @@ use std::path::Path;
 use serde::{Deserialize, Serialize};
 
 use super::super::Loadable;
-use super::super::scene::Environment;
+use super::super::objects::HitData;
 use super::Scattering;
-use crate::math::{Colour, Ray};
-use crate::specifications::objects::HitData;
+use crate::math::Colour;
 
 
 /***** LIBRARY *****/
@@ -39,11 +38,10 @@ impl Loadable for StaticColour {
     fn load(&mut self, _dir: &Path) -> Result<(), Self::Error> { Ok(()) }
 }
 impl Scattering for StaticColour {
+    type PDF = Infallible;
+
     #[inline]
-    fn scatter(&self, _ray: Ray, _record: &HitData, _env: &Environment) -> (Option<Ray>, Colour, f64) {
-        // Compute the normal map colour based on the normal
-        (None, self.colour, 1.0)
-    }
+    fn emitted(&self, _rec: &HitData) -> Colour { self.colour }
 }
 
 
@@ -58,9 +56,8 @@ impl Loadable for NormalMap {
     fn load(&mut self, _dir: &Path) -> Result<(), Self::Error> { Ok(()) }
 }
 impl Scattering for NormalMap {
+    type PDF = Infallible;
+
     #[inline]
-    fn scatter(&self, _ray: Ray, record: &HitData, _env: &Environment) -> (Option<Ray>, Colour, f64) {
-        // Compute the normal map colour based on the normal
-        (None, 0.5 * Colour::new(record.normal.x + 1.0, record.normal.y + 1.0, record.normal.z + 1.0, 2.0), 1.0)
-    }
+    fn emitted(&self, rec: &HitData) -> Colour { 0.5 * Colour::new(rec.normal.x + 1.0, rec.normal.y + 1.0, rec.normal.z + 1.0, 2.0) }
 }

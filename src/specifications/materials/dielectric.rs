@@ -12,12 +12,12 @@ use std::path::Path;
 use serde::{Deserialize, Serialize};
 
 use super::super::Loadable;
+use super::super::objects::HitData;
 use super::super::scene::Environment;
-use super::Scattering;
 use super::metal::reflect;
+use super::{ScatterRecord, Scattering};
 use crate::math::{Colour, Ray, Vec3};
 use crate::random;
-use crate::specifications::objects::HitData;
 
 
 /***** HELPER FUNCTIONS *****/
@@ -90,8 +90,10 @@ impl Loadable for PartialDielectric {
     fn load(&mut self, _dir: &Path) -> Result<(), Self::Error> { Ok(()) }
 }
 impl Scattering for PartialDielectric {
+    type PDF = Infallible;
+
     #[inline]
-    fn scatter(&self, ray: Ray, record: &HitData, env: &Environment) -> (Option<Ray>, Colour, f64) {
+    fn scatter(&self, ray: Ray, record: &HitData, env: &Environment) -> Option<ScatterRecord<Self::PDF>> {
         // NOTE: We are always assuming we are refracting against air here
         let eta_over_eta_prime: f64 =
             if record.front_face { env.air_refraction_index / self.refraction_index } else { self.refraction_index / env.air_refraction_index };
@@ -105,7 +107,7 @@ impl Scattering for PartialDielectric {
         let refracted: Vec3 = refract(unit_direction, record.normal, cos_theta, eta_over_eta_prime);
 
         // Then bounce the ray
-        (Some(Ray::new(record.hit, refracted)), self.colour, 1.0)
+        Some(ScatterRecord::from_ray(self.colour, Ray::new(record.hit, refracted)))
     }
 }
 
@@ -133,8 +135,10 @@ impl Loadable for Dielectric {
     fn load(&mut self, _dir: &Path) -> Result<(), Self::Error> { Ok(()) }
 }
 impl Scattering for Dielectric {
+    type PDF = Infallible;
+
     #[inline]
-    fn scatter(&self, ray: Ray, record: &HitData, env: &Environment) -> (Option<Ray>, Colour, f64) {
+    fn scatter(&self, ray: Ray, record: &HitData, env: &Environment) -> Option<ScatterRecord<Self::PDF>> {
         // NOTE: We are always assuming we are refracting against air here
         let eta_over_eta_prime: f64 =
             if record.front_face { env.air_refraction_index / self.refraction_index } else { self.refraction_index / env.air_refraction_index };
@@ -156,6 +160,6 @@ impl Scattering for Dielectric {
         };
 
         // Then bounce the ray
-        (Some(Ray::new(record.hit, out)), self.colour, 1.0)
+        Some(ScatterRecord::from_ray(self.colour, Ray::new(record.hit, out)))
     }
 }

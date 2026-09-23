@@ -13,8 +13,8 @@ use serde::{Deserialize, Serialize};
 use super::super::Loadable;
 use super::super::objects::HitData;
 use super::super::scene::Environment;
-use super::Scattering;
 use super::diffuse::random3_uniform;
+use super::{ScatterRecord, Scattering};
 use crate::math::{Colour, Ray, Vec3};
 
 
@@ -46,8 +46,10 @@ impl Loadable for Metal {
     fn load(&mut self, _dir: &Path) -> Result<(), Self::Error> { Ok(()) }
 }
 impl Scattering for Metal {
+    type PDF = Infallible;
+
     #[inline]
-    fn scatter(&self, ray: Ray, record: &HitData, _env: &Environment) -> (Option<Ray>, Colour, f64) {
+    fn scatter(&self, ray: Ray, record: &HitData, _env: &Environment) -> Option<ScatterRecord<Self::PDF>> {
         // Compute the scattered ray, making sure the scattered one is not zero
         let reflected: Vec3 = reflect(ray.direct, record.normal);
         // Add some fuzz by offsetting the endpoint of the reflected vector by a small amount.
@@ -56,6 +58,6 @@ impl Scattering for Metal {
         let reflected: Vec3 = reflected.unit() + self.fuzz * random3_uniform();
 
         // Now we can simply return the new ray to bounce and the colour
-        (Some(Ray::with_time(record.hit, reflected, ray.time)), self.colour, 1.0)
+        Some(ScatterRecord::from_ray(self.colour, Ray::with_time(record.hit, reflected, ray.time)))
     }
 }

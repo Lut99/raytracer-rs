@@ -20,10 +20,12 @@ pub mod dielectric;
 pub mod diffuse;
 pub mod metal;
 pub mod phase_function;
+mod scatterrecord;
 pub mod simple;
 
 // Imports & Exports
 use std::cell::{Ref, RefMut};
+use std::convert::Infallible;
 use std::path::Path;
 use std::rc::Rc;
 use std::sync::{Arc, MutexGuard, RwLockReadGuard, RwLockWriteGuard};
@@ -32,14 +34,16 @@ pub use dielectric::{Dielectric, PartialDielectric};
 pub use diffuse::{Diffuse, DiffuseLight, Lambertian, LambertianTexture};
 pub use metal::Metal;
 pub use phase_function::Isotropic;
+pub use scatterrecord::*;
 use serde::{Deserialize, Serialize};
 pub use simple::{NormalMap, StaticColour};
 use thiserror::Error;
 
 use super::Loadable;
+use super::objects::HitData;
+use super::objects::pdf::PDF;
+use super::scene::Environment;
 use crate::math::{Colour, Ray, Vec3};
-use crate::specifications::objects::HitData;
-use crate::specifications::scene::Environment;
 
 
 /***** HELPER MACROS *****/
@@ -47,32 +51,36 @@ use crate::specifications::scene::Environment;
 macro_rules! scattering_ptr_impl {
     ('a, $ty:ty) => {
         impl<'a, T: Scattering> Scattering for $ty {
+            type PDF = <T as Scattering>::PDF;
+
             #[inline]
             fn pdf(&self, ray: Ray, record: &HitData, env: &Environment, scattered: Ray) -> f64 {
                 <T as Scattering>::pdf(self, ray, record, env, scattered)
             }
 
             #[inline]
-            fn emitted(&self, uv: (f64, f64), p: Vec3) -> Colour { <T as Scattering>::emitted(self, uv, p) }
+            fn emitted(&self, rec: &HitData) -> Colour { <T as Scattering>::emitted(self, rec) }
 
             #[inline]
-            fn scatter(&self, ray: Ray, record: &HitData, env: &Environment) -> (Option<Ray>, Colour, f64) {
+            fn scatter(&self, ray: Ray, record: &HitData, env: &Environment) -> Option<ScatterRecord<Self::PDF>> {
                 <T as Scattering>::scatter(self, ray, record, env)
             }
         }
     };
     ($ty:ty) => {
         impl<T: Scattering> Scattering for $ty {
+            type PDF = <T as Scattering>::PDF;
+
             #[inline]
             fn pdf(&self, ray: Ray, record: &HitData, env: &Environment, scattered: Ray) -> f64 {
                 <T as Scattering>::pdf(self, ray, record, env, scattered)
             }
 
             #[inline]
-            fn emitted(&self, uv: (f64, f64), p: Vec3) -> Colour { <T as Scattering>::emitted(self, uv, p) }
+            fn emitted(&self, rec: &HitData) -> Colour { <T as Scattering>::emitted(self, rec) }
 
             #[inline]
-            fn scatter(&self, ray: Ray, record: &HitData, env: &Environment) -> (Option<Ray>, Colour, f64) {
+            fn scatter(&self, ray: Ray, record: &HitData, env: &Environment) -> Option<ScatterRecord<Self::PDF>> {
                 <T as Scattering>::scatter(self, ray, record, env)
             }
         }
@@ -103,6 +111,12 @@ pub enum ObjectKind {
 /***** INTERFACES *****/
 /// The Scattering trait implements any material that we can use to cover an object.
 pub trait Scattering {
+    /// The PDF returned by this object.
+    ///
+    /// If it's never returned, use [`Infallible`].
+    type PDF: PDF;
+
+
     /// Samples the probability of this material scattering a ray in the given direction.
     ///
     /// # Returns
@@ -117,14 +131,12 @@ pub trait Scattering {
     /// Returns the colour of any light emitted by this material.
     ///
     /// # Arguments
-    /// - `uv`: A pair of texture coordinates on the object to return the color of the object's
-    ///   light at that spot.
-    /// - `p`: A spatial position of the object's hitted surface.
+    /// - `rec`: A [`HitData`] describing the hit of the light.
     ///
     /// # Returns
     /// A [`Colour`] of the light being emitted. Is black if this emits nothing.
     #[inline]
-    fn emitted(&self, _uv: (f64, f64), _p: Vec3) -> Colour {
+    fn emitted(&self, _rec: &HitData) -> Colour {
         /* Standard impl: just black */
         Colour::BLACK
     }
@@ -143,14 +155,16 @@ pub trait Scattering {
     /// PDF weight based on the scattered ray.
     ///
     /// If [`None`] is returned for the [`Ray`], then no more bounce is necessary.
-    fn scatter(&self, _ray: Ray, _record: &HitData, _env: &Environment) -> (Option<Ray>, Colour, f64) {
+    fn scatter(&self, _ray: Ray, _record: &HitData, _env: &Environment) -> Option<ScatterRecord<Self::PDF>> {
         /* Standard impl: no scattering */
-        (None, Colour::BLACK, 1.0)
+        None
     }
 }
 
 // Standard impls
 impl Scattering for () {
+    type PDF = Infallible;
+
     #[inline]
     #[track_caller]
     fn pdf(&self, _ray: Ray, _record: &HitData, _env: &Environment, _scattered: Ray) -> f64 {
@@ -159,11 +173,11 @@ impl Scattering for () {
 
     #[inline]
     #[track_caller]
-    fn emitted(&self, _uv: (f64, f64), _p: Vec3) -> Colour { panic!("You called <() as Scattering>::emitted() - this is not implemented") }
+    fn emitted(&self, _rec: &HitData) -> Colour { panic!("You called <() as Scattering>::emitted() - this is not implemented") }
 
     #[inline]
     #[track_caller]
-    fn scatter(&self, _ray: Ray, _record: &HitData, _env: &Environment) -> (Option<Ray>, Colour, f64) {
+    fn scatter(&self, _ray: Ray, _record: &HitData, _env: &Environment) -> Option<ScatterRecord<Self::PDF>> {
         panic!("You called <() as Scattering>::scatter() - this is not implemented")
     }
 }
@@ -222,6 +236,31 @@ macro_rules! material_impl {
 
 
 
+        /// An abstraction over all material's PDFs.
+        #[derive(Clone, Copy, Debug)]
+        pub enum MaterialPDF {
+            $($mat(<$mat as Scattering>::PDF),)*
+        }
+
+        // Interfaces
+        impl PDF for MaterialPDF {
+            #[inline]
+            fn value(&self, direct: Ray, env: &Environment) -> f64 {
+                match self {
+                    $(Self::$mat(p) => p.value(direct, env),)*
+                }
+            }
+
+            #[inline]
+            fn sample(&self, t_us: u64, origin: Vec3) -> Vec3 {
+                match self {
+                    $(Self::$mat(p) => p.sample(t_us, origin),)*
+                }
+            }
+        }
+
+
+
         /// A runtime abstraction of all possible materials.
         #[derive(Clone, Debug, Deserialize, Serialize)]
         #[serde(tag = "type")]
@@ -267,6 +306,8 @@ macro_rules! material_impl {
             }
         }
         impl Scattering for Material {
+            type PDF = MaterialPDF;
+
             #[inline]
             #[track_caller]
             fn pdf(&self, ray: Ray, record: &HitData, env: &Environment, scattered: Ray) -> f64 {
@@ -278,18 +319,18 @@ macro_rules! material_impl {
 
             #[inline]
             #[track_caller]
-            fn emitted(&self, uv: (f64, f64), p: Vec3) -> Colour {
+            fn emitted(&self, rec: &HitData) -> Colour {
                 match self {
-                    $(Self::$mat(m) => m.emitted(uv, p),)*
+                    $(Self::$mat(m) => m.emitted(rec),)*
                     Self::Empty => panic!("Cannot emit anything from the empty material; please specify one"),
                 }
             }
 
             #[inline]
             #[track_caller]
-            fn scatter(&self, ray: Ray, record: &HitData, env: &Environment) -> (Option<Ray>, Colour, f64) {
+            fn scatter(&self, ray: Ray, record: &HitData, env: &Environment) -> Option<ScatterRecord<Self::PDF>> {
                 match self {
-                    $(Self::$mat(m) => m.scatter(ray, record, env),)*
+                    $(Self::$mat(m) => m.scatter(ray, record, env).map(|r| ScatterRecord { attenuation: r.attenuation, ray_or_pdf: r.ray_or_pdf.map_pdf(MaterialPDF::$mat) }),)*
                     Self::Empty => panic!("Cannot scatter anything off the empty material; please specify one"),
                 }
             }

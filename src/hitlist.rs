@@ -14,8 +14,9 @@ use crate::math::aabb::Interval;
 use crate::math::{AABB, Ray};
 use crate::specifications::materials::{Material, ObjectKind};
 use crate::specifications::objects::pdf::LightPDF;
-use crate::specifications::objects::{BoundingBoxable, DynObject, HitData, HitRecord, Hittable, JsonObject, Object};
+use crate::specifications::objects::{BoundingBoxable, DynObject, HitData, HitRecord, Hittable, JsonObject, MaterialOrVolume, Object};
 use crate::specifications::scene::Environment;
+use crate::specifications::volumes::Volume;
 
 
 /***** HELPERS *****/
@@ -186,6 +187,8 @@ impl IntoIterator for BVHNode {
 pub enum SplitMode {
     /// Split only the lights as specular.
     LightsOnly,
+    /// Split only specular objects, not lights or anything.
+    SpecularOnly,
     /// Split only scattering objects as scattering, the rest as specular.
     ScatterOnly,
     /// Split nothing, everything is scattering.
@@ -285,6 +288,19 @@ impl HitList {
                             ObjectIndex::Scatter(i)
                         },
                         ObjectKind::Light => {
+                            let i = speculars.len();
+                            speculars.push(o);
+                            ObjectIndex::Specular(i)
+                        },
+                    },
+
+                    SplitMode::SpecularOnly => match o.mat.kind() {
+                        ObjectKind::Scatter | ObjectKind::Light => {
+                            let i = scatters.len();
+                            scatters.push(o);
+                            ObjectIndex::Scatter(i)
+                        },
+                        ObjectKind::Specular => {
                             let i = speculars.len();
                             speculars.push(o);
                             ObjectIndex::Specular(i)
@@ -405,7 +421,7 @@ impl Hittable for HitList {
     }
 }
 impl HitList {
-    pub fn hit_full(&self, ray: Ray, t_min: f64, t_max: f64, env: &Environment) -> Option<HitRecord<'_>> {
+    pub fn hit_full(&self, ray: Ray, t_min: f64, t_max: f64, env: &Environment) -> Option<HitRecord<MaterialOrVolume<&'_ Material, &'_ Volume>>> {
         #[cfg(debug_assertions)]
         if ray.time < self.ts[0] || ray.time > self.ts[1] {
             panic!("HitTree initialized for time range {:?} cannot compute Ray hit at time {}", self.ts, ray.time);
@@ -446,7 +462,7 @@ impl HitList {
 
         // Now, if we hit, we only need to check objects in the same hit group for closeness!
         for group in hit_groups {
-            let mut res: Option<HitRecord> = None;
+            let mut res: Option<HitRecord<_>> = None;
             for (_, obj) in group {
                 let obj = obj.get(&self.scatters, &self.speculars);
                 match (res, obj.hit_full(ray, t_min, t_max, env)) {

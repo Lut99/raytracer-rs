@@ -111,8 +111,8 @@ struct RenderArguments {
     )]
     ray_max_depth: Option<usize>,
     /// Determines the mode of splitting objects between scattering and specular materials.
-    #[clap(long, default_value = "scatter_only")]
-    split_mode: SplitMode,
+    #[clap(long)]
+    split_mode: Option<SplitMode>,
 
     /// A once-more nested subcommand that defines what type of media to render.
     #[clap(subcommand)]
@@ -159,6 +159,8 @@ enum Book {
     OneWeekend,
     #[clap(alias = "book2")]
     NextWeek,
+    #[clap(alias = "book3")]
+    RestOfYourLife,
 }
 
 /// Defines the arguments for the `generate` subcommand.
@@ -239,7 +241,11 @@ fn main() -> ExitCode {
                             return ExitCode::FAILURE;
                         }
                     }
-                    let list: HitList = HitList::with_objs(render.split_mode, 0u64..u64::from(scene.camera.shutter_time) + 1u64, scene.objects);
+                    let list: HitList = HitList::with_objs(
+                        render.split_mode.unwrap_or(SplitMode::ScatterOnly),
+                        0u64..u64::from(scene.camera.shutter_time) + 1u64,
+                        scene.objects,
+                    );
 
                     // Now render based on the backend
                     let output: Image = match render.backend {
@@ -528,6 +534,93 @@ fn main() -> ExitCode {
                             // Done
                             objects
                         },
+
+                        Book::RestOfYourLife => {
+                            let neutral = Material::Lambertian(Lambertian { colour: Colour::new(0.73, 0.73, 0.73, 1.0) });
+                            let red = Material::Lambertian(Lambertian { colour: Colour::new(0.65, 0.05, 0.05, 1.0) });
+                            let green = Material::Lambertian(Lambertian { colour: Colour::new(0.12, 0.45, 0.15, 1.0) });
+                            let glass = Material::Dielectric(Dielectric { colour: Colour::new(1.0, 1.0, 1.0, 1.0), refraction_index: 1.5 });
+                            let light = Material::DiffuseLight(DiffuseLight { colour: Colour::new(15.0, 15.0, 15.0, 1.0) });
+
+                            let mut objects: Vec<JsonObject> = Vec::with_capacity(8);
+                            objects.push(JsonObject::Object(Object {
+                                obj: DynObject::Quad(Quad {
+                                    pos: Vec3::new(555.0, 0.0, 0.0),
+                                    u:   Vec3::new(0.0, 555.0, 0.0),
+                                    v:   Vec3::new(0.0, 0.0, 555.0),
+                                }),
+                                mat: green,
+                                volumized: None,
+                                transforms: Vec::new(),
+                            }));
+                            objects.push(JsonObject::Object(Object {
+                                obj: DynObject::Quad(Quad {
+                                    pos: Vec3::new(0.0, 0.0, 0.0),
+                                    u:   Vec3::new(0.0, 555.0, 0.0),
+                                    v:   Vec3::new(0.0, 0.0, 555.0),
+                                }),
+                                mat: red,
+                                volumized: None,
+                                transforms: Vec::new(),
+                            }));
+                            objects.push(JsonObject::Object(Object {
+                                obj: DynObject::Quad(Quad {
+                                    pos: Vec3::new(343.0, 554.0, 332.0),
+                                    u:   Vec3::new(-130.0, 0.0, 0.0),
+                                    v:   Vec3::new(0.0, 0.0, -105.0),
+                                }),
+                                mat: light,
+                                volumized: None,
+                                transforms: Vec::new(),
+                            }));
+                            objects.push(JsonObject::Object(Object {
+                                obj: DynObject::Quad(Quad {
+                                    pos: Vec3::new(0.0, 0.0, 0.0),
+                                    u:   Vec3::new(555.0, 0.0, 0.0),
+                                    v:   Vec3::new(0.0, 0.0, 555.0),
+                                }),
+                                mat: neutral.clone(),
+                                volumized: None,
+                                transforms: Vec::new(),
+                            }));
+                            objects.push(JsonObject::Object(Object {
+                                obj: DynObject::Quad(Quad {
+                                    pos: Vec3::new(555.0, 555.0, 555.0),
+                                    u:   Vec3::new(-555.0, 0.0, 0.0),
+                                    v:   Vec3::new(0.0, 0.0, -555.0),
+                                }),
+                                mat: neutral.clone(),
+                                volumized: None,
+                                transforms: Vec::new(),
+                            }));
+                            objects.push(JsonObject::Object(Object {
+                                obj: DynObject::Quad(Quad {
+                                    pos: Vec3::new(0.0, 0.0, 555.0),
+                                    u:   Vec3::new(555.0, 0.0, 0.0),
+                                    v:   Vec3::new(0.0, 555.0, 0.0),
+                                }),
+                                mat: neutral.clone(),
+                                volumized: None,
+                                transforms: Vec::new(),
+                            }));
+                            objects.push(JsonObject::Object(Object {
+                                obj: DynObject::Box(Box { aabb: AABB::from_points(Vec3::new(0.0, 0.0, 0.0), Vec3::new(165.0, 330.0, 165.0)) }),
+                                mat: neutral,
+                                volumized: None,
+                                transforms: vec![
+                                    Transform::RotateY(RotateY { angle: 15.0 }),
+                                    Transform::Translate(Translate { pos: Vec3::new(265.0, 0.0, 295.0) }),
+                                ],
+                            }));
+                            objects.push(JsonObject::Object(Object {
+                                obj: DynObject::Sphere(Sphere { center: Vec3::new(190.0, 90.0, 190.0), radius: 90.0 }),
+                                mat: glass,
+                                volumized: None,
+                                transforms: Vec::new(),
+                            }));
+
+                            objects
+                        },
                     };
 
                     // Ensure to load all
@@ -539,11 +632,11 @@ fn main() -> ExitCode {
                     }
 
                     // Convert that to a static HitList
-                    let list: HitList = HitList::with_objs(render.split_mode, 0u64..cover.shutter_time + 1u64, objects);
-                    let dims: (u32, u32) = if let Some(dims) = render.dims { (dims.0.into(), dims.1.into()) } else { (800, 600) };
+                    let list: HitList =
+                        HitList::with_objs(render.split_mode.unwrap_or(SplitMode::ScatterOnly), 0u64..cover.shutter_time + 1u64, objects);
                     let cam = match cover.book {
                         Book::OneWeekend => Camera::new(
-                            dims,
+                            render.dims.map(|dims| (dims.0.into(), dims.1.into())).unwrap_or((800, 600)),
                             render.n_samples.unwrap_or_else(|| 100.try_into().unwrap()).into(),
                             20.0,
                             0.6,
@@ -554,7 +647,7 @@ fn main() -> ExitCode {
                             Vec3::new(0.0, 1.0, 0.0),
                         ),
                         Book::NextWeek => Camera::new(
-                            dims,
+                            render.dims.map(|dims| (dims.0.into(), dims.1.into())).unwrap_or((800, 600)),
                             render.n_samples.unwrap_or_else(|| 5000.try_into().unwrap()).into(),
                             40.0,
                             0.0,
@@ -564,10 +657,22 @@ fn main() -> ExitCode {
                             Vec3::new(278.0, 278.0, 0.0),
                             Vec3::new(0.0, 1.0, 0.0),
                         ),
+                        Book::RestOfYourLife => Camera::new(
+                            render.dims.map(|dims| (dims.0.into(), dims.1.into())).unwrap_or((600, 600)),
+                            1000,
+                            40.0,
+                            0.0,
+                            0.0,
+                            cover.shutter_time,
+                            Vec3::new(278.0, 278.0, -800.0),
+                            Vec3::new(278.0, 278.0, 0.0),
+                            Vec3::new(0.0, 1.0, 0.0),
+                        ),
                     };
                     let env = match cover.book {
                         Book::OneWeekend => Environment::default(),
                         Book::NextWeek => Environment { background: Background::None, ..Default::default() },
+                        Book::RestOfYourLife => Environment { background: Background::None, ..Default::default() },
                     };
 
                     // Now render based on the backend

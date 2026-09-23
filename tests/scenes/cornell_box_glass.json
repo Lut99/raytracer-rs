@@ -229,42 +229,19 @@
       ]
     },
     {
-      "type": "box",
-      "x": [
-        0.0,
-        165.0
-      ],
-      "y": [
-        0.0,
-        165.0
-      ],
-      "z": [
-        0.0,
-        165.0
-      ],
+      "type": "sphere",
+      "center": [190, 90, 190],
+      "radius": 90,
       "mat": {
-        "type": "lambertian",
+        "type": "dielectric",
+        "refraction_index": 1.5,
         "colour": [
-          0.73,
-          0.73,
-          0.73,
+          1.0,
+          1.0,
+          1.0,
           1.0
         ]
-      },
-      "transforms": [
-        {
-          "type": "rotate_y",
-          "angle": -18.0
-        },
-        {
-          "type": "translate",
-          "pos": [
-            130.0,
-            0.0,
-            65.0
-          ]
-        }
-      ]
+      }
     }
   ]
 }

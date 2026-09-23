@@ -1,6 +1,6 @@
 {
   "environment": {
-    "background": "None"
+    "background": { "type": "none" }
   },
   "camera": {
     "vfov": 20.0,

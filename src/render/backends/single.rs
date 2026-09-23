@@ -96,6 +96,10 @@ impl RayRenderer for SingleThreadRenderer {
         // Fix the final pixel values
         let scale: f64 = 1.0 / cam.n_samples() as f64;
         for colour in image.iter_mut() {
+            // NaN catchall
+            colour.prune_nans();
+
+            // Scale the colours appropriately
             *colour *= scale;
             if self.gamma_correction {
                 *colour = colour.gamma();

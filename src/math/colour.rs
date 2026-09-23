@@ -72,17 +72,30 @@ impl Colour {
 
 
 
+    /// Returns this Colour, but any computed NaNs are set to 0.0
+    ///
+    /// # Returns
+    /// A new `Colour` without [`f64::NAN`].
+    pub const fn prune_nans(&self) -> Self {
+        Self {
+            r: if self.r.is_nan() { 0.0 } else { self.r },
+            g: if self.g.is_nan() { 0.0 } else { self.g },
+            b: if self.b.is_nan() { 0.0 } else { self.b },
+            a: if self.a.is_nan() { 0.0 } else { self.a },
+        }
+    }
+
     /// Returns this Colour, but with the alpha set to 1.0.
     ///
     /// # Returns
     /// A new `Colour` instance with the same RGB-values, but with alpha set to 1.0.
-    pub fn opaque(&self) -> Self { Self { r: self.r, g: self.g, b: self.b, a: 1.0 } }
+    pub const fn opaque(&self) -> Self { Self { r: self.r, g: self.g, b: self.b, a: 1.0 } }
 
     /// Returns this Colour, but with all its values clamped in the [0.0, 1.0] range.
     ///
     /// # Returns
     /// A new `Colour` instance with the same RGBA-values, but clamped where necessary.
-    pub fn clamp(&self) -> Self {
+    pub const fn clamp(&self) -> Self {
         Self { r: self.r.clamp(0.0, 1.0), g: self.g.clamp(0.0, 1.0), b: self.b.clamp(0.0, 1.0), a: self.a.clamp(0.0, 1.0) }
     }
 

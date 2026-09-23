@@ -97,6 +97,8 @@ impl Default for Environment {
 
 /// Defines possible backgrounds.
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+#[serde(tag = "type")]
 pub enum Background {
     /// A custom color.
     Colour(Colour),

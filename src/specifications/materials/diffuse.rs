@@ -24,7 +24,7 @@ use super::super::objects::HitData;
 use super::super::objects::pdf::{CosinePDF, PDF as _};
 use super::super::scene::Environment;
 use super::super::textures::{Texture, Textured};
-use super::Scattering;
+use super::{ScatterRecord, Scattering};
 use crate::math::{Colour, ONB, Ray, Vec3};
 use crate::random;
 
@@ -84,19 +84,6 @@ pub fn lambertian_pdf(record: &HitData, scattered: Ray, env: &Environment) -> f6
     pdf.value(scattered, env)
 }
 
-/// Implements Lambertian scattering logic.
-#[inline]
-pub fn lambertian_scatter(ray: Ray, record: &HitData, colour: Colour) -> (Option<Ray>, Colour, f64) {
-    // Get a coordinate base around the hit normal, then get a random direction in that unit sphere
-    // to find a random scatter direction.
-    let pdf = CosinePDF { onb: ONB::from_single_axis(record.normal) };
-    let scattered = Ray::with_time(record.hit, pdf.sample(ray.time, record.hit).unit(), ray.time);
-
-    // Now we can simply return the new ray to bounce and the colour
-    // NOTE: By construction, `uvw.w` == `record.normal` but unit)
-    (Some(scattered), colour, record.normal.dot(scattered.direct) / PI)
-}
-
 
 
 
@@ -115,11 +102,14 @@ impl Loadable for Diffuse {
     fn load(&mut self, _dir: &Path) -> Result<(), Self::Error> { Ok(()) }
 }
 impl Scattering for Diffuse {
+    type PDF = Infallible;
+
     #[inline]
-    fn scatter(&self, _ray: Ray, record: &HitData, _env: &Environment) -> (Option<Ray>, Colour, f64) {
+    fn scatter(&self, _ray: Ray, record: &HitData, _env: &Environment) -> Option<ScatterRecord<Self::PDF>> {
         // Return a ray scattered in a random direction
         let direction: Vec3 = random3_on_hemisphere(record.normal);
-        (Some(Ray::new(record.hit, direction)), self.colour, 1.0 / (2.0 * PI))
+        // 1.0 / (2.0 * PI)
+        Some(ScatterRecord::from_ray(self.colour, Ray::new(record.hit, direction)))
     }
 }
 
@@ -138,8 +128,10 @@ impl Loadable for DiffuseLight {
     fn load(&mut self, _dir: &Path) -> Result<(), Self::Error> { Ok(()) }
 }
 impl Scattering for DiffuseLight {
+    type PDF = Infallible;
+
     #[inline]
-    fn emitted(&self, _uv: (f64, f64), _p: Vec3) -> Colour { self.colour }
+    fn emitted(&self, _rec: &HitData) -> Colour { self.colour }
 }
 
 
@@ -157,11 +149,15 @@ impl Loadable for Lambertian {
     fn load(&mut self, _dir: &Path) -> Result<(), Self::Error> { Ok(()) }
 }
 impl Scattering for Lambertian {
+    type PDF = CosinePDF;
+
     #[inline]
     fn pdf(&self, _ray: Ray, record: &HitData, env: &Environment, scattered: Ray) -> f64 { lambertian_pdf(record, scattered, env) }
 
     #[inline]
-    fn scatter(&self, ray: Ray, record: &HitData, _env: &Environment) -> (Option<Ray>, Colour, f64) { lambertian_scatter(ray, record, self.colour) }
+    fn scatter(&self, _ray: Ray, record: &HitData, _env: &Environment) -> Option<ScatterRecord<Self::PDF>> {
+        Some(ScatterRecord::from_pdf(self.colour, CosinePDF { onb: ONB::from_single_axis(record.normal) }))
+    }
 }
 
 
@@ -179,11 +175,13 @@ impl<T: Loadable> Loadable for LambertianTexture<T> {
     fn load(&mut self, dir: &Path) -> Result<(), Self::Error> { self.texture.load(dir) }
 }
 impl<T: Textured> Scattering for LambertianTexture<T> {
+    type PDF = CosinePDF;
+
     #[inline]
     fn pdf(&self, _ray: Ray, record: &HitData, env: &Environment, scattered: Ray) -> f64 { lambertian_pdf(record, scattered, env) }
 
     #[inline]
-    fn scatter(&self, ray: Ray, record: &HitData, _env: &Environment) -> (Option<Ray>, Colour, f64) {
-        lambertian_scatter(ray, record, self.texture.value(record.uv, record.hit))
+    fn scatter(&self, _ray: Ray, record: &HitData, _env: &Environment) -> Option<ScatterRecord<Self::PDF>> {
+        Some(ScatterRecord::from_pdf(self.texture.value(record.uv, record.hit), CosinePDF { onb: ONB::from_single_axis(record.normal) }))
     }
 }

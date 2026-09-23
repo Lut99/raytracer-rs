@@ -44,11 +44,11 @@ pub use sphere::Sphere;
 use thiserror::Error;
 
 use super::Loadable;
-use super::materials::{Material, Scattering};
+use super::materials::{Material, ScatterRecord, Scattering};
 use super::scene::Environment;
 use super::transforms::{RotateX, RotateY, RotateZ, Transform, Transforming as _, Translate};
 use super::volumes::{Volume, Volumizing as _};
-use crate::math::{AABB, Ray, Vec3};
+use crate::math::{AABB, Colour, Ray, Vec3};
 
 
 /***** MACRO RULES *****/
@@ -180,6 +180,75 @@ hittable_ptr_impl!('a, MutexGuard<'a, T>);
 hittable_ptr_impl!('a, parking_lot::RwLockReadGuard<'a, T>);
 hittable_ptr_impl!('a, parking_lot::RwLockWriteGuard<'a, T>);
 hittable_ptr_impl!('a, parking_lot::MutexGuard<'a, T>);
+
+
+
+
+
+/***** AUXILLARY *****/
+/// Defines the possible PDFs for [`MaterialOrVolume`].
+#[derive(Clone, Copy, Debug)]
+pub enum MaterialOrVolumePDF<P1, P2> {
+    Material(P1),
+    Volume(P2),
+}
+
+// Interfaces
+impl<P1: PDF, P2: PDF> PDF for MaterialOrVolumePDF<P1, P2> {
+    #[inline]
+    fn value(&self, direct: Ray, env: &Environment) -> f64 {
+        match self {
+            Self::Material(m) => m.value(direct, env),
+            Self::Volume(v) => v.value(direct, env),
+        }
+    }
+
+    #[inline]
+    fn sample(&self, t_us: u64, origin: Vec3) -> Vec3 {
+        match self {
+            Self::Material(m) => m.sample(t_us, origin),
+            Self::Volume(v) => v.sample(t_us, origin),
+        }
+    }
+}
+
+
+
+/// Defines the possible materials.
+#[derive(Clone, Copy, Debug)]
+pub enum MaterialOrVolume<M, V> {
+    Material(M),
+    Volume(V),
+}
+
+// Interfaces
+impl<M: Scattering, V: Scattering> Scattering for MaterialOrVolume<M, V> {
+    type PDF = MaterialOrVolumePDF<M::PDF, V::PDF>;
+
+    #[inline]
+    fn pdf(&self, ray: Ray, record: &HitData, env: &Environment, scattered: Ray) -> f64 {
+        match self {
+            Self::Material(m) => m.pdf(ray, record, env, scattered),
+            Self::Volume(v) => v.pdf(ray, record, env, scattered),
+        }
+    }
+
+    #[inline]
+    fn emitted(&self, rec: &HitData) -> Colour {
+        match self {
+            Self::Material(m) => m.emitted(rec),
+            Self::Volume(v) => v.emitted(rec),
+        }
+    }
+
+    #[inline]
+    fn scatter(&self, ray: Ray, record: &HitData, env: &Environment) -> Option<ScatterRecord<Self::PDF>> {
+        match self {
+            Self::Material(m) => m.scatter(ray, record, env).map(|r| r.map_pdf(MaterialOrVolumePDF::Material)),
+            Self::Volume(v) => v.scatter(ray, record, env).map(|r| r.map_pdf(MaterialOrVolumePDF::Volume)),
+        }
+    }
+}
 
 
 
@@ -367,10 +436,14 @@ impl<T: Hittable, M: Scattering> Object<T, M> {
     /// # Returns
     /// A new [`HitRecord`] struct, which collects relevant information of this hit, or else [`None`] if the ray does not hit.
     #[inline]
-    pub fn hit_full(&self, ray: Ray, t_min: f64, t_max: f64, env: &Environment) -> Option<HitRecord<'_>> {
+    pub fn hit_full(&self, ray: Ray, t_min: f64, t_max: f64, env: &Environment) -> Option<HitRecord<MaterialOrVolume<&'_ M, &'_ Volume>>> {
         self.hit(ray, t_min, t_max, env).map(|data| {
             // Either get the object's original material, or override it with the volume's
-            if let Some(volume) = &self.volumized { HitRecord { data, mat: volume } } else { HitRecord { data, mat: &self.mat } }
+            if let Some(volume) = &self.volumized {
+                HitRecord { data, mat: MaterialOrVolume::Volume(volume) }
+            } else {
+                HitRecord { data, mat: MaterialOrVolume::Material(&self.mat) }
+            }
         })
     }
 }

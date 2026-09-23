@@ -300,8 +300,12 @@ impl AABB {
         // If it overlaps, it's a hit; otherwise it isn't.
         let hitmin = f64::max(t_min, f64::max(f64::max(tx.min(), ty.min()), tz.min()));
         let hitmax = f64::min(t_max, f64::min(f64::min(tx.max(), ty.max()), tz.max()));
-        // SAFETY: hitmin is guaranteed to be <= hitmax
-        if hitmin < hitmax { Some(unsafe { Interval::new_ordered(hitmin, hitmax) }) } else { None }
+        if hitmin < hitmax {
+            // SAFETY: hitmin is guaranteed to be <= hitmax
+            Some(unsafe { Interval::new_ordered(hitmin, hitmax) })
+        } else {
+            None
+        }
     }
 
 

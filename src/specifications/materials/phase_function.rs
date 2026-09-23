@@ -6,16 +6,15 @@
 //
 
 use std::convert::Infallible;
-use std::f64::consts::PI;
 use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
 use super::super::Loadable;
 use super::super::objects::HitData;
+use super::super::objects::pdf::UnitPDF;
 use super::super::scene::Environment;
-use super::Scattering;
-use super::diffuse::random3_uniform;
+use super::{PDF as _, ScatterRecord, Scattering};
 use crate::math::{Colour, Ray};
 
 
@@ -37,12 +36,15 @@ impl Loadable for Isotropic {
     fn load(&mut self, _dir: &Path) -> Result<(), Self::Error> { Ok(()) }
 }
 impl Scattering for Isotropic {
-    #[inline]
-    fn pdf(&self, _ray: Ray, _record: &HitData, _env: &Environment, _scattered: Ray) -> f64 { 1.0 / (4.0 * PI) }
+    type PDF = UnitPDF;
 
     #[inline]
-    fn scatter(&self, ray: Ray, rec: &HitData, _env: &Environment) -> (Option<Ray>, Colour, f64) {
+    fn pdf(&self, _ray: Ray, _record: &HitData, env: &Environment, scattered: Ray) -> f64 { UnitPDF.value(scattered, env) }
+
+    #[inline]
+    fn scatter(&self, _ray: Ray, _rec: &HitData, _env: &Environment) -> Option<ScatterRecord<Self::PDF>> {
         // Create a new ray bouncing randomly in any direction
-        (Some(Ray::with_time(rec.hit, random3_uniform(), ray.time)), self.colour, 1.0 / (4.0 * PI))
+        // 1.0 / (4.0 * PI)
+        Some(ScatterRecord::from_pdf(self.colour, UnitPDF))
     }
 }

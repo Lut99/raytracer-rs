@@ -23,7 +23,8 @@ use super::super::scene::Environment;
 use super::hitrecord::HitData;
 use super::pdf::PDF;
 use super::{BoundingBoxable, Hittable};
-use crate::math::{AABB, Ray, Vec3};
+use crate::math::{AABB, ONB, Ray, Vec3};
+use crate::random;
 
 
 /***** HELPER FUNCTIONS *****/
@@ -85,6 +86,21 @@ fn sphere_hit(center: Vec3, radius: f64, ray: Ray, t_min: f64, t_max: f64) -> Op
 
 
 
+/// Generates a random point on the facing side of a sphere.
+pub fn random3_to_sphere(radius: f64, dist_sqrt: f64) -> Vec3 {
+    let r1 = random::f64();
+    let r2 = random::f64();
+    let z = 1.0 + r2 * ((1.0 - radius * radius / dist_sqrt).sqrt() - 1.0);
+
+    let phi = 2.0 * PI * r1;
+    let x = phi.cos() * (1.0 - z * z).sqrt();
+    let y = phi.sin() * (1.0 - z * z).sqrt();
+
+    Vec3::new(x, y, z)
+}
+
+
+
 
 
 /***** LIBRARY *****/
@@ -109,10 +125,25 @@ impl BoundingBoxable for Sphere {
 }
 impl PDF for Sphere {
     #[inline]
-    fn value(&self, direct: Ray, _env: &Environment) -> f64 { todo!() }
+    fn value(&self, direct: Ray, env: &Environment) -> f64 {
+        // Do the expensive, harder test
+        if self.hit(direct, 0.001, f64::INFINITY, env).is_none() {
+            return 0.0;
+        }
+
+        let dist_sqrt = (self.center - direct.origin).length2();
+        let cos_theta_max = (1.0 - self.radius * self.radius / dist_sqrt).sqrt();
+        let solid_angle = 2.0 * PI * (1.0 - cos_theta_max);
+        1.0 / solid_angle
+    }
 
     #[inline]
-    fn sample(&self, _t_us: u64, origin: Vec3) -> Vec3 { todo!() }
+    fn sample(&self, _t_us: u64, origin: Vec3) -> Vec3 {
+        let direct = self.center - origin;
+        let dist_sqrt = direct.length2();
+        let uwv = ONB::from_single_axis(direct);
+        return uwv.transform(random3_to_sphere(self.radius, dist_sqrt));
+    }
 }
 impl Hittable for Sphere {
     fn hit(&self, ray: Ray, t_min: f64, t_max: f64, _env: &Environment) -> Option<HitData> { sphere_hit(self.center, self.radius, ray, t_min, t_max) }

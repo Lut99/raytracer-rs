@@ -17,8 +17,9 @@ use std::sync::{Arc, MutexGuard, RwLockReadGuard, RwLockWriteGuard};
 pub use constant::ConstantDensity;
 use serde::{Deserialize, Serialize};
 
-use super::materials::Scattering;
+use super::materials::{ScatterRecord, Scattering};
 use super::objects::HitData;
+use super::objects::pdf::PDF;
 use super::scene::Environment;
 use crate::math::{Colour, Ray, Vec3};
 
@@ -82,6 +83,31 @@ volumizing_ptr_impl!('a, parking_lot::MutexGuard<'a, T>);
 /***** LIBRARY *****/
 macro_rules! volume_impl {
     ($($(#[$($attrs:tt)*])* $volume:ident),* $(,)?) => {
+        /// Represents the possible PDFs for [`Volume`].
+        #[derive(Clone, Copy, Debug)]
+        pub enum VolumePDF {
+            $($volume(<$volume as Scattering>::PDF),)*
+        }
+
+        // Interfaces
+        impl PDF for VolumePDF {
+            #[inline]
+            fn value(&self, direct: Ray, env: &Environment) -> f64 {
+                match self {
+                    $(Self::$volume(p) => p.value(direct, env),)*
+                }
+            }
+
+            #[inline]
+            fn sample(&self, t_us: u64, origin: Vec3) -> Vec3 {
+                match self {
+                    $(Self::$volume(p) => p.sample(t_us, origin),)*
+                }
+            }
+        }
+
+
+
         /// Represents a dynamic form of any [`Volumizing`] entity.
         #[derive(Clone, Copy, Debug, Deserialize, Serialize)]
         #[serde(untagged)]
@@ -92,6 +118,8 @@ macro_rules! volume_impl {
 
         // Interfaces
         impl Scattering for Volume {
+            type PDF = VolumePDF;
+
             #[inline]
             #[track_caller]
             fn pdf(&self, ray: Ray, record: &HitData, env: &Environment, scattered: Ray) -> f64 {
@@ -102,17 +130,17 @@ macro_rules! volume_impl {
 
             #[inline]
             #[track_caller]
-            fn emitted(&self, uv: (f64, f64), p: Vec3) -> Colour {
+            fn emitted(&self, rec: &HitData) -> Colour {
                 match self {
-                    $(Self::$volume(v) => v.emitted(uv, p),)*
+                    $(Self::$volume(v) => v.emitted(rec),)*
                 }
             }
 
             #[inline]
             #[track_caller]
-            fn scatter(&self, ray: Ray, record: &HitData, env: &Environment) -> (Option<Ray>, Colour, f64) {
+            fn scatter(&self, ray: Ray, record: &HitData, env: &Environment) -> Option<ScatterRecord<Self::PDF>> {
                 match self {
-                    $(Self::$volume(v) => v.scatter(ray, record, env),)*
+                    $(Self::$volume(v) => v.scatter(ray, record, env).map(|r| r.map_pdf(VolumePDF::$volume)),)*
                 }
             }
         }

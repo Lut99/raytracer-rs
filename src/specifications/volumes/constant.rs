@@ -7,7 +7,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use super::super::materials::{Isotropic, Scattering};
+use super::super::materials::{Isotropic, ScatterRecord, Scattering};
 use super::super::objects::HitData;
 use super::super::scene::Environment;
 use super::Volumizing;
@@ -28,17 +28,21 @@ pub struct ConstantDensity {
 
 // Interfaces
 impl Scattering for ConstantDensity {
+    type PDF = <Isotropic as Scattering>::PDF;
+
     #[track_caller]
     #[inline]
     fn pdf(&self, ray: Ray, record: &HitData, env: &Environment, scattered: Ray) -> f64 { self.phase_function.pdf(ray, record, env, scattered) }
 
     #[track_caller]
     #[inline]
-    fn emitted(&self, uv: (f64, f64), p: Vec3) -> Colour { self.phase_function.emitted(uv, p) }
+    fn emitted(&self, rec: &HitData) -> Colour { self.phase_function.emitted(rec) }
 
     #[track_caller]
     #[inline]
-    fn scatter(&self, ray: Ray, record: &HitData, env: &Environment) -> (Option<Ray>, Colour, f64) { self.phase_function.scatter(ray, record, env) }
+    fn scatter(&self, ray: Ray, record: &HitData, env: &Environment) -> Option<ScatterRecord<Self::PDF>> {
+        self.phase_function.scatter(ray, record, env)
+    }
 }
 impl Volumizing for ConstantDensity {
     fn volumize(&self, ray: crate::math::Ray, t1: f64, t2: f64) -> Option<HitData> {
