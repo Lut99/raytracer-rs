@@ -47,13 +47,19 @@ impl Transforming for Translate {
     }
 
     #[inline]
-    fn transform(&self, mut ray: Ray) -> Ray {
+    fn transform_vec3_obj(&self, _t_us: u64, vec: Vec3) -> Vec3 { vec - self.pos }
+
+    #[inline]
+    fn transform_vec3_world(&self, _t_us: u64, vec: Vec3) -> Vec3 { vec + self.pos }
+
+    #[inline]
+    fn transform_ray_obj(&self, mut ray: Ray) -> Ray {
         ray.origin -= self.pos;
         ray
     }
 
     #[inline]
-    fn transform_back(&self, mut rec: HitData) -> HitData {
+    fn transform_rec_world(&self, mut rec: HitData) -> HitData {
         rec.hit += self.pos;
         rec
     }
@@ -107,7 +113,25 @@ impl Transforming for AnimatedTranslate {
     }
 
     #[inline]
-    fn transform(&self, mut ray: Ray) -> Ray {
+    fn transform_vec3_obj(&self, t_us: u64, vec: Vec3) -> Vec3 {
+        // Compute the position for this timestep
+        let dpos: Vec3 = self.compute_dpos(t_us);
+
+        // Run the update
+        vec - dpos
+    }
+
+    #[inline]
+    fn transform_vec3_world(&self, t_us: u64, vec: Vec3) -> Vec3 {
+        // Compute the position for this timestep
+        let dpos: Vec3 = self.compute_dpos(t_us);
+
+        // Run the update
+        vec + dpos
+    }
+
+    #[inline]
+    fn transform_ray_obj(&self, mut ray: Ray) -> Ray {
         // Compute the position for this timestep
         let dpos: Vec3 = self.compute_dpos(ray.time);
 
@@ -117,7 +141,7 @@ impl Transforming for AnimatedTranslate {
     }
 
     #[inline]
-    fn transform_back(&self, mut rec: HitData) -> HitData {
+    fn transform_rec_world(&self, mut rec: HitData) -> HitData {
         // Compute the position for this timestep
         let dpos: Vec3 = self.compute_dpos(rec.time);
 

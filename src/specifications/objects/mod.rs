@@ -370,7 +370,7 @@ impl<T: PDF, M> PDF for Object<T, M> {
     fn value(&self, mut direct: Ray, env: &Environment) -> f64 {
         // Transform the ray accordingly, first
         for trans in self.transforms.iter().rev() {
-            direct = trans.transform(direct);
+            direct = trans.transform_ray_obj(direct);
         }
 
         // Compute the probability it hit
@@ -378,25 +378,21 @@ impl<T: PDF, M> PDF for Object<T, M> {
     }
 
     #[inline]
-    fn sample(&self, t_us: u64, origin: Vec3) -> Vec3 {
+    fn sample(&self, t_us: u64, mut origin: Vec3) -> Vec3 {
         // Transform the ray accordingly, first
-        // A bit ugly, going thru rays, but oh well...
-        let mut origin = Ray::new(origin, Vec3::zeroes());
         for trans in self.transforms.iter().rev() {
-            origin = trans.transform(origin);
+            origin = trans.transform_vec3_obj(t_us, origin);
         }
 
         // Sample a new point
-        let p = self.obj.sample(t_us, origin.origin);
+        let mut p = self.obj.sample(t_us, origin);
 
         // Transform it back
-        // A bit ugly, going thru hitdatas, but oh well...
-        let mut rec = HitData::new(Ray::zeroes(), p, 0.0, Vec3::zeroes(), (0.0, 0.0));
         for trans in self.transforms.iter() {
             // Jump through some hoops to translate back...
-            rec = trans.transform_back(rec);
+            p = trans.transform_vec3_world(t_us, p);
         }
-        rec.hit
+        p
     }
 }
 impl<T: Hittable, M> Hittable for Object<T, M> {
@@ -404,7 +400,7 @@ impl<T: Hittable, M> Hittable for Object<T, M> {
     fn hit(&self, mut ray: Ray, t_min: f64, t_max: f64, env: &Environment) -> Option<HitData> {
         // First, transform the ray on the way there...
         for trans in self.transforms.iter().rev() {
-            ray = trans.transform(ray);
+            ray = trans.transform_ray_obj(ray);
         }
 
         // Then decide how to hit the object
@@ -431,7 +427,7 @@ impl<T: Hittable, M> Hittable for Object<T, M> {
 
         // Transform the result back
         for trans in self.transforms.iter() {
-            rec = trans.transform_back(rec);
+            rec = trans.transform_rec_world(rec);
         }
         Some(rec)
     }

@@ -38,10 +38,10 @@ impl BoundingBoxable for Box {
 }
 impl PDF for Box {
     #[inline]
-    fn value(&self, direct: Ray, _env: &Environment) -> f64 { todo!() }
+    fn value(&self, direct: Ray, env: &Environment) -> f64 { self.aabb.value(direct, env) }
 
     #[inline]
-    fn sample(&self, _t_us: u64, origin: Vec3) -> Vec3 { todo!() }
+    fn sample(&self, t_us: u64, origin: Vec3) -> Vec3 { self.aabb.sample(t_us, origin) }
 }
 impl Hittable for Box {
     #[inline]

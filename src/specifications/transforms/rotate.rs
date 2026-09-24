@@ -106,7 +106,27 @@ macro_rules! rotate_impl {
             }
 
             #[inline]
-            fn transform(&self, ray: Ray) -> Ray {
+            fn transform_vec3_obj(&self, _t_us: u64, vec: Vec3) -> Vec3 {
+                // Compute the sin_theta and cos_theta for this angle
+                let angle_radians: f64 = degrees_to_radians(self.angle);
+                let sin_theta: f64 = angle_radians.sin();
+                let cos_theta: f64 = angle_radians.cos();
+
+                $rotate(vec, sin_theta, cos_theta)
+            }
+
+            #[inline]
+            fn transform_vec3_world(&self, _t_us: u64, vec: Vec3) -> Vec3 {
+                // Compute the sin_theta and cos_theta for this angle
+                let angle_radians: f64 = degrees_to_radians(self.angle);
+                let sin_theta: f64 = angle_radians.sin();
+                let cos_theta: f64 = angle_radians.cos();
+
+                $rotate_back(vec, sin_theta, cos_theta)
+            }
+
+            #[inline]
+            fn transform_ray_obj(&self, ray: Ray) -> Ray {
                 // Compute the sin_theta and cos_theta for this angle
                 let angle_radians: f64 = degrees_to_radians(self.angle);
                 let sin_theta: f64 = angle_radians.sin();
@@ -119,7 +139,7 @@ macro_rules! rotate_impl {
             }
 
             #[inline]
-            fn transform_back(&self, mut rec: HitData) -> HitData {
+            fn transform_rec_world(&self, mut rec: HitData) -> HitData {
                 // Compute the sin_theta and cos_theta for this angle
                 let angle_radians: f64 = degrees_to_radians(self.angle);
                 let sin_theta: f64 = angle_radians.sin();

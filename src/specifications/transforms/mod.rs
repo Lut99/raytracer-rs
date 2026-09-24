@@ -19,7 +19,7 @@ use serde::{Deserialize, Serialize};
 pub use translate::{AnimatedTranslate, Translate};
 
 use super::objects::HitData;
-use crate::math::{AABB, Ray};
+use crate::math::{AABB, Ray, Vec3};
 
 
 /***** HELPER MACROS *****/
@@ -30,10 +30,16 @@ macro_rules! transforming_ptr_impl {
             fn transform_aabb(&self, t_us: u64, aabb: AABB) -> AABB { <T as Transforming>::transform_aabb(self, t_us, aabb) }
 
             #[inline]
-            fn transform(&self, ray: Ray) -> Ray { <T as Transforming>::transform(self, ray) }
+            fn transform_vec3_obj(&self, t_us: u64, vec: Vec3) -> Vec3 { <T as Transforming>::transform_vec3_obj(self, t_us, vec) }
 
             #[inline]
-            fn transform_back(&self, rec: HitData) -> HitData { <T as Transforming>::transform_back(self, rec) }
+            fn transform_vec3_world(&self, t_us: u64, ray: Vec3) -> Vec3 { <T as Transforming>::transform_vec3_world(self, t_us, ray) }
+
+            #[inline]
+            fn transform_ray_obj(&self, ray: Ray) -> Ray { <T as Transforming>::transform_ray_obj(self, ray) }
+
+            #[inline]
+            fn transform_rec_world(&self, rec: HitData) -> HitData { <T as Transforming>::transform_rec_world(self, rec) }
         }
     };
     ($ty:ty) => {
@@ -42,10 +48,16 @@ macro_rules! transforming_ptr_impl {
             fn transform_aabb(&self, t_us: u64, aabb: AABB) -> AABB { <T as Transforming>::transform_aabb(self, t_us, aabb) }
 
             #[inline]
-            fn transform(&self, ray: Ray) -> Ray { <T as Transforming>::transform(self, ray) }
+            fn transform_vec3_obj(&self, t_us: u64, vec: Vec3) -> Vec3 { <T as Transforming>::transform_vec3_obj(self, t_us, vec) }
 
             #[inline]
-            fn transform_back(&self, rec: HitData) -> HitData { <T as Transforming>::transform_back(self, rec) }
+            fn transform_vec3_world(&self, t_us: u64, ray: Vec3) -> Vec3 { <T as Transforming>::transform_vec3_world(self, t_us, ray) }
+
+            #[inline]
+            fn transform_ray_obj(&self, ray: Ray) -> Ray { <T as Transforming>::transform_ray_obj(self, ray) }
+
+            #[inline]
+            fn transform_rec_world(&self, rec: HitData) -> HitData { <T as Transforming>::transform_rec_world(self, rec) }
         }
     };
 }
@@ -57,38 +69,61 @@ macro_rules! transforming_ptr_impl {
 /***** INTERFACES *****/
 /// Defines an abstraction over all transforming objects.
 pub trait Transforming {
-    /// Transforms an object's AABB.
+    // AABB
+    /// Transforms an object's AABB from object space to world space.
     ///
     /// # Arguments
-    /// - `t_us`: The time, in us since the start of the scene, at which the transformation needs to occur.
+    /// - `t_us`: The time, in us since the start of the scene, at which the transformation needs
+    ///   to occur.
     /// - `aabb`: The [`AABB`] to transform.
     ///
     /// # Returns
     /// A new [`AABB`] representing the transformed version.
-    fn transform_aabb(&self, t_us: u64, aabb: AABB) -> AABB;
+    fn transform_aabb(&self, _t_us: u64, aabb: AABB) -> AABB;
 
-    /// Transforms a Ray shot at an object.
+
+    // Vec
+    /// Transforms a 3D vector from "world" space to "object" space.
     ///
-    /// After the object's real hit computation, [`Transform::transform_back()`] is called to undo
-    /// this.
+    /// # Arguments
+    /// - `t_us`: The time, in us since the start of the scene, at which the transformation needs
+    ///   to occur.
+    /// - `vec`: The [`Vec3`] to transform.
+    ///
+    /// # Returns
+    /// A new [`Vec3`] that is `vec` but in object space.
+    fn transform_vec3_obj(&self, t_us: u64, vec: Vec3) -> Vec3;
+
+    /// Transforms a 3D vector from "object" space to "world" space.
+    ///
+    /// # Arguments
+    /// - `t_us`: The time, in us since the start of the scene, at which the transformation needs
+    ///   to occur.
+    /// - `vec`: The [`Vec3`] to transform.
+    ///
+    /// # Returns
+    /// A new [`Vec3`] that is `vec` but in world space.
+    fn transform_vec3_world(&self, t_us: u64, vec: Vec3) -> Vec3;
+
+
+    // Raytracer
+    /// Transforms a Ray shot at an object.
     ///
     /// # Arguments
     /// - `ray`: The [`Ray`] to transform.
     ///
     /// # Returns
-    /// A new [`Ray`] in transformed space.
-    fn transform(&self, ray: Ray) -> Ray;
+    /// A new [`Ray`] in object space.
+    fn transform_ray_obj(&self, ray: Ray) -> Ray;
 
     /// Transforms a Ray shot at an object back into normal space.
-    ///
-    /// This is executed after an object's hit. [`Transform::transform()`] is called before.
     ///
     /// # Arguments
     /// - `rec`: The [`HitData`] in transformed space to transform back.
     ///
     /// # Returns
     /// A new [`HitData`] in transformed space.
-    fn transform_back(&self, rec: HitData) -> HitData;
+    fn transform_rec_world(&self, rec: HitData) -> HitData;
 }
 
 // Pointer-like impls
@@ -131,16 +166,30 @@ macro_rules! transform_impl {
             }
 
             #[inline]
-            fn transform(&self, ray: Ray) -> Ray {
+            fn transform_vec3_obj(&self, t_us: u64, vec: Vec3) -> Vec3 {
                 match self {
-                    $(Self::$obj(o) => o.transform(ray),)*
+                    $(Self::$obj(o) => o.transform_vec3_obj(t_us, vec),)*
                 }
             }
 
             #[inline]
-            fn transform_back(&self, rec: HitData) -> HitData {
+            fn transform_vec3_world(&self, t_us: u64, vec: Vec3) -> Vec3 {
                 match self {
-                    $(Self::$obj(o) => o.transform_back(rec),)*
+                    $(Self::$obj(o) => o.transform_vec3_world(t_us, vec),)*
+                }
+            }
+
+            #[inline]
+            fn transform_ray_obj(&self, ray: Ray) -> Ray {
+                match self {
+                    $(Self::$obj(o) => o.transform_ray_obj(ray),)*
+                }
+            }
+
+            #[inline]
+            fn transform_rec_world(&self, rec: HitData) -> HitData {
+                match self {
+                    $(Self::$obj(o) => o.transform_rec_world(rec),)*
                 }
             }
         }
