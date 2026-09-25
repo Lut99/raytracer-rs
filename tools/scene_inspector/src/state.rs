@@ -60,11 +60,15 @@ impl From<wgpu::CreateSurfaceError> for Error {
 
 
 /***** CONSTANTS *****/
-pub const VERTICES: &[Vertex] =
-    &[Vertex { position: [0.0, 0.5, 0.0], color: [1.0, 0.0, 0.0] }, Vertex { position: [-0.5, -0.5, 0.0], color: [0.0, 1.0, 0.0] }, Vertex {
-        position: [0.5, -0.5, 0.0],
-        color:    [0.0, 0.0, 1.0],
-    }];
+const VERTICES: &[Vertex] = &[
+    Vertex { position: [-0.0868241, 0.49240386, 0.0], color: [1.0, 0.0, 0.0] }, // A
+    Vertex { position: [-0.49513406, 0.06958647, 0.0], color: [0.0, 1.0, 0.0] }, // B
+    Vertex { position: [-0.21918549, -0.44939706, 0.0], color: [0.0, 0.0, 1.0] }, // C
+    Vertex { position: [0.35966998, -0.3473291, 0.0], color: [0.5, 0.5, 0.0] }, // D
+    Vertex { position: [0.44147372, 0.2347359, 0.0], color: [0.0, 0.5, 0.5] },  // E
+];
+
+const INDICES: &[u16] = &[0, 1, 4, 1, 2, 4, 2, 3, 4];
 
 
 
@@ -124,6 +128,10 @@ pub struct State {
     vertex_buffer:     wgpu::Buffer,
     /// The number of vertices in the `vertex_buffer`.
     vertex_buffer_len: u32,
+    /// A buffer for storing indices to render.
+    index_buffer:      wgpu::Buffer,
+    /// The number of indices in the `index_buffer`.
+    index_buffer_len:  u32,
 
     // State
     /// Did we configure the surface yet?
@@ -251,7 +259,7 @@ impl State {
             cache: None,
         });
 
-        // Create the buffer
+        // Create the buffers
         debug!(target: "State::new", "Creating vertex buffer...");
         let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label:    Some("vertex buffer"),
@@ -260,9 +268,29 @@ impl State {
         });
         let vertex_buffer_len: u32 = VERTICES.len() as u32;
 
+        debug!(target: "State::new", "Creating index buffer...");
+        let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label:    Some("index buffer"),
+            contents: bytemuck::cast_slice(INDICES),
+            usage:    wgpu::BufferUsages::INDEX,
+        });
+        let index_buffer_len: u32 = INDICES.len() as u32;
+
         // Finally create self
         info!(target: "State::new", "Initialization success");
-        Ok(Self { window, config, device, pipeline, queue, surface, vertex_buffer, vertex_buffer_len, is_surface_configured: false })
+        Ok(Self {
+            window,
+            config,
+            device,
+            pipeline,
+            queue,
+            surface,
+            vertex_buffer,
+            vertex_buffer_len,
+            index_buffer,
+            index_buffer_len,
+            is_surface_configured: false,
+        })
     }
 }
 
@@ -357,7 +385,8 @@ impl State {
             // Add the pipeline
             render_pass.set_pipeline(&self.pipeline);
             render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
-            render_pass.draw(0..self.vertex_buffer_len, 0..1);
+            render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+            render_pass.draw_indexed(0..self.index_buffer_len, 0, 0..1);
         }
 
         // Submit the encoder
