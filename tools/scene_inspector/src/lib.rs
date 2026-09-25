@@ -3,6 +3,8 @@
 //
 //  Description:
 //!   Defines everything except the entrypoint of the scene_inspector.
+//!
+//!   Thanks to <https://sotrh.github.io/learn-wgpu> for getting us started!
 //
 
 // Modules

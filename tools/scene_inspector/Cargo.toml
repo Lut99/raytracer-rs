@@ -2,9 +2,14 @@
 name = "scene_inspector"
 version = "0.1.0"
 edition = "2024"
+authors = ["Lut99"]
+repository.workspace = true
+license.workspace = true
+description = "A rasterizer for showing raytracer-rs scenes and debug information about them."
 
 
 [dependencies]
+bytemuck = { version = "1.25.0", features = ["derive"] }
 clap = { version = "4.6.0", features = ["derive"] }
 error-trace = "4.0.0"
 humanlog = { git = "https://github.com/Lut99/humanlog-rs", tag = "v0.2.0" }

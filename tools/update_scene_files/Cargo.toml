@@ -2,6 +2,10 @@
 name = "update_scene_files"
 version = "1.0.0"
 edition = "2024"
+authors = ["Lut99"]
+repository.workspace = true
+license.workspace = true
+description = "A tool for updating scene files between raytracer-rs versions."
 
 
 [dependencies]

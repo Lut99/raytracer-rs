@@ -9,6 +9,7 @@ use std::sync::Arc;
 
 use log::{debug, info};
 use thiserror::Error;
+use wgpu::util::DeviceExt as _;
 use winit::event_loop::ActiveEventLoop;
 use winit::keyboard::KeyCode;
 use winit::window::Window;
@@ -58,6 +59,47 @@ impl From<wgpu::CreateSurfaceError> for Error {
 
 
 
+/***** CONSTANTS *****/
+pub const VERTICES: &[Vertex] =
+    &[Vertex { position: [0.0, 0.5, 0.0], color: [1.0, 0.0, 0.0] }, Vertex { position: [-0.5, -0.5, 0.0], color: [0.0, 1.0, 0.0] }, Vertex {
+        position: [0.5, -0.5, 0.0],
+        color:    [0.0, 0.0, 1.0],
+    }];
+
+
+
+
+
+/***** AUXILLARY *****/
+/// Defines a single vertex.
+#[repr(C)]
+#[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct Vertex {
+    position: [f32; 3],
+    color:    [f32; 3],
+}
+
+// Vertex
+impl Vertex {
+    /// Returns the [`VertexBufferLayout`] required to read this.
+    #[inline]
+    pub const fn desc() -> wgpu::VertexBufferLayout<'static> {
+        wgpu::VertexBufferLayout {
+            array_stride: std::mem::size_of::<Vertex>() as wgpu::BufferAddress,
+            step_mode:    wgpu::VertexStepMode::Vertex,
+            attributes:   &[wgpu::VertexAttribute { offset: 0, shader_location: 0, format: wgpu::VertexFormat::Float32x3 }, wgpu::VertexAttribute {
+                offset: std::mem::size_of::<[f32; 3]>() as wgpu::BufferAddress,
+                shader_location: 1,
+                format: wgpu::VertexFormat::Float32x3,
+            }],
+        }
+    }
+}
+
+
+
+
+
 /***** LIBRARY *****/
 /// Defines the state of the [`App`](super::App).
 pub struct State {
@@ -76,6 +118,12 @@ pub struct State {
     queue:    wgpu::Queue,
     /// The surface that WGPU draws to.
     surface:  wgpu::Surface<'static>,
+
+    // Data
+    /// A buffer for storing vertices to render.
+    vertex_buffer:     wgpu::Buffer,
+    /// The number of vertices in the `vertex_buffer`.
+    vertex_buffer_len: u32,
 
     // State
     /// Did we configure the surface yet?
@@ -175,7 +223,7 @@ impl State {
             vertex: wgpu::VertexState {
                 module: &shader,
                 entry_point: Some("vs_main"),
-                buffers: &[],
+                buffers: &[Some(Vertex::desc())],
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
             },
             fragment: Some(wgpu::FragmentState {
@@ -203,9 +251,18 @@ impl State {
             cache: None,
         });
 
+        // Create the buffer
+        debug!(target: "State::new", "Creating vertex buffer...");
+        let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label:    Some("vertex buffer"),
+            contents: bytemuck::cast_slice(VERTICES),
+            usage:    wgpu::BufferUsages::VERTEX,
+        });
+        let vertex_buffer_len: u32 = VERTICES.len() as u32;
+
         // Finally create self
         info!(target: "State::new", "Initialization success");
-        Ok(Self { window, config, device, pipeline, queue, surface, is_surface_configured: false })
+        Ok(Self { window, config, device, pipeline, queue, surface, vertex_buffer, vertex_buffer_len, is_surface_configured: false })
     }
 }
 
@@ -299,7 +356,8 @@ impl State {
 
             // Add the pipeline
             render_pass.set_pipeline(&self.pipeline);
-            render_pass.draw(0..3, 0..1);
+            render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
+            render_pass.draw(0..self.vertex_buffer_len, 0..1);
         }
 
         // Submit the encoder

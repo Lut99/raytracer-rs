@@ -2443,6 +2443,7 @@ dependencies = [
 name = "scene_inspector"
 version = "0.1.0"
 dependencies = [
+ "bytemuck",
  "clap",
  "error-trace",
  "humanlog 0.2.0 (git+https://github.com/Lut99/humanlog-rs?tag=v0.2.0)",
