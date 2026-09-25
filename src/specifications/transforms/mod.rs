@@ -39,6 +39,12 @@ macro_rules! transforming_ptr_impl {
             fn transform_ray_obj(&self, ray: Ray) -> Ray { <T as Transforming>::transform_ray_obj(self, ray) }
 
             #[inline]
+            fn transform_ray_world(&self, ray: Ray) -> Ray { <T as Transforming>::transform_ray_world(self, ray) }
+
+            #[inline]
+            fn transform_rec_obj(&self, rec: HitData) -> HitData { <T as Transforming>::transform_rec_obj(self, rec) }
+
+            #[inline]
             fn transform_rec_world(&self, rec: HitData) -> HitData { <T as Transforming>::transform_rec_world(self, rec) }
         }
     };
@@ -55,6 +61,12 @@ macro_rules! transforming_ptr_impl {
 
             #[inline]
             fn transform_ray_obj(&self, ray: Ray) -> Ray { <T as Transforming>::transform_ray_obj(self, ray) }
+
+            #[inline]
+            fn transform_ray_world(&self, ray: Ray) -> Ray { <T as Transforming>::transform_ray_world(self, ray) }
+
+            #[inline]
+            fn transform_rec_obj(&self, rec: HitData) -> HitData { <T as Transforming>::transform_rec_obj(self, rec) }
 
             #[inline]
             fn transform_rec_world(&self, rec: HitData) -> HitData { <T as Transforming>::transform_rec_world(self, rec) }
@@ -106,7 +118,7 @@ pub trait Transforming {
     fn transform_vec3_world(&self, t_us: u64, vec: Vec3) -> Vec3;
 
 
-    // Raytracer
+    // Ray
     /// Transforms a Ray shot at an object.
     ///
     /// # Arguments
@@ -117,6 +129,26 @@ pub trait Transforming {
     fn transform_ray_obj(&self, ray: Ray) -> Ray;
 
     /// Transforms a Ray shot at an object back into normal space.
+    ///
+    /// # Arguments
+    /// - `ray`: The [`Ray`] to transform.
+    ///
+    /// # Returns
+    /// A new [`Ray`] in world space.
+    fn transform_ray_world(&self, ray: Ray) -> Ray;
+
+
+    // HitData
+    /// Transforms a record.
+    ///
+    /// # Arguments
+    /// - `rec`: The [`HitData`] in transformed space to transform back.
+    ///
+    /// # Returns
+    /// A new [`HitData`] in object space.
+    fn transform_rec_obj(&self, rec: HitData) -> HitData;
+
+    /// Transforms a record recording a ray shot at an object back into normal space.
     ///
     /// # Arguments
     /// - `rec`: The [`HitData`] in transformed space to transform back.
@@ -183,6 +215,20 @@ macro_rules! transform_impl {
             fn transform_ray_obj(&self, ray: Ray) -> Ray {
                 match self {
                     $(Self::$obj(o) => o.transform_ray_obj(ray),)*
+                }
+            }
+
+            #[inline]
+            fn transform_ray_world(&self, ray: Ray) -> Ray {
+                match self {
+                    $(Self::$obj(o) => o.transform_ray_world(ray),)*
+                }
+            }
+
+            #[inline]
+            fn transform_rec_obj(&self, rec: HitData) -> HitData {
+                match self {
+                    $(Self::$obj(o) => o.transform_rec_obj(rec),)*
                 }
             }
 

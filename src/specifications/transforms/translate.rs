@@ -59,6 +59,18 @@ impl Transforming for Translate {
     }
 
     #[inline]
+    fn transform_ray_world(&self, mut ray: Ray) -> Ray {
+        ray.origin += self.pos;
+        ray
+    }
+
+    #[inline]
+    fn transform_rec_obj(&self, mut rec: HitData) -> HitData {
+        rec.hit -= self.pos;
+        rec
+    }
+
+    #[inline]
     fn transform_rec_world(&self, mut rec: HitData) -> HitData {
         rec.hit += self.pos;
         rec
@@ -138,6 +150,26 @@ impl Transforming for AnimatedTranslate {
         // Run the update
         ray.origin -= dpos;
         ray
+    }
+
+    #[inline]
+    fn transform_ray_world(&self, mut ray: Ray) -> Ray {
+        // Compute the position for this timestep
+        let dpos: Vec3 = self.compute_dpos(ray.time);
+
+        // Run the update
+        ray.origin += dpos;
+        ray
+    }
+
+    #[inline]
+    fn transform_rec_obj(&self, mut rec: HitData) -> HitData {
+        // Compute the position for this timestep
+        let dpos: Vec3 = self.compute_dpos(rec.time);
+
+        // Run the update
+        rec.hit -= dpos;
+        rec
     }
 
     #[inline]
