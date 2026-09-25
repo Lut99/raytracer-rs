@@ -49,4 +49,7 @@ obj = ["dep:mtllib", "dep:obj"]
 
 [workspace]
 resolver = "2"
-members = ["tools/update_scene_files"]
+members = [
+    "tools/scene_inspector",
+    "tools/update_scene_files"
+]

@@ -239,6 +239,7 @@ impl HitList {
         fn _decompress_json_object(objs: impl IntoIterator<Item = JsonObject>, res: &mut Vec<Object<DynObject, Material>>) {
             for obj in objs {
                 match obj {
+                    #[cfg(feature = "obj")]
                     JsonObject::Model(_) => panic!("Encountered unloaded model; please load it first."),
                     JsonObject::Object(o) => res.push(o),
                     JsonObject::Group(g) => {

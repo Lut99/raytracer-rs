@@ -36,6 +36,7 @@ use std::sync::{Arc, MutexGuard, RwLockReadGuard, RwLockWriteGuard};
 pub use boxed::Box;
 pub use group::Group;
 pub use hitrecord::*;
+#[cfg(feature = "obj")]
 pub use model::Model;
 use pdf::PDF;
 pub use plane::{Quad, Triangle};
@@ -95,6 +96,7 @@ macro_rules! hittable_ptr_impl {
 #[derive(Debug, Error)]
 pub enum JsonObjectLoadError {
     /// The model failed.
+    #[cfg(feature = "obj")]
     #[error("{0}")]
     Model(#[from] model::Error),
     /// The object failed.
@@ -262,6 +264,7 @@ impl<M: Scattering, V: Scattering> Scattering for MaterialOrVolume<M, V> {
 #[serde(untagged)]
 pub enum JsonObject {
     /// It's an unloaded model.
+    #[cfg(feature = "obj")]
     Model(Model),
     /// It's a loose object.
     Object(Object<DynObject, Material>),
@@ -276,6 +279,7 @@ impl Loadable for JsonObject {
     #[inline]
     fn load(&mut self, dir: &Path) -> Result<(), Self::Error> {
         match self {
+            #[cfg(feature = "obj")]
             Self::Model(m) => {
                 // Attempt to load the model into a group
                 let group = m.load(dir)?;
