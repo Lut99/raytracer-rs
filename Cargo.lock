@@ -2447,6 +2447,7 @@ dependencies = [
  "clap",
  "error-trace",
  "humanlog 0.2.0 (git+https://github.com/Lut99/humanlog-rs?tag=v0.2.0)",
+ "image",
  "log",
  "pollster",
  "raytracer 0.3.0",
