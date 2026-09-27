@@ -5,6 +5,7 @@
 //!   Defines the application state.
 //
 
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use image::ImageFormat;
@@ -14,6 +15,8 @@ use wgpu::util::DeviceExt as _;
 use winit::event_loop::ActiveEventLoop;
 use winit::keyboard::KeyCode;
 use winit::window::Window;
+
+use super::gpu::Texture;
 
 
 /***** ERRORS *****/
@@ -40,6 +43,10 @@ pub enum Error {
     /// Lost the active surface.
     #[error("Active surface was lost")]
     SurfaceLost,
+    #[error("Failed to load texture")]
+    TextureLoad(#[source] super::gpu::texture::Error),
+    #[error("Failed to load texture GPU resources")]
+    TextureLoadGpu(#[source] super::gpu::texture::Error),
 }
 
 // Conversion
@@ -62,11 +69,11 @@ impl From<wgpu::CreateSurfaceError> for Error {
 
 /***** CONSTANTS *****/
 const VERTICES: &[Vertex] = &[
-    Vertex { position: [-0.0868241, 0.49240386, 0.0], color: [1.0, 0.0, 0.0] }, // A
-    Vertex { position: [-0.49513406, 0.06958647, 0.0], color: [0.0, 1.0, 0.0] }, // B
-    Vertex { position: [-0.21918549, -0.44939706, 0.0], color: [0.0, 0.0, 1.0] }, // C
-    Vertex { position: [0.35966998, -0.3473291, 0.0], color: [0.5, 0.5, 0.0] }, // D
-    Vertex { position: [0.44147372, 0.2347359, 0.0], color: [0.0, 0.5, 0.5] },  // E
+    Vertex { position: [-0.0868241, 0.49240386, 0.0], tex_coords: [0.4131759, 0.00759614] }, // A
+    Vertex { position: [-0.49513406, 0.06958647, 0.0], tex_coords: [0.0048659444, 0.43041354] }, // B
+    Vertex { position: [-0.21918549, -0.44939706, 0.0], tex_coords: [0.28081453, 0.949397] }, // C
+    Vertex { position: [0.35966998, -0.3473291, 0.0], tex_coords: [0.85967, 0.84732914] },   // D
+    Vertex { position: [0.44147372, 0.2347359, 0.0], tex_coords: [0.9414737, 0.2652641] },   // E
 ];
 
 const INDICES: &[u16] = &[0, 1, 4, 1, 2, 4, 2, 3, 4];
@@ -80,8 +87,8 @@ const INDICES: &[u16] = &[0, 1, 4, 1, 2, 4, 2, 3, 4];
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct Vertex {
-    position: [f32; 3],
-    color:    [f32; 3],
+    position:   [f32; 3],
+    tex_coords: [f32; 2],
 }
 
 // Vertex
@@ -95,7 +102,7 @@ impl Vertex {
             attributes:   &[wgpu::VertexAttribute { offset: 0, shader_location: 0, format: wgpu::VertexFormat::Float32x3 }, wgpu::VertexAttribute {
                 offset: std::mem::size_of::<[f32; 3]>() as wgpu::BufferAddress,
                 shader_location: 1,
-                format: wgpu::VertexFormat::Float32x3,
+                format: wgpu::VertexFormat::Float32x2,
             }],
         }
     }
@@ -126,13 +133,15 @@ pub struct State {
 
     // Data
     /// A buffer for storing vertices to render.
-    vertex_buffer:     wgpu::Buffer,
+    vertex_buffer: wgpu::Buffer,
     /// The number of vertices in the `vertex_buffer`.
     vertex_buffer_len: u32,
     /// A buffer for storing indices to render.
-    index_buffer:      wgpu::Buffer,
+    index_buffer: wgpu::Buffer,
     /// The number of indices in the `index_buffer`.
-    index_buffer_len:  u32,
+    index_buffer_len: u32,
+    /// Loaded textures
+    texs: Vec<Texture>,
 
     // State
     /// Did we configure the surface yet?
@@ -212,31 +221,45 @@ impl State {
             color_space: wgpu::SurfaceColorSpace::Auto,
         };
 
-        // Load the example texture
-        debug!(target: "State::new", "Decoding example texture...");
-        let im = image::load_from_memory_with_format(include_bytes!("../pollo.jpg"), ImageFormat::Jpeg).unwrap();
-        let im = im.into_rgba8();
-        let im_dims = im.dimensions();
-
-        // Put it in a texture
-        debug!(target: "State::new", "Loading example texture...");
-        let tex_size = wgpu::Extent3d { width: im_dims.0, height: im_dims.1, depth_or_array_layers: 1 };
-        let diff_tex = device.create_texture(&wgpu::TextureDescriptor {
-            label: Some("example texture"),
-            size: tex_size,
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::Rgba8UnormSrgb,
-            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
-            view_formats: &[],
+        // Load texture related resources
+        debug!(target: "State::new", "Creating sampler...");
+        let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+            label: Some("sampler"),
+            address_mode_u: wgpu::AddressMode::ClampToEdge,
+            address_mode_v: wgpu::AddressMode::ClampToEdge,
+            address_mode_w: wgpu::AddressMode::ClampToEdge,
+            mag_filter: wgpu::FilterMode::Linear,
+            min_filter: wgpu::FilterMode::Nearest,
+            mipmap_filter: wgpu::MipmapFilterMode::Nearest,
+            ..Default::default()
         });
-        queue.write_texture(
-            wgpu::TexelCopyTextureInfo { texture: &diff_tex, mip_level: 0, origin: wgpu::Origin3d::ZERO, aspect: wgpu::TextureAspect::All },
-            &im,
-            wgpu::TexelCopyBufferLayout { offset: 0, bytes_per_row: Some(4 * im_dims.0), rows_per_image: Some(im_dims.1) },
-            tex_size,
-        );
+        debug!(target: "State::new", "Creating bind layout...");
+        let bind_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label:   Some("bind group layout"),
+            entries: &[
+                wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Texture {
+                        sample_type:    wgpu::TextureSampleType::Float { filterable: true },
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                        multisampled:   false,
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 1,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                    count: None,
+                },
+            ],
+        });
+
+        // Load the example texture
+        let mut tex = Texture::from_path_with_format(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("pollo.jpg"), ImageFormat::Jpeg)
+            .map_err(Error::TextureLoad)?;
+        tex.load_gpu(&device, &queue, &sampler, &bind_layout).map_err(Error::TextureLoadGpu)?;
 
         // Prepare loading the pipeline
         debug!(target: "State::new", "Loading shaders...");
@@ -246,7 +269,7 @@ impl State {
         });
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("render pipeline layout"),
-            bind_group_layouts: &[],
+            bind_group_layouts: &[Some(&bind_layout)],
             immediate_size: 0,
         });
 
@@ -316,6 +339,7 @@ impl State {
             vertex_buffer_len,
             index_buffer,
             index_buffer_len,
+            texs: vec![tex],
             is_surface_configured: false,
         })
     }
@@ -411,6 +435,9 @@ impl State {
 
             // Add the pipeline
             render_pass.set_pipeline(&self.pipeline);
+            for i in 0..self.texs.len() {
+                render_pass.set_bind_group(i as u32, self.texs[i].bind_group(), &[]);
+            }
             render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
             render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
             render_pass.draw_indexed(0..self.index_buffer_len, 0, 0..1);

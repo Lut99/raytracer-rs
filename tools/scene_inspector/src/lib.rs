@@ -8,6 +8,7 @@
 //
 
 // Modules
+pub mod gpu;
 pub mod state;
 
 // Imports
