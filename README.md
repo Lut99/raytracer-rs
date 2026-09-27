@@ -45,7 +45,7 @@ Some images that we've rendered:
 
 ![An image showing the famous Cornell-box.](./images/cornell.png)
 
-![An image showing the famous Cornell-box with a glass sphere and crispier rendering.](./images/cornell_glass.png)
+![An image showing the famous Cornell-box with a glass sphere and crispier rendering.](./images/cornell_importance.png)
 
 
 ## Usage
