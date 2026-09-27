@@ -30,6 +30,22 @@ and executed using:
 ```
 
 
+## Flex
+Some images that we've rendered:
+
+![An image showing the cover of book #1 with bouncy spheres.](./images/cover_bouncy.png)
+
+![An image showing the cover of book #1 with a checkerboard-pattern floor.](./images/cover_checkered.png)
+
+![An image showing some spheres, one of which is the earth.](./images/earth.png)
+
+![An image showing some shapes, a couple of which are light sources.](./images/first_lights.png)
+
+![An image showing the cover of book #2 with lights, cubes, spheres and gasses.](./images/cover2.png)
+
+![An image showing the famous Cornell-box.](./images/cornell.png)
+
+
 ## Usage
 
 ### Command-Line Interface
@@ -163,24 +179,6 @@ Finally, the following volumes are supported:
   constant density `density`. It has a colour  `colour`.
 
 For examples of scene files, check the [`tests/scenes`](./tests/scenes/) directory.
-
-
-## Results
-Some images that we've rendered as based on the tutorial:
-
-![An image showing the cover of book #1 with bouncy spheres.](./images/cover_bouncy.png)
-
-![An image showing the cover of book #1 with a checkerboard-pattern floor.](./images/cover_checkered.png)
-
-![An image showing some spheres, one of which is the earth.](./images/earth.png)
-
-![An image showing some shapes, a couple of which are light sources.](./images/first_lights.png)
-
-![An image showing the cover of book #2 with lights, cubes, spheres and gasses.](./images/cover2.png)
-
-![An image showing the famous Cornell-box.](./images/cornell.png)
-
-![An image showing the famous Cornell-box, with importance sampling and a glass sphere.](./images/cornell_importance.png)
 
 
 ## Features
