@@ -132,9 +132,9 @@ pub struct State {
 
     // Data
     /// A buffer for storing vertices to render.
-    vertex_buffer: Buffer<Vertex>,
+    vertex_buffer: Buffer<'static, &'static [Vertex]>,
     /// A buffer for storing indices to render.
-    index_buffer: Buffer<u16>,
+    index_buffer: Buffer<'static, &'static [u16]>,
     /// Loaded textures
     texs: Vec<Texture>,
 
@@ -306,12 +306,15 @@ impl State {
 
         // Create the buffers
         debug!(target: "State::new", "Creating vertex buffer...");
-        let mut vertex_buffer: Buffer<Vertex> = VERTICES.into_iter().copied().collect();
-        vertex_buffer.load_gpu_directly(&device, wgpu::BufferUsages::VERTEX, Some("vertex buffer"));
+        let mut vertex_buffer = Buffer::with_label_and_data(wgpu::BufferUsages::VERTEX, "vertex buffer", VERTICES);
+        vertex_buffer.load_gpu(&device, |v| bytemuck::cast_slice(v));
 
         debug!(target: "State::new", "Creating index buffer...");
-        let mut index_buffer: Buffer<u16> = INDICES.into_iter().copied().collect();
-        index_buffer.load_gpu_directly(&device, wgpu::BufferUsages::INDEX, Some("index buffer"));
+        let mut index_buffer = Buffer::with_label_and_data(wgpu::BufferUsages::INDEX, "index buffer", INDICES);
+        index_buffer.load_gpu(&device, |i| bytemuck::cast_slice(i));
+
+        debug!(target: "State::new", "Creating new Camera...");
+
 
         // Finally create self
         info!(target: "State::new", "Initialization success");
@@ -414,7 +417,7 @@ impl State {
             }
             render_pass.set_vertex_buffer(0, self.vertex_buffer.buffer_slice(..));
             render_pass.set_index_buffer(self.index_buffer.buffer_slice(..), wgpu::IndexFormat::Uint16);
-            render_pass.draw_indexed(0..self.index_buffer.len() as u32, 0, 0..1);
+            render_pass.draw_indexed(0..self.index_buffer.get().unwrap().len() as u32, 0, 0..1);
         }
 
         // Submit the encoder
