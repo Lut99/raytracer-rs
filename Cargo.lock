@@ -2279,7 +2279,7 @@ dependencies = [
  "console 0.16.4",
  "error-trace",
  "fastrand",
- "humanlog 0.2.0 (git+https://github.com/Lut99/humanlog-rs)",
+ "humanlog 0.2.0 (git+https://github.com/Lut99/humanlog-rs?tag=v0.2.0)",
  "image",
  "indicatif",
  "log",

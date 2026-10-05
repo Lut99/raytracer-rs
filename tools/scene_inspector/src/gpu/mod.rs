@@ -6,7 +6,9 @@
 //
 
 // Submodules
+pub mod buffer;
 pub mod texture;
 
 // Imports
+pub use buffer::Buffer;
 pub use texture::Texture;

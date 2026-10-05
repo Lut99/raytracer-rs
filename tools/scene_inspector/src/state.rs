@@ -11,12 +11,11 @@ use std::sync::Arc;
 use image::ImageFormat;
 use log::{debug, info};
 use thiserror::Error;
-use wgpu::util::DeviceExt as _;
 use winit::event_loop::ActiveEventLoop;
 use winit::keyboard::KeyCode;
 use winit::window::Window;
 
-use super::gpu::Texture;
+use super::gpu::{Buffer, Texture};
 
 
 /***** ERRORS *****/
@@ -133,13 +132,9 @@ pub struct State {
 
     // Data
     /// A buffer for storing vertices to render.
-    vertex_buffer: wgpu::Buffer,
-    /// The number of vertices in the `vertex_buffer`.
-    vertex_buffer_len: u32,
+    vertex_buffer: Buffer<Vertex>,
     /// A buffer for storing indices to render.
-    index_buffer: wgpu::Buffer,
-    /// The number of indices in the `index_buffer`.
-    index_buffer_len: u32,
+    index_buffer: Buffer<u16>,
     /// Loaded textures
     texs: Vec<Texture>,
 
@@ -311,37 +306,16 @@ impl State {
 
         // Create the buffers
         debug!(target: "State::new", "Creating vertex buffer...");
-        let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label:    Some("vertex buffer"),
-            contents: bytemuck::cast_slice(VERTICES),
-            usage:    wgpu::BufferUsages::VERTEX,
-        });
-        let vertex_buffer_len: u32 = VERTICES.len() as u32;
+        let mut vertex_buffer: Buffer<Vertex> = VERTICES.into_iter().copied().collect();
+        vertex_buffer.load_gpu_directly(&device, wgpu::BufferUsages::VERTEX, Some("vertex buffer"));
 
         debug!(target: "State::new", "Creating index buffer...");
-        let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label:    Some("index buffer"),
-            contents: bytemuck::cast_slice(INDICES),
-            usage:    wgpu::BufferUsages::INDEX,
-        });
-        let index_buffer_len: u32 = INDICES.len() as u32;
+        let mut index_buffer: Buffer<u16> = INDICES.into_iter().copied().collect();
+        index_buffer.load_gpu_directly(&device, wgpu::BufferUsages::INDEX, Some("index buffer"));
 
         // Finally create self
         info!(target: "State::new", "Initialization success");
-        Ok(Self {
-            window,
-            config,
-            device,
-            pipeline,
-            queue,
-            surface,
-            vertex_buffer,
-            vertex_buffer_len,
-            index_buffer,
-            index_buffer_len,
-            texs: vec![tex],
-            is_surface_configured: false,
-        })
+        Ok(Self { window, config, device, pipeline, queue, surface, vertex_buffer, index_buffer, texs: vec![tex], is_surface_configured: false })
     }
 }
 
@@ -438,9 +412,9 @@ impl State {
             for i in 0..self.texs.len() {
                 render_pass.set_bind_group(i as u32, self.texs[i].bind_group(), &[]);
             }
-            render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
-            render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
-            render_pass.draw_indexed(0..self.index_buffer_len, 0, 0..1);
+            render_pass.set_vertex_buffer(0, self.vertex_buffer.buffer_slice(..));
+            render_pass.set_index_buffer(self.index_buffer.buffer_slice(..), wgpu::IndexFormat::Uint16);
+            render_pass.draw_indexed(0..self.index_buffer.len() as u32, 0, 0..1);
         }
 
         // Submit the encoder
