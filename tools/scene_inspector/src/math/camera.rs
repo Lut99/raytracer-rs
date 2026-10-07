@@ -41,23 +41,23 @@ pub struct CameraViewProjMat4 {
 pub struct Camera {
     // Properties
     /// Vertical Field-of-View
-    vfov:   f64,
+    pub vfov:   f64,
     /// Aspect ratio.
-    aspect: f64,
+    pub aspect: f64,
     /// The interval on which the Z-axis is rendered.
-    z:      Interval,
+    pub z:      Interval,
 
     // Location
     /// The point where the camera is.
-    lookfrom: Vec3,
+    pub lookfrom: Vec3,
     /// The point where the camera looks at.
-    lookat: Vec3,
+    pub lookat: Vec3,
     /// A vector pointing to the up of the camera.
-    up: Vec3,
+    pub up: Vec3,
 
     // GPU
     /// A buffer to load the raw CPU data in.
-    gpu: Option<(wgpu::BindGroupLayout, wgpu::BindGroup)>,
+    gpu: Option<(wgpu::Buffer, wgpu::BindGroupLayout, wgpu::BindGroup)>,
 }
 
 // Constructors
@@ -130,6 +130,18 @@ impl Camera {
 
 // GPU
 impl Camera {
+    fn _build_raw_proj_view_mat4(&self) -> [[f32; 4]; 4] {
+        // NOTE: We do this transposed because our matrix representation is transposed from what
+        // WGPU expects.
+        let view_proj = self.build_view_proj_mat4().0;
+        [
+            [view_proj[0][0] as f32, view_proj[1][0] as f32, view_proj[2][0] as f32, view_proj[3][0] as f32],
+            [view_proj[0][1] as f32, view_proj[1][1] as f32, view_proj[2][1] as f32, view_proj[3][1] as f32],
+            [view_proj[0][2] as f32, view_proj[1][2] as f32, view_proj[2][2] as f32, view_proj[3][2] as f32],
+            [view_proj[0][3] as f32, view_proj[1][3] as f32, view_proj[2][3] as f32, view_proj[3][3] as f32],
+        ]
+    }
+
     /// Loads GPU resources for this camera's matrix.
     ///
     /// The resources are loaded as a uniform buffer, with bind group layouts.
@@ -170,7 +182,21 @@ impl Camera {
         });
 
         // Store self
-        self.gpu = Some((bgl, bg));
+        self.gpu = Some((buf, bgl, bg));
+    }
+
+    /// Updates the GPU resources for this camera's values.
+    ///
+    /// The resources are loaded as a uniform buffer, with bind group layouts.
+    ///
+    /// # Arguments
+    /// - `queue`: The [`wgpu::Queue`] to update the uniform buffer with.
+    pub fn sync_gpu(&mut self, queue: &wgpu::Queue) {
+        let Some((buf, _, _)) = &self.gpu else { panic!("Cannot call Camera::sync_gpu() before calling Camera::load_gpu()") };
+
+        // Build the view projection matrix & update the buffer with it
+        let view_proj = self._build_raw_proj_view_mat4();
+        queue.write_buffer(buf, 0, bytemuck::cast_slice(std::slice::from_ref(&view_proj)));
     }
 
 
@@ -182,7 +208,7 @@ impl Camera {
     #[inline]
     #[track_caller]
     pub const fn bind_group_layout(&self) -> &wgpu::BindGroupLayout {
-        let Some((bgl, _)) = &self.gpu else { panic!("Cannot call Camera::bind_group_layout() before calling Camera::load_gpu()") };
+        let Some((_, bgl, _)) = &self.gpu else { panic!("Cannot call Camera::bind_group_layout() before calling Camera::load_gpu()") };
         bgl
     }
 
@@ -193,7 +219,7 @@ impl Camera {
     #[inline]
     #[track_caller]
     pub const fn bind_group(&self) -> &wgpu::BindGroup {
-        let Some((_, bg)) = &self.gpu else { panic!("Cannot call Camera::bind_group() before calling Camera::load_gpu()") };
+        let Some((_, _, bg)) = &self.gpu else { panic!("Cannot call Camera::bind_group() before calling Camera::load_gpu()") };
         bg
     }
 }

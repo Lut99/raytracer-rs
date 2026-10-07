@@ -7,6 +7,7 @@
 
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use image::ImageFormat;
 use log::{debug, info};
@@ -16,6 +17,7 @@ use winit::keyboard::KeyCode;
 use winit::window::Window;
 
 use super::gpu::{Buffer, Texture};
+use crate::logic::camera_controller::CameraController;
 use crate::math::{Camera, Interval, Vec3};
 
 
@@ -140,10 +142,14 @@ pub struct State {
     tex: Texture,
     /// The camera.
     cam: Camera,
+    /// A controller for the camera.
+    cam_controller: CameraController,
 
     // State
     /// Did we configure the surface yet?
     is_surface_configured: bool,
+    /// Last time an update occurred.
+    last_update: Instant,
 }
 
 // Constructors
@@ -330,7 +336,21 @@ impl State {
 
         // Finally create self
         info!(target: "State::new", "Initialization success");
-        Ok(Self { window, config, device, pipeline, queue, surface, vertex_buffer, index_buffer, tex, cam, is_surface_configured: false })
+        Ok(Self {
+            window,
+            config,
+            device,
+            pipeline,
+            queue,
+            surface,
+            vertex_buffer,
+            index_buffer,
+            tex,
+            cam,
+            cam_controller: Default::default(),
+            is_surface_configured: false,
+            last_update: Instant::now(),
+        })
     }
 }
 
@@ -344,10 +364,14 @@ impl State {
     ///   the app.
     /// - `code`: The pressed key's code.
     /// - `is_pressed`: Whether the key is pressed or not.
-    pub fn handle_key(&self, event_loop: &ActiveEventLoop, code: KeyCode, is_pressed: bool) {
+    pub fn handle_key(&mut self, event_loop: &ActiveEventLoop, code: KeyCode, is_pressed: bool) {
         match (code, is_pressed) {
             (KeyCode::Escape, true) => event_loop.exit(),
-            _ => return,
+            _ => {
+                // Let other systems handle it
+                self.cam_controller.handle_key(code, is_pressed);
+                self.update();
+            },
         }
     }
 
@@ -369,7 +393,11 @@ impl State {
 
     /// Updates the state.
     pub fn update(&mut self) {
-        /* TODO */
+        let since_last_update = self.last_update.elapsed();
+        self.last_update = Instant::now();
+
+        self.cam_controller.update_camera(since_last_update, &mut self.cam);
+        self.cam.sync_gpu(&self.queue);
     }
 
 

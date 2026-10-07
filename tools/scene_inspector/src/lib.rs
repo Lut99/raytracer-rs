@@ -9,6 +9,7 @@
 
 // Modules
 pub mod gpu;
+pub mod logic;
 pub mod math;
 pub mod state;
 
@@ -37,7 +38,7 @@ impl App {
     ///
     /// # Returns
     /// A new instance of an App.
-    pub const fn new() -> Self { Self { state: None } }
+    pub fn new() -> Self { Self { state: None } }
 }
 
 // Interfaces
@@ -86,6 +87,7 @@ impl ApplicationHandler<State> for App {
             WindowEvent::CloseRequested => event_loop.exit(),
             WindowEvent::Resized(size) => state.resize(size.width, size.height),
             WindowEvent::RedrawRequested => {
+                state.update();
                 if let Err(err) = state.render() {
                     error!("{}", toplevel!(("Failed to run a render pass"), err));
                     event_loop.exit();
