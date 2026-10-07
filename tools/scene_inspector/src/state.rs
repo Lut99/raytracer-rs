@@ -16,6 +16,7 @@ use winit::keyboard::KeyCode;
 use winit::window::Window;
 
 use super::gpu::{Buffer, Texture};
+use crate::math::{Camera, Interval, Vec3};
 
 
 /***** ERRORS *****/
@@ -136,7 +137,9 @@ pub struct State {
     /// A buffer for storing indices to render.
     index_buffer: Buffer<'static, &'static [u16]>,
     /// Loaded textures
-    texs: Vec<Texture>,
+    tex: Texture,
+    /// The camera.
+    cam: Camera,
 
     // State
     /// Did we configure the surface yet?
@@ -155,6 +158,7 @@ impl State {
     #[inline]
     pub async fn new(window: Arc<Window>) -> Result<Self, Error> {
         let size = window.inner_size();
+        debug!(target: "State::new", "Input window size: {}x{}", size.width, size.height);
 
         // Create a new WGPU instance
         debug!(target: "State::new", "Creating WGPU instance...");
@@ -256,6 +260,17 @@ impl State {
             .map_err(Error::TextureLoad)?;
         tex.load_gpu(&device, &queue, &sampler, &bind_layout).map_err(Error::TextureLoadGpu)?;
 
+        debug!(target: "State::new", "Creating new Camera...");
+        let mut cam = Camera::new(
+            45.0,
+            config.width as f64 / config.height as f64,
+            Interval::new(0.1, 100.0),
+            Vec3::new(0.0, 1.0, 2.0),
+            Vec3::new(0.0, 0.0, 0.0),
+            Vec3::new(0.0, 1.0, 0.0),
+        );
+        cam.load_gpu(&device);
+
         // Prepare loading the pipeline
         debug!(target: "State::new", "Loading shaders...");
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
@@ -264,7 +279,7 @@ impl State {
         });
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("render pipeline layout"),
-            bind_group_layouts: &[Some(&bind_layout)],
+            bind_group_layouts: &[Some(&bind_layout), Some(cam.bind_group_layout())],
             immediate_size: 0,
         });
 
@@ -313,12 +328,9 @@ impl State {
         let mut index_buffer = Buffer::with_label_and_data(wgpu::BufferUsages::INDEX, "index buffer", INDICES);
         index_buffer.load_gpu(&device, |i| bytemuck::cast_slice(i));
 
-        debug!(target: "State::new", "Creating new Camera...");
-
-
         // Finally create self
         info!(target: "State::new", "Initialization success");
-        Ok(Self { window, config, device, pipeline, queue, surface, vertex_buffer, index_buffer, texs: vec![tex], is_surface_configured: false })
+        Ok(Self { window, config, device, pipeline, queue, surface, vertex_buffer, index_buffer, tex, cam, is_surface_configured: false })
     }
 }
 
@@ -412,9 +424,8 @@ impl State {
 
             // Add the pipeline
             render_pass.set_pipeline(&self.pipeline);
-            for i in 0..self.texs.len() {
-                render_pass.set_bind_group(i as u32, self.texs[i].bind_group(), &[]);
-            }
+            render_pass.set_bind_group(0, self.tex.bind_group(), &[]);
+            render_pass.set_bind_group(1, self.cam.bind_group(), &[]);
             render_pass.set_vertex_buffer(0, self.vertex_buffer.buffer_slice(..));
             render_pass.set_index_buffer(self.index_buffer.buffer_slice(..), wgpu::IndexFormat::Uint16);
             render_pass.draw_indexed(0..self.index_buffer.get().unwrap().len() as u32, 0, 0..1);

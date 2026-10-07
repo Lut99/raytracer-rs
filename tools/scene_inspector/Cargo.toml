@@ -23,5 +23,9 @@ wgpu = "30.0.0"
 raytracer = { path = "../..", default-features = false }
 
 
+[dev-dependencies]
+cgmath = "0.18.0"
+
+
 [features]
 default = []

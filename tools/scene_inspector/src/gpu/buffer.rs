@@ -146,6 +146,11 @@ impl<'a, T> Buffer<'a, T> {
         }));
     }
 
+    /// Frees the GPU resources for this texture.
+    pub fn free_gpu(&mut self) { self.gpu = None; }
+
+
+
     /// Returns a [`wgpu::BufferView`] that can be rendered.
     ///
     /// # Arguments

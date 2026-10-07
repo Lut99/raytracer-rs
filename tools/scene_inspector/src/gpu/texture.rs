@@ -46,7 +46,7 @@ pub struct Texture {
 
     // GPU
     /// The bind group used to render the texture.
-    bind_group: Option<wgpu::BindGroup>,
+    gpu: Option<wgpu::BindGroup>,
 }
 
 // Constructors
@@ -118,7 +118,7 @@ impl Texture {
             info!(target: "Texture::new", "Loaded {what:?}: {}x{}, {} byte(s)", data.dimensions().0, data.dimensions().1, 4 * data.len());
 
             // Store self
-            Ok(Texture { what, data, bind_group: None })
+            Ok(Texture { what, data, gpu: None })
         }
         _from_reader_with_format(what.into(), format, reader)
     }
@@ -177,18 +177,17 @@ impl Texture {
         });
 
         // Set it internally
-        self.bind_group = Some(bind_group);
+        self.gpu = Some(bind_group);
 
         // Done
         Ok(())
     }
 
     /// Frees the GPU resources for this texture.
-    pub fn free_gpu(&mut self) { self.bind_group = None; }
-}
+    pub fn free_gpu(&mut self) { self.gpu = None; }
 
-// Access
-impl Texture {
+
+
     /// Provides access to the loaded bind group.
     ///
     /// # Returns
@@ -199,7 +198,7 @@ impl Texture {
     #[inline]
     #[track_caller]
     pub const fn bind_group(&self) -> &wgpu::BindGroup {
-        match &self.bind_group {
+        match &self.gpu {
             Some(bg) => bg,
             None => panic!("Cannot call Texture::bind_group() before calling Texture::load_gpu()"),
         }
