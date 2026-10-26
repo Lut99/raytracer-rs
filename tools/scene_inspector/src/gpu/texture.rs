@@ -35,6 +35,163 @@ pub enum Error {
 
 
 /***** LIBRARY *****/
+/// Represents a single texture used for depth buffering.
+pub struct Depth {
+    dims: (u32, u32),
+    gpu:  Option<wgpu::TextureView>,
+}
+
+// Constants
+impl Depth {
+    /// The texture format used for depth buffers.
+    pub const FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
+}
+
+// Constructors
+impl Depth {
+    /// Creates a depth buffer texture.
+    ///
+    /// # Arguments
+    /// - `dims`: The dimensions of the output screen for accurate depth'ing.
+    ///
+    /// # Returns
+    /// A new Texture that is suitable for depth buffering.
+    #[inline]
+    pub const fn new(dims: (u32, u32)) -> Self { Self { dims, gpu: None } }
+}
+
+// GPU
+impl Depth {
+    /// Creates the samplers for depth textures.
+    ///
+    /// # Arguments
+    /// - `device`: The [`wgpu::Device`] to create the sampler on.
+    ///
+    /// # Returns
+    /// A [`wgpu::Sampler`].
+    pub fn sampler(device: &wgpu::Device) -> wgpu::Sampler {
+        debug!(target: "Depth::sampler", "Creating sampler...");
+        device.create_sampler(&wgpu::SamplerDescriptor {
+            label: Some("depth sampler"),
+            address_mode_u: wgpu::AddressMode::ClampToEdge,
+            address_mode_v: wgpu::AddressMode::ClampToEdge,
+            address_mode_w: wgpu::AddressMode::ClampToEdge,
+            mag_filter: wgpu::FilterMode::Linear,
+            min_filter: wgpu::FilterMode::Linear,
+            mipmap_filter: wgpu::MipmapFilterMode::Nearest,
+            compare: Some(wgpu::CompareFunction::LessEqual),
+            lod_min_clamp: 0.0,
+            lod_max_clamp: 100.0,
+            ..Default::default()
+        })
+    }
+
+    /// Creates the bind group layout for depth textures.
+    ///
+    /// # Arguments
+    /// - `device`: The [`wgpu::Device`] to create the bind layout on.
+    ///
+    /// # Returns
+    /// A [`wgpu::BindGroupLayout`].
+    pub fn bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
+        debug!(target: "Depth::bind_group_layout", "Creating bind layout...");
+        device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label:   Some("bind group layout"),
+            entries: &[
+                wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Texture {
+                        sample_type:    wgpu::TextureSampleType::Float { filterable: true },
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                        multisampled:   false,
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 1,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                    count: None,
+                },
+            ],
+        })
+    }
+
+    /// Creates a depth/stencil state description for render pipelines.
+    ///
+    /// # Returns
+    /// A [`wgpu::DepthStencilState`].
+    #[inline]
+    pub fn depth_stencil_state() -> wgpu::DepthStencilState {
+        wgpu::DepthStencilState {
+            format: Self::FORMAT,
+            depth_write_enabled: Some(true),
+            depth_compare: Some(wgpu::CompareFunction::Less),
+            stencil: Default::default(),
+            bias: Default::default(),
+        }
+    }
+
+
+
+    /// Loads the GPU resources for this texture.
+    ///
+    /// # Arguments
+    /// - `device`: A [`wgpu::Device`] to load the texture to.
+    ///
+    /// # Errors
+    /// This function can error if the GPU errors.
+    pub fn load_gpu(&mut self, device: &wgpu::Device) {
+        // Put it in a texture
+        debug!(target: "Depth::load_gpu", "Creating depth buffer on GPU...");
+        let tex_size = wgpu::Extent3d { width: self.dims.0.max(1), height: self.dims.1.max(1), depth_or_array_layers: 1 };
+        let tex = device.create_texture(&wgpu::TextureDescriptor {
+            label: Some(&"depth texture"),
+            size: tex_size,
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: Self::FORMAT,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
+            view_formats: &[],
+        });
+        let view = tex.create_view(&wgpu::TextureViewDescriptor::default());
+
+        // Set it internally
+        self.gpu = Some(view);
+
+        // Done
+    }
+
+    /// Frees the GPU resources for this texture.
+    pub fn free_gpu(&mut self) { self.gpu = None; }
+
+
+
+    /// Provides access to the loaded texture view.
+    ///
+    /// # Returns
+    /// A reference to the internal [`wgpu::TextureView`] thru a RenderPassDepthStencilAttachment.
+    ///
+    /// # Panics
+    /// This function panics if you didn't call [`Depth::load_gpu()`] on this texture.
+    #[inline]
+    #[track_caller]
+    pub const fn attachment(&self) -> wgpu::RenderPassDepthStencilAttachment<'_> {
+        match &self.gpu {
+            Some(view) => wgpu::RenderPassDepthStencilAttachment {
+                view,
+                depth_ops: Some(wgpu::Operations { load: wgpu::LoadOp::Clear(1.0), store: wgpu::StoreOp::Store }),
+                stencil_ops: None,
+            },
+            None => panic!("Cannot call Depth::attachment() before calling Depth::load_gpu()"),
+        }
+    }
+}
+
+
+
 /// Represents a single texture, CPU- and GPU resources combined.
 #[derive(Debug)]
 pub struct Texture {
@@ -126,6 +283,61 @@ impl Texture {
 
 // Texture
 impl Texture {
+    /// Creates the sampler for regular ol' textures.
+    ///
+    /// # Arguments
+    /// - `device`: The [`wgpu::Device`] to create the sampler on.
+    ///
+    /// # Returns
+    /// A [`wgpu::Sampler`].
+    pub fn sampler(device: &wgpu::Device) -> wgpu::Sampler {
+        debug!(target: "Texture::sampler", "Creating sampler...");
+        device.create_sampler(&wgpu::SamplerDescriptor {
+            label: Some("texture sampler"),
+            address_mode_u: wgpu::AddressMode::ClampToEdge,
+            address_mode_v: wgpu::AddressMode::ClampToEdge,
+            address_mode_w: wgpu::AddressMode::ClampToEdge,
+            mag_filter: wgpu::FilterMode::Linear,
+            min_filter: wgpu::FilterMode::Nearest,
+            mipmap_filter: wgpu::MipmapFilterMode::Nearest,
+            ..Default::default()
+        })
+    }
+
+    /// Creates the bind group layout for regular ol' textures.
+    ///
+    /// # Arguments
+    /// - `device`: The [`wgpu::Device`] to create the bind layout on.
+    ///
+    /// # Returns
+    /// A [`wgpu::BindGroupLayout`].
+    pub fn bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
+        debug!(target: "Texture::bind_group_layout", "Creating bind layout...");
+        device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label:   Some("bind group layout"),
+            entries: &[
+                wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Texture {
+                        sample_type:    wgpu::TextureSampleType::Float { filterable: true },
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                        multisampled:   false,
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 1,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                    count: None,
+                },
+            ],
+        })
+    }
+
+
+
     /// Loads the GPU resources for this texture.
     ///
     /// # Arguments
@@ -136,17 +348,11 @@ impl Texture {
     ///
     /// # Errors
     /// This function can error if the GPU errors.
-    pub fn load_gpu(
-        &mut self,
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
-        sampler: &wgpu::Sampler,
-        bind_layout: &wgpu::BindGroupLayout,
-    ) -> Result<(), Error> {
+    pub fn load_gpu(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, sampler: &wgpu::Sampler, bind_layout: &wgpu::BindGroupLayout) {
         let im_dims = self.data.dimensions();
 
         // Put it in a texture
-        debug!(target: "State::new", "Loading texture to GPU...");
+        debug!(target: "Texture::load_gpu", "Loading texture to GPU...");
         let tex_size = wgpu::Extent3d { width: im_dims.0, height: im_dims.1, depth_or_array_layers: 1 };
         let tex = device.create_texture(&wgpu::TextureDescriptor {
             label: Some(&format!("texture {:?}", self.what)),
@@ -180,7 +386,6 @@ impl Texture {
         self.gpu = Some(bind_group);
 
         // Done
-        Ok(())
     }
 
     /// Frees the GPU resources for this texture.

@@ -5,18 +5,17 @@
 //!   Defines the application state.
 //
 
-use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Instant;
 
-use image::ImageFormat;
 use log::{debug, info};
 use thiserror::Error;
 use winit::event_loop::ActiveEventLoop;
 use winit::keyboard::KeyCode;
 use winit::window::Window;
 
-use super::gpu::{Buffer, Texture};
+use super::gpu::Texture;
+use crate::gpu::{Depth, Pipeline};
 use crate::logic::camera_controller::CameraController;
 use crate::math::{Camera, Interval, Vec3};
 
@@ -47,8 +46,6 @@ pub enum Error {
     SurfaceLost,
     #[error("Failed to load texture")]
     TextureLoad(#[source] super::gpu::texture::Error),
-    #[error("Failed to load texture GPU resources")]
-    TextureLoadGpu(#[source] super::gpu::texture::Error),
 }
 
 // Conversion
@@ -69,51 +66,6 @@ impl From<wgpu::CreateSurfaceError> for Error {
 
 
 
-/***** CONSTANTS *****/
-const VERTICES: &[Vertex] = &[
-    Vertex { position: [-0.0868241, 0.49240386, 0.0], tex_coords: [0.4131759, 0.00759614] }, // A
-    Vertex { position: [-0.49513406, 0.06958647, 0.0], tex_coords: [0.0048659444, 0.43041354] }, // B
-    Vertex { position: [-0.21918549, -0.44939706, 0.0], tex_coords: [0.28081453, 0.949397] }, // C
-    Vertex { position: [0.35966998, -0.3473291, 0.0], tex_coords: [0.85967, 0.84732914] },   // D
-    Vertex { position: [0.44147372, 0.2347359, 0.0], tex_coords: [0.9414737, 0.2652641] },   // E
-];
-
-const INDICES: &[u16] = &[0, 1, 4, 1, 2, 4, 2, 3, 4];
-
-
-
-
-
-/***** AUXILLARY *****/
-/// Defines a single vertex.
-#[repr(C)]
-#[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
-pub struct Vertex {
-    position:   [f32; 3],
-    tex_coords: [f32; 2],
-}
-
-// Vertex
-impl Vertex {
-    /// Returns the [`VertexBufferLayout`] required to read this.
-    #[inline]
-    pub const fn desc() -> wgpu::VertexBufferLayout<'static> {
-        wgpu::VertexBufferLayout {
-            array_stride: std::mem::size_of::<Vertex>() as wgpu::BufferAddress,
-            step_mode:    wgpu::VertexStepMode::Vertex,
-            attributes:   &[wgpu::VertexAttribute { offset: 0, shader_location: 0, format: wgpu::VertexFormat::Float32x3 }, wgpu::VertexAttribute {
-                offset: std::mem::size_of::<[f32; 3]>() as wgpu::BufferAddress,
-                shader_location: 1,
-                format: wgpu::VertexFormat::Float32x2,
-            }],
-        }
-    }
-}
-
-
-
-
-
 /***** LIBRARY *****/
 /// Defines the state of the [`App`](super::App).
 pub struct State {
@@ -123,27 +75,22 @@ pub struct State {
 
     // Render structures
     /// A configuration used to create the surface.
-    config:   wgpu::SurfaceConfiguration,
+    config: wgpu::SurfaceConfiguration,
     /// The device we use to render.
-    device:   wgpu::Device,
-    /// The pipeline that renders for us.
-    pipeline: wgpu::RenderPipeline,
+    device: wgpu::Device,
     /// The queue that we send commands to the device.
-    queue:    wgpu::Queue,
+    queue: wgpu::Queue,
     /// The surface that WGPU draws to.
-    surface:  wgpu::Surface<'static>,
-
-    // Data
-    /// A buffer for storing vertices to render.
-    vertex_buffer: Buffer<'static, &'static [Vertex]>,
-    /// A buffer for storing indices to render.
-    index_buffer: Buffer<'static, &'static [u16]>,
-    /// Loaded textures
-    tex: Texture,
+    surface: wgpu::Surface<'static>,
+    /// Depth buffer for correctly ordering objects.
+    depth_buffer: Depth,
     /// The camera.
     cam: Camera,
     /// A controller for the camera.
     cam_controller: CameraController,
+
+    // Pipelines
+    pipeline: Pipeline,
 
     // State
     /// Did we configure the surface yet?
@@ -227,45 +174,14 @@ impl State {
         };
 
         // Load texture related resources
-        debug!(target: "State::new", "Creating sampler...");
-        let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
-            label: Some("sampler"),
-            address_mode_u: wgpu::AddressMode::ClampToEdge,
-            address_mode_v: wgpu::AddressMode::ClampToEdge,
-            address_mode_w: wgpu::AddressMode::ClampToEdge,
-            mag_filter: wgpu::FilterMode::Linear,
-            min_filter: wgpu::FilterMode::Nearest,
-            mipmap_filter: wgpu::MipmapFilterMode::Nearest,
-            ..Default::default()
-        });
-        debug!(target: "State::new", "Creating bind layout...");
-        let bind_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label:   Some("bind group layout"),
-            entries: &[
-                wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Texture {
-                        sample_type:    wgpu::TextureSampleType::Float { filterable: true },
-                        view_dimension: wgpu::TextureViewDimension::D2,
-                        multisampled:   false,
-                    },
-                    count: None,
-                },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 1,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
-                    count: None,
-                },
-            ],
-        });
+        let tex_sampler = Texture::sampler(&device);
+        let tex_bind_layout = Texture::bind_group_layout(&device);
 
-        // Load the example texture
-        let mut tex = Texture::from_path_with_format(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("pollo.jpg"), ImageFormat::Jpeg)
-            .map_err(Error::TextureLoad)?;
-        tex.load_gpu(&device, &queue, &sampler, &bind_layout).map_err(Error::TextureLoadGpu)?;
+        // Load the depth buffer
+        let mut depth_buffer = Depth::new((config.width, config.height));
+        depth_buffer.load_gpu(&device);
 
+        // Load the camera
         debug!(target: "State::new", "Creating new Camera...");
         let mut cam = Camera::new(
             45.0,
@@ -277,62 +193,8 @@ impl State {
         );
         cam.load_gpu(&device);
 
-        // Prepare loading the pipeline
-        debug!(target: "State::new", "Loading shaders...");
-        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label:  Some("shader"),
-            source: wgpu::ShaderSource::Wgsl(include_str!("shaders/shader.wgsl").into()),
-        });
-        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("render pipeline layout"),
-            bind_group_layouts: &[Some(&bind_layout), Some(cam.bind_group_layout())],
-            immediate_size: 0,
-        });
-
-        // Create the pipeline
-        debug!(target: "State::new", "Creating render pipeline...");
-        let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("render pipeline"),
-            layout: Some(&pipeline_layout),
-            vertex: wgpu::VertexState {
-                module: &shader,
-                entry_point: Some("vs_main"),
-                buffers: &[Some(Vertex::desc())],
-                compilation_options: wgpu::PipelineCompilationOptions::default(),
-            },
-            fragment: Some(wgpu::FragmentState {
-                module: &shader,
-                entry_point: Some("fs_main"),
-                targets: &[Some(wgpu::ColorTargetState {
-                    format:     config.format,
-                    blend:      Some(wgpu::BlendState::REPLACE),
-                    write_mask: wgpu::ColorWrites::ALL,
-                })],
-                compilation_options: wgpu::PipelineCompilationOptions::default(),
-            }),
-            primitive: wgpu::PrimitiveState {
-                topology: wgpu::PrimitiveTopology::TriangleList,
-                strip_index_format: None,
-                front_face: wgpu::FrontFace::Ccw,
-                cull_mode: Some(wgpu::Face::Back),
-                polygon_mode: wgpu::PolygonMode::Fill,
-                unclipped_depth: false,
-                conservative: false,
-            },
-            depth_stencil: None,
-            multisample: wgpu::MultisampleState { count: 1, mask: !0, alpha_to_coverage_enabled: false },
-            multiview_mask: None,
-            cache: None,
-        });
-
-        // Create the buffers
-        debug!(target: "State::new", "Creating vertex buffer...");
-        let mut vertex_buffer = Buffer::with_label_and_data(wgpu::BufferUsages::VERTEX, "vertex buffer", VERTICES);
-        vertex_buffer.load_gpu(&device, |v| bytemuck::cast_slice(v));
-
-        debug!(target: "State::new", "Creating index buffer...");
-        let mut index_buffer = Buffer::with_label_and_data(wgpu::BufferUsages::INDEX, "index buffer", INDICES);
-        index_buffer.load_gpu(&device, |i| bytemuck::cast_slice(i));
+        // Create all pipeline combinations
+        let pipeline = Pipeline::new(&device, &queue, config.format, &tex_sampler, &tex_bind_layout, cam.bind_group_layout());
 
         // Finally create self
         info!(target: "State::new", "Initialization success");
@@ -340,14 +202,12 @@ impl State {
             window,
             config,
             device,
-            pipeline,
             queue,
             surface,
-            vertex_buffer,
-            index_buffer,
-            tex,
+            depth_buffer,
             cam,
             cam_controller: Default::default(),
+            pipeline,
             is_surface_configured: false,
             last_update: Instant::now(),
         })
@@ -387,6 +247,8 @@ impl State {
 
         self.config.width = width;
         self.config.height = height;
+        self.depth_buffer = Depth::new((width, height));
+        self.depth_buffer.load_gpu(&self.device);
         self.surface.configure(&self.device, &self.config);
         self.is_surface_configured = true;
     }
@@ -444,19 +306,19 @@ impl State {
                     depth_slice: None,
                     ops: wgpu::Operations { load: wgpu::LoadOp::Clear(wgpu::Color { r: 0.1, g: 0.2, b: 0.3, a: 1.0 }), store: wgpu::StoreOp::Store },
                 })],
-                depth_stencil_attachment: None,
+                depth_stencil_attachment: Some(self.depth_buffer.attachment()),
                 occlusion_query_set: None,
                 timestamp_writes: None,
                 multiview_mask: None,
             });
 
             // Add the pipeline
-            render_pass.set_pipeline(&self.pipeline);
-            render_pass.set_bind_group(0, self.tex.bind_group(), &[]);
+            render_pass.set_pipeline(self.pipeline.pipeline());
+            render_pass.set_bind_group(0, self.pipeline.tex_bind_group(), &[]);
             render_pass.set_bind_group(1, self.cam.bind_group(), &[]);
-            render_pass.set_vertex_buffer(0, self.vertex_buffer.buffer_slice(..));
-            render_pass.set_index_buffer(self.index_buffer.buffer_slice(..), wgpu::IndexFormat::Uint16);
-            render_pass.draw_indexed(0..self.index_buffer.get().unwrap().len() as u32, 0, 0..1);
+            render_pass.set_vertex_buffer(0, self.pipeline.vbuf().buffer_slice(..));
+            render_pass.set_index_buffer(self.pipeline.ibuf().buffer_slice(..), wgpu::IndexFormat::Uint16);
+            render_pass.draw_indexed(0..self.pipeline.ibuf().get().unwrap().len() as u32, 0, 0..1);
         }
 
         // Submit the encoder

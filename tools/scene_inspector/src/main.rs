@@ -5,6 +5,7 @@
 //!   Entrypoint to the scene inspector.
 //
 
+use std::path::PathBuf;
 use std::process::ExitCode;
 
 use clap::Parser;
@@ -24,6 +25,10 @@ struct Arguments {
     /// If given, enables TRACE-level log messages. Implies `--debug`.
     #[clap(long, global = true)]
     trace: bool,
+
+    /// The scene to inspect.
+    #[clap(name = "SCENE")]
+    scene: PathBuf,
 }
 
 
@@ -65,7 +70,7 @@ pub fn main() -> ExitCode {
 
     // Initialize the app
     debug!("Initializing app...");
-    let mut app = App::new();
+    let mut app = App::new(args.scene);
     if let Err(err) = event_loop.run_app(&mut app) {
         error!("{}", toplevel!(("Failed to initialize app"), err));
         return ExitCode::FAILURE;

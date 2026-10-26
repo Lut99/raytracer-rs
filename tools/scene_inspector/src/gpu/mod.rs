@@ -7,8 +7,10 @@
 
 // Submodules
 pub mod buffer;
+pub mod pipeline;
 pub mod texture;
 
 // Exports
 pub use buffer::Buffer;
-pub use texture::Texture;
+pub use pipeline::Pipeline;
+pub use texture::{Depth, Texture};

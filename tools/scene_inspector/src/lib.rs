@@ -11,8 +11,10 @@
 pub mod gpu;
 pub mod logic;
 pub mod math;
+pub mod spec;
 pub mod state;
 
+use std::path::PathBuf;
 // Imports
 use std::sync::Arc;
 
@@ -29,6 +31,9 @@ use winit::window::{Window, WindowId};
 /***** LIBRARY *****/
 /// Defines the toplevel application struct that handles everything.
 pub struct App {
+    /// The path to the scene file to load.
+    scene: PathBuf,
+    /// The render state of the app.
     state: Option<State>,
 }
 
@@ -36,9 +41,12 @@ pub struct App {
 impl App {
     /// Constructor for the App.
     ///
+    /// # Arguments
+    /// - `scene`: The path of the scene file to load.
+    ///
     /// # Returns
     /// A new instance of an App.
-    pub fn new() -> Self { Self { state: None } }
+    pub fn new(scene: PathBuf) -> Self { Self { scene, state: None } }
 }
 
 // Interfaces
